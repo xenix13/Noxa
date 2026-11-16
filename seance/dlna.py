@@ -140,6 +140,8 @@ class DLNA:
                         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
                     except OSError:
                         pass
+                # toutes les interfaces : voulu (annonce SSDP en multidiffusion et réponses aux M-SEARCH) ; les
+                # demandes venant d'hors du réseau local sont refusées (is_local), et le service est coupé par défaut
                 s.bind(("", SSDP_PORT))
                 s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
                              struct.pack("4s4s", socket.inet_aton(GROUP), socket.inet_aton("0.0.0.0")))

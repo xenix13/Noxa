@@ -244,7 +244,7 @@ def register(app, ctx, x):
         if not cands:
             return {"path": None}
         day = time.strftime("%Y-%m-%d")
-        pick = cands[int(hashlib.sha1(f"{uid}|{day}".encode()).hexdigest(), 16) % len(cands)]
+        pick = cands[int(hashlib.sha256(f"{uid}|{day}".encode()).hexdigest(), 16) % len(cands)]  # tirage du jour, pas de sécurité
         return {"path": f"/library/metadata/{pick['id']}/art/{pick['img_version']}"}
 
     @app.route("POST", "/api/me/wallpaper")

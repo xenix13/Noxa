@@ -1809,7 +1809,7 @@ class SeanceTest(unittest.TestCase):
         self.assertIn(f'href="/v/{m.group(1)}/css/app.css"', html)
         # démarrage : script en ligne autorisé par son empreinte (CSP), liste du code à précharger
         import base64, hashlib
-        boot = re.search(r"<script>(.*?)</script>", html).group(1)
+        boot = re.search(r"<script>(.*?)</script\s*>", html, re.I | re.S).group(1)
         digest = base64.b64encode(hashlib.sha256(boot.encode()).digest()).decode()
         self.assertIn(f"'sha256-{digest}'", h["Content-Security-Policy"])
         self.assertIn("/api/me", boot)
