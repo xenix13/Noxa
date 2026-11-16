@@ -324,7 +324,10 @@ export function wideCard(c, { onPlay, onWatched } = {}) {
   if (!onWatched) return card;
   // bouton à côté du lien (pas dedans) : « marquer comme vu » sans lancer la lecture
   const label = c.type === 'episode' ? tr('Marquer « {p1} » comme vu', { p1: episodeCode(c) }) : tr('Marquer comme vu');
+  // et un accès discret à la fiche (de la série pour un épisode), sans reprendre la lecture
+  const about = c.type === 'episode' ? tr('Fiche de la série') : tr('Fiche du film');
   return h('div.card-slot', card,
+    h('a.card-watch.card-about', { href: `#/item/${c.show_id || c.id}`, title: about, 'aria-label': `${about} : ${title}` }, icon('info')),
     h('button.card-watch', { type: 'button', title: label, 'aria-label': `${label} : ${title}`,
       onclick: (e) => { e.currentTarget.disabled = true; onWatched(c, slot()); } }, icon('check')));
   function slot() { return card.parentElement; }

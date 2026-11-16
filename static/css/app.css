@@ -630,6 +630,20 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 .filters-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
 .filters-row .tabs { margin-bottom: 0; }
 .filters-row select { width: auto; }
+.filters-selects { display: flex; gap: 8px; flex-wrap: wrap; }
+.discover-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 22px; }
+.chip-link { padding: 7px 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  text-decoration: none; font-size: 14px; white-space: nowrap; }
+.chip-link:hover, .chip-link:focus-visible { border-color: var(--accent); }
+.chip-link.active { background: var(--accent); border-color: var(--accent); color: var(--ink-on-accent); font-weight: 600; }
+.dcard-ask { position: absolute; right: 8px; bottom: 8px; z-index: 2; width: 34px; height: 34px; border: 0; border-radius: 50%;
+  background: var(--accent); color: var(--ink-on-accent); font-size: 22px; line-height: 1; font-weight: 600; cursor: pointer;
+  opacity: 0; transition: opacity 0.2s, transform 0.2s; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5); }
+.dcard-ask[hidden] { display: none; }
+.dcard:hover .dcard-ask, .dcard-ask:focus-visible { opacity: 1; }
+.dcard-ask:hover { transform: scale(1.12); }
+.dcard-ask:disabled { opacity: 0.5; cursor: progress; }
+@media (hover: none) { .dcard-ask { opacity: 0.95; } }
 .filters-row + .grid { margin-top: 18px; }
 .center-row { display: flex; justify-content: center; padding: 24px 0; }
 .dbadge { position: absolute; left: 8px; top: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px;
@@ -845,6 +859,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
   border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff; cursor: pointer; opacity: 0;
   backdrop-filter: blur(6px); transition: opacity 0.2s, background 0.2s, transform 0.2s; }
 .card-watch .icon { width: 18px; height: 18px; fill: currentColor; }
+.card-about { right: 48px; text-decoration: none; }
 .card-slot:hover .card-watch, .card-watch:focus-visible { opacity: 1; }
 .card-slot:hover .card-watch { transform: translateY(-4px); }
 .card-watch:hover { background: var(--accent); color: var(--ink-on-accent); }
@@ -948,14 +963,14 @@ img.fade.in { opacity: 1; }
 @media (max-width: 760px) { .group-new { display: none; } }
 
 /* ---------- application installée (web app) ---------- */
-.topbar-back { display: none; color: var(--text); flex: none; }
+.topbar-back { color: var(--text); flex: none; margin-right: -10px; }
+.topbar-back[hidden] { display: none; }
 .user-menu .install-app { display: flex; align-items: center; gap: 8px; color: var(--accent); font-weight: 600; }
 .user-menu .install-app[hidden] { display: none; }
 .user-menu .install-app .icon { width: 18px; height: 18px; fill: currentColor; }
 .install-steps ol { padding-left: 20px; line-height: 1.9; }
 .install-steps .icon { width: 18px; height: 18px; vertical-align: -3px; fill: var(--accent); }
 @media (display-mode: standalone) {
-  .topbar-back:not([hidden]) { display: inline-grid; margin-right: -16px; }
   /* iPhone : la barre d'état est par-dessus l'application (black-translucent) */
   :root { --safe-top: env(safe-area-inset-top, 0px); }
   .player-top { padding-top: env(safe-area-inset-top); }

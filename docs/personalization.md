@@ -88,9 +88,9 @@ A device can keep its own style (*This device*), e.g. *Classic* on the TV and *S
 
 ## Discover and requests
 
-The **Discover** tab shows the catalogues of the streaming platforms available in your region, the week's trends and a search (TMDB key needed). Each title says whether it is **already on the server**, **requested** or **downloading**.
+The **Discover** tab shows the week's trends, **upcoming** and popular movies and shows, and the catalogues of the streaming platforms available in your region (TMDB key needed). Shortcuts at the top open the full lists, which can be filtered by type, sorting (popular, trending, upcoming, most recent, top rated), genre and service. The search shows results while you type, grouped into movies and shows. Each title says whether it is **already on the server**, **requested** or **downloading**.
 
-**Request** sends the request to [Seerr](https://docs.seerr.dev), which passes it on to Radarr / Sonarr; for a show you choose the seasons. A missing title added to your **Watchlist** is requested automatically (can be turned off) and lands in your list when it arrives.
+The **+** button on a poster requests the title without leaving the list. **Request** sends the request to [Seerr](https://docs.seerr.dev), which passes it on to Radarr / Sonarr; for a show you choose the seasons. A missing title added to your **Watchlist** is requested automatically (can be turned off) and lands in your list when it arrives.
 
 **Setting up Seerr:**
 

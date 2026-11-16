@@ -572,7 +572,7 @@ function episodeRow(e, refresh) {
         h('button.icon-btn.watch-toggle', { title: e.watched ? tr('Marquer non vu') : tr('Marquer vu'),
           class: e.watched ? 'icon-btn watch-toggle on' : 'icon-btn watch-toggle',
           onclick: async () => {
-            try { await post(`/api/items/${e.id}/watched`, { watched: !e.watched }); refresh(); } catch (x) { toast(x.message, 'bad'); }
+            try { await post(`/api/items/${e.id}/watched`, { watched: !e.watched }); refresh(true); } catch (x) { toast(x.message, 'bad'); }
           } }, icon('check'))),
       e.summary ? h('p.episode-summary', { class: e.watched ? 'episode-summary' : 'episode-summary spoiler' }, e.summary) : null));
 }
@@ -584,7 +584,15 @@ export async function renderItem(main, rk, ctx) {
   if (!ctx.isCurrent()) return;
   if (d.type === 'season') { location.replace(`#/item/${d.show_id}?season=${d.id}`); return; }
   document.title = `${d.type === 'episode' ? d.show : d.title} · Noxa`;
-  const rerender = () => renderItem(main, rk, ctx);
+  // rafraîchissement sur place (vu / non vu, métadonnées…) : on reste au même endroit de la page
+  const rerender = async () => {
+    const y = window.scrollY;
+    main.style.minHeight = `${main.offsetHeight}px`;
+    try { await renderItem(main, rk, ctx); } finally {
+      if (ctx.isCurrent()) window.scrollTo(0, y);
+      setTimeout(() => { main.style.minHeight = ''; }, 600);
+    }
+  };
   const art = d.type === 'episode' ? (d.show_art || d.art) : d.art;
   const poster = d.type === 'episode' ? d.show_thumb : d.thumb;
 
@@ -698,13 +706,18 @@ export async function renderItem(main, rk, ctx) {
       || d.seasons.find((s) => d.play_target && s.id === d.play_target.season_id) || d.seasons[0];
     const list = h('div.episodes');
     const tabs = h('div.tabs', { role: 'tablist' });
-    const loadSeason = async (s) => {
+    // quiet : mise à jour sur place (épisode marqué vu) — la liste reste affichée, sinon la page se vide un
+    // instant et remonte tout en haut
+    const loadSeason = async (s, quiet = false) => {
       current = s;
       tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.id === s.id));
-      list.replaceChildren(spinner());
+      if (!quiet) list.replaceChildren(spinner());
       try {
         const eps = await get(`/api/items/${s.id}/children`);
-        list.replaceChildren(...eps.map((e) => episodeRow(e, () => loadSeason(current))));
+        if (current !== s) return;
+        const y = window.scrollY;
+        list.replaceChildren(...eps.map((e) => episodeRow(e, (q) => loadSeason(current, q === true))));
+        if (quiet) window.scrollTo(0, y);
       } catch (e) { list.replaceChildren(h('p.form-error', e.message)); }
     };
     for (const s of d.seasons) {

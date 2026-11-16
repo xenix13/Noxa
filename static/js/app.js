@@ -32,6 +32,32 @@ export const state = { me: null, status: null };
 const root = document.getElementById('app');
 let cleanup = null;
 let renderToken = 0;
+// Retour en arrière : chaque page visitée porte un numéro (history.state), et sa position de défilement est gardée ;
+// revenir sur une page déjà vue (bouton Retour) la rouvre là où on l'avait laissée
+const scrolls = new Map();
+let pageSeq = 0, pageNo = 0;
+function enterPage() {
+  if (pageNo) scrolls.set(pageNo, window.scrollY);
+  let n = history.state && history.state.n;
+  const back = Boolean(n) && n <= pageSeq && scrolls.has(n);
+  if (!n || n > pageSeq) {
+    n = ++pageSeq;
+    try { history.replaceState({ ...(history.state || {}), n }, ''); } catch { /* historique indisponible */ }
+  }
+  pageNo = n;
+  return back ? scrolls.get(n) : 0;
+}
+function restoreScroll(y, token) {
+  if (!y) return;
+  // la page grandit encore (images, rangées) : on réessaie tant qu'elle n'est pas assez haute
+  let tries = 0;
+  const go = () => {
+    if (token !== renderToken) return;
+    window.scrollTo(0, y);
+    if (Math.abs(window.scrollY - y) > 4 && ++tries < 12) setTimeout(go, 120);
+  };
+  go();
+}
 // lecteur réduit : il continue pendant la navigation, dans un coin de l'écran (en dehors de #app)
 let mini = null;
 
@@ -341,7 +367,7 @@ function shell(active) {
       if (first) first.focus({ preventScroll: true });
     } }, avatar(me.user, 34));
   const header = h('header.topbar',
-    // application installée : plus de bouton « précédent » du navigateur, on en met un
+    // bouton « précédent » : l'application de bureau et la web app installée n'ont pas celui du navigateur
     h('button.icon-btn.topbar-back', { type: 'button', 'aria-label': tr('Retour'), title: tr('Retour'), hidden: active === 'home',
       onclick: () => { if (history.length > 1) history.back(); else location.hash = '#/'; } }, icon('back')),
     h('a.logo', { href: '#/', 'aria-label': tr('Noxa — accueil') }, h('span.logo-mark', { 'aria-hidden': 'true' }), 'Noxa'),
@@ -409,6 +435,7 @@ async function route() {
   cancelImages(root);
   const { parts, query } = parseHash();
   const page = parts[0] || '';
+  const backTo = enterPage();
   window.scrollTo(0, 0);
 
   if (!state.status) {
@@ -531,6 +558,7 @@ async function route() {
   } catch (e) {
     if (token === renderToken) clear(main, errorBox(e, route));
   }
+  if (token === renderToken) restoreScroll(backTo, token);
 }
 
 setUnauthorizedHandler(() => {

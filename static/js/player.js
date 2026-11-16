@@ -1141,7 +1141,9 @@ export async function renderPlayer(root, rk, ctx) {
   };
   const toggleFull = () => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else player.requestFullscreen().catch(() => {});
+    // plein écran sur la page entière, pas sur le lecteur : il est reconstruit à chaque épisode, et le plein
+    // écran s'arrêterait à chaque passage à l'épisode suivant
+    else document.documentElement.requestFullscreen().catch(() => player.requestFullscreen().catch(() => {}));
   };
   const wake = () => {
     player.classList.remove('idle');

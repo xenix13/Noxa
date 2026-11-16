@@ -1538,6 +1538,15 @@ class SeanceTest(unittest.TestCase):
                               ("Kaze no Michi", "available"), ("Le Grand Voyage", "available")])
             self.assertEqual(nf[3]["item_id"], self.movie("Le Grand Voyage")["id"])
             self.assertEqual(len(home["trending"]), 4)  # les personnes sont écartées
+            # rangées « à venir » et « populaires » (films, séries), et liste complète triée par sortie à venir
+            self.assertEqual([x["key"] for x in home["sections"]],
+                             ["upcoming_movie", "upcoming_tv", "popular_movie", "popular_tv"])
+            st, up = self.lea.call("GET", "/api/discover/browse?type=tv&sort=upcoming")
+            self.assertEqual((st, up["seerr"], bool(up["results"])), (200, False, True), up)
+            call = next(q for p_, q in reversed(TMDB.calls) if p_ == "/discover/tv" and "first_air_date.gte" in q)
+            self.assertGreater(call["first_air_date.gte"], time.strftime("%Y-%m-%d"))
+            self.assertNotIn("with_watch_providers", call)
+            self.assertEqual(self.lea.call("GET", "/api/discover/browse?sort=nimporte")[0], 400)
             self.assertEqual(self.lea.call("POST", "/api/discover/request", {"type": "movie", "tmdb_id": 9101})[0], 409)
             st, body, h = self.lea.call("GET", "/api/discover/img?p=/p9101.jpg&k=poster", raw=True)
             self.assertEqual((st, body[:2]), (200, b"\xff\xd8"))
