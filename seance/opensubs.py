@@ -101,7 +101,7 @@ class OpenSubtitles:
         if auth:
             token, host = self.login()
             headers["Authorization"] = f"Bearer {token}"
-            if host and base is None and API.startswith("https://api.opensubtitles.com"):
+            if host and base is None and urllib.parse.urlsplit(API).hostname == "api.opensubtitles.com":
                 base = f"https://{host}/api/v1"  # compte VIP : serveur dédié indiqué à la connexion
         url = (base or API) + path
         if params:
