@@ -19,7 +19,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date
+from datetime import date, timedelta
 
 from . import i18n
 from .metadata import TMDB_IMG, MetaError
@@ -191,7 +191,7 @@ def register(app, ctx, x):
         d = res.get("release_date") if mt == "movie" else res.get("first_air_date")
         return {"media_type": mt, "tmdb_id": int(res["id"]), "title": res.get("title") or res.get("name") or "",
                 "original_title": res.get("original_title") or res.get("original_name") or "",
-                "year": int(d[:4]) if d and d[:4].isdigit() else None, "poster": res.get("poster_path"),
+                "year": int(d[:4]) if d and d[:4].isdigit() else None, "date": d or None, "poster": res.get("poster_path"),
                 "backdrop": res.get("backdrop_path"), "overview": res.get("overview") or "",
                 "rating": round(res["vote_average"], 1) if res.get("vote_average") else None,
                 "popularity": res.get("popularity") or 0}
@@ -226,19 +226,42 @@ def register(app, ctx, x):
                                 "logo": p.get("logo_path")}
         return [out[p] for p in FEATURED if p in out]
 
-    def browse(kind, provider, sort="popular", page=1):
-        params = {"watch_region": region(), "with_watch_monetization_types": "flatrate|free|ads",
-                  "sort_by": SORTS[kind].get(sort, "popularity.desc"), "page": page, "include_adult": "false"}
+    def browse(kind, provider, sort="popular", page=1, genre=0):
+        """Catalogue TMDB : populaires, tendances, à venir, récents ou mieux notés ; par service et par genre."""
+        if sort == "trending" and not provider and not genre:
+            r = tget(f"/trending/{kind}/week", page=page)
+            return [card(res, kind) for res in r.get("results", [])], int(r.get("total_pages") or 1)
+        params = {"sort_by": SORTS[kind].get(sort, "popularity.desc"), "page": page, "include_adult": "false"}
         if provider:
-            params["with_watch_providers"] = str(provider)
-        today = date.today().isoformat()
+            params.update({"watch_region": region(), "with_watch_monetization_types": "flatrate|free|ads",
+                           "with_watch_providers": str(provider)})
+        if genre:
+            params["with_genres"] = str(genre)
+        today = date.today()
+        field = "primary_release_date" if kind == "movie" else "first_air_date"
+        if sort == "upcoming":  # pas encore sortis : à partir de demain, sur un an, les plus attendus d'abord
+            params[field + ".gte"] = (today + timedelta(days=1)).isoformat()
+            params[field + ".lte"] = (today + timedelta(days=365)).isoformat()
+            if kind == "movie":
+                params["region"] = region()
         if sort == "recent":
-            params["primary_release_date.lte" if kind == "movie" else "first_air_date.lte"] = today
+            params[field + ".lte"] = today.isoformat()
             params["vote_count.gte"] = 5
         if sort == "rating":
             params["vote_count.gte"] = 300
         r = tget(f"/discover/{kind}", **params)
         return [card(res, kind) for res in r.get("results", [])], int(r.get("total_pages") or 1)
+
+    def genres(kind):
+        try:
+            return [{"id": g["id"], "name": g["name"]} for g in tget(f"/genre/{kind}/list").get("genres", [])
+                    if g.get("id") and g.get("name")]
+        except HTTPError:
+            return []
+
+    # rangées de l'accueil de Découvrir, en plus des tendances et des services : (clé, type, tri)
+    SECTIONS = (("upcoming_movie", "movie", "upcoming"), ("upcoming_tv", "tv", "upcoming"),
+                ("popular_movie", "movie", "popular"), ("popular_tv", "tv", "popular"))
 
     @app.route("GET", "/api/discover/home")
     def discover_home(req):
@@ -246,6 +269,7 @@ def register(app, ctx, x):
         provs = providers()
         jobs = {pool.submit(browse, k, p["id"]): (p["id"], k) for p in provs for k in ("movie", "tv")}
         trend = pool.submit(tget, "/trending/all/week")
+        extra = {key: pool.submit(browse, kind, None, sort) for key, kind, sort in SECTIONS}
         rows = {}
         for f, (pid, kind) in jobs.items():
             try:
@@ -263,8 +287,16 @@ def register(app, ctx, x):
             for i in range(max(len(mv), len(tv))):  # films et séries en alternance
                 mixed += [c for c in (tv[i] if i < len(tv) else None, mv[i] if i < len(mv) else None) if c]
             out_rows.append({**p, "items": decorate(user, mixed[:24])})
+        sections = []
+        for key, kind, sort in SECTIONS:
+            try:
+                items = decorate(user, extra[key].result()[0][:20])
+            except HTTPError:
+                items = []
+            if items:
+                sections.append({"key": key, "type": kind, "sort": sort, "items": items})
         return {"region": region(), "seerr": seerr().enabled, "trending": decorate(user, trending[:20]),
-                "providers": out_rows}
+                "sections": sections, "providers": out_rows}
 
     @app.route("GET", "/api/discover/browse")
     def discover_browse(req):
@@ -273,9 +305,15 @@ def register(app, ctx, x):
             raise HTTPError(400, "Type invalide")
         provider = req.int_arg("provider", 0, lo=0)
         page = req.int_arg("page", 1, lo=1, hi=50)
-        cards, pages = browse(kind, provider or None, req.arg("sort") or "popular", page)
-        prov = next((p for p in providers() if p["id"] == provider), None)
-        return {"page": page, "pages": min(pages, 50), "provider": prov, "results": decorate(req.user, cards)}
+        sort = req.arg("sort") or "popular"
+        if sort not in ("popular", "trending", "upcoming", "recent", "rating"):
+            raise HTTPError(400, "Tri invalide")
+        genre = req.int_arg("genre", 0, lo=0)
+        cards, pages = browse(kind, provider or None, sort, page, genre)
+        provs = providers()
+        prov = next((p for p in provs if p["id"] == provider), None)
+        return {"page": page, "pages": min(pages, 50), "provider": prov, "providers": provs, "genres": genres(kind),
+                "seerr": seerr().enabled, "results": decorate(req.user, cards)}
 
     @app.route("GET", "/api/discover/search")
     def discover_search(req):
@@ -284,7 +322,7 @@ def register(app, ctx, x):
             return {"results": []}
         r = tget("/search/multi", query=q, include_adult="false", page=1)
         cards = [card(x_) for x_ in r.get("results", [])]
-        return {"results": decorate(req.user, cards)}
+        return {"seerr": seerr().enabled, "results": decorate(req.user, cards)}
 
     @app.route("GET", "/api/discover/title/(?P<kind>movie|tv)/(?P<tid>\\d{1,9})")
     def discover_title(req):
