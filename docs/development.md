@@ -88,7 +88,9 @@ French text in the code is the **translation key**:
 
 - `test`: where new work lands first; the *Test* update channel and the `:test` Docker image follow it.
 - `main`: stable releases. Every push to `main` with a new version in `seance/__init__.py` makes CI publish the GitHub release `v<version>` with the `.deb`, the Docker images (`latest` and `<version>`), the Android TV APK and the desktop / Android apps. Hand-written notes are taken from `docs/releases/v<version>.md` when that file exists.
-- `docker-compose.yml` on `main` must use `ghcr.io/xenix13/noxa:latest` (CI checks it).
+- Changes reach `main` only through a pull request from `test`, reviewed and merged by the maintainer.
+- `docker-compose.yml` uses `ghcr.io/xenix13/noxa:latest` on both branches (CI checks it on `main`); switch the tag to `:test` by hand to try the test channel.
+- Commit messages, pull requests and release notes (`docs/releases/`) are written in English.
 - Versions follow [semantic versioning](https://semver.org).
 
 ## Former name (Nexis)

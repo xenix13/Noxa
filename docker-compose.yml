@@ -2,8 +2,8 @@
 # Le code d'installation du premier lancement s'affiche avec : docker compose logs noxa
 services:
   noxa:
-    # branche test : image de test, reconstruite à chaque mise à jour de la branche (sur main : noxa:latest)
-    image: ghcr.io/xenix13/noxa:test
+    # published release; to try the test channel, use ghcr.io/xenix13/noxa:test instead
+    image: ghcr.io/xenix13/noxa:latest
     container_name: noxa
     restart: unless-stopped
     ports:
