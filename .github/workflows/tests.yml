@@ -16,16 +16,20 @@ jobs:
         with:
           python-version: "3.12"
       - name: ffmpeg
-        timeout-minutes: 14
-        # le miroir apt des machines GitHub se fige parfois : délais courts, trois essais de 4 minutes ; dès le
-        # deuxième, seules les sources d'Ubuntu (pas les dépôts tiers de l'image), puis un autre miroir
+        timeout-minutes: 20
+        # The apt mirror of GitHub runners sometimes stalls, and a killed install leaves dpkg locked: each attempt
+        # first repairs dpkg, never asks questions (debconf, needrestart), skips man-db triggers and prints
+        # progress. From the second attempt on: Ubuntu sources only (not the image's third-party ones), then
+        # another mirror.
         run: |
+          sudo rm -f /var/lib/man-db/auto-update
+          APT="sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=60"
           for i in 1 2 3; do
-            timeout 240 sh -c 'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -q &&
-              sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq ffmpeg' && exit 0
-            echo "apt bloqué (essai $i), nouvel essai"
+            sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
+            timeout 360 sh -c "$APT update -q && $APT install -y --no-install-recommends ffmpeg" && exit 0  # same packages as the Docker image (no recommends)
+            echo "apt stalled (attempt $i), retrying"
             sudo find /etc/apt/sources.list.d -type f ! -name 'ubuntu.sources' -exec mv {} /tmp/ \; || true
-            [ "$i" = 2 ] && sudo sed -i 's#http://azure.archive.ubuntu.com/ubuntu#http://archive.ubuntu.com/ubuntu#g' \
+            [ "$i" = 2 ] && sudo sed -i 's#http://[a-z0-9.-]*archive.ubuntu.com/ubuntu#http://archive.ubuntu.com/ubuntu#g' \
               /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
           done
           exit 1
