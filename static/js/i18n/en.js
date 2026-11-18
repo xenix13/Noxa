@@ -1293,6 +1293,8 @@ export default {
   "dlna upnp téléviseur smart tv samsung lg sony console xbox ps5 box réseau local serveur multimédia": "dlna upnp tv smart tv samsung lg sony console xbox ps5 box local network media server",
   "{n} photo": "{n} photo",
   "{n} photos": "{n} photos",
+  "{n} album": "{n} album",
+  "{n} albums": "{n} albums",
   "{p1} photos · {p2} albums": "{p1} photos · {p2} albums",
   "Automatique (selon le débit)": "Automatic (based on bandwidth)",
   "Automatique ({q})": "Automatic ({q})",

@@ -105,12 +105,17 @@ The Docker image is published as `ghcr.io/xenix13/noxa` and, for existing instal
 
 ## Documentation screenshots
 
-The images in `docs/images` come from a generated demo library with fictional titles:
+The images in `docs/images` come from a demo library of free films and photos from Wikimedia Commons: Blender Foundation open movies (Creative Commons), public domain classics and CC0 photos. The list, with licences, is in `tools/screenshots/free_titles.json`.
+
+1. Download each video from its Commons page (the 480p WebM transcode is enough) as `<file>.webm`, each poster as `<title>.jpg` or `.png`, and each photo under its Commons file name.
+2. Build the library, then take the screenshots:
 
 ```bash
-python3 tools/screenshots/demo_library.py /srv/media        # posters, .nfo files and videos (~4 GB)
+python3 tools/screenshots/free_library.py ~/dl/videos ~/dl/posters /srv/media ~/dl/photos  # Movies/, Shows/, Photos/ with .nfo files
 python3 tools/screenshots/take.py /srv/media docs/images     # starts a throwaway server and takes the screenshots
 ```
+
+The Blender films are upscaled to 1080p (they were made in HD); landscape artwork becomes a 2:3 poster over a blurred copy of itself. The older `demo_library.py` builds a fully generated library with fictional titles, handy when no network is available.
 
 Run `take.py` as a regular user (as root every folder looks writable and the Libraries page warns about it). Set `CHROMIUM=/path/to/chrome` if Playwright's own browser is not installed.
 
