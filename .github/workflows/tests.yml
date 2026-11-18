@@ -15,20 +15,35 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # GitHub's Ubuntu mirror is sometimes very slow (tens of kB/s): the ffmpeg packages are kept in a cache,
+      # so most runs only download what changed
+      - uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-ffmpeg-ubuntu-24.04-v1
       - name: ffmpeg
-        timeout-minutes: 14
-        # le miroir apt des machines GitHub se fige parfois : délais courts, trois essais de 4 minutes ; dès le
-        # deuxième, seules les sources d'Ubuntu (pas les dépôts tiers de l'image), puis un autre miroir
+        timeout-minutes: 25
+        # Each attempt repairs dpkg, never asks questions and prints its progress. Packages downloaded by an
+        # attempt that was cut short stay in ~/apt-archives, so the next one resumes. From the second attempt on:
+        # Ubuntu sources only (not the image's third-party ones) and the main Ubuntu mirror instead of the runner's.
         run: |
+          mkdir -p ~/apt-archives/partial
+          sudo rm -f /var/lib/man-db/auto-update
+          APT="sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=60 -o Dir::Cache::Archives=$HOME/apt-archives"
+          ok=
           for i in 1 2 3; do
-            timeout 240 sh -c 'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -q &&
-              sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq ffmpeg' && exit 0
-            echo "apt bloqué (essai $i), nouvel essai"
+            sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
+            # same packages as the Docker image (no recommends)
+            timeout 420 sh -c "$APT update -q && $APT install -y --no-install-recommends ffmpeg" && { ok=1; break; }
+            echo "apt too slow or stalled (attempt $i), retrying"
             sudo find /etc/apt/sources.list.d -type f ! -name 'ubuntu.sources' -exec mv {} /tmp/ \; || true
-            [ "$i" = 2 ] && sudo sed -i 's#http://azure.archive.ubuntu.com/ubuntu#http://archive.ubuntu.com/ubuntu#g' \
-              /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
+            sudo sed -i 's#http://[a-z0-9.-]*archive\.ubuntu\.com/ubuntu#http://archive.ubuntu.com/ubuntu#g' \
+              /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
           done
-          exit 1
+          # the cache action (not root) must be able to read and save the folder
+          sudo rm -rf ~/apt-archives/partial ~/apt-archives/lock
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-archives
+          [ -n "$ok" ] && ffmpeg -version | head -1
       - run: pip install pillow
       - run: python -m unittest discover -s tests -t . -v
       - run: for f in deploy/*.sh; do bash -n "$f"; done
