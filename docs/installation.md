@@ -10,8 +10,9 @@ Noxa is a single Python program plus ffmpeg. Choose the method that matches your
 | [Install script](#install-script-debian--ubuntu) | An existing Debian / Ubuntu VM, LXC or PC | From the interface |
 | [`.deb` package](#deb-package) | You prefer `apt` to manage software | `apt install` the new package, or from the interface |
 | [Docker](#docker) | You already run everything in containers | `docker compose pull` |
+| [Unraid](#unraid) | An Unraid server | *Docker → Check for updates* |
 
-**Contents:** [Requirements](#requirements) · [Proxmox LXC](#proxmox-lxc-in-one-command) · [Install script](#install-script-debian--ubuntu) · [.deb](#deb-package) · [Docker](#docker) · [Access to your media](#access-to-your-media) · [Graphics card](#hardware-transcoding-graphics-card) · [HTTPS and remote access](#https-and-remote-access) · [Updates](#updates) · [Configuration file](#configuration-file) · [Uninstall](#uninstall)
+**Contents:** [Requirements](#requirements) · [Proxmox LXC](#proxmox-lxc-in-one-command) · [Install script](#install-script-debian--ubuntu) · [.deb](#deb-package) · [Docker](#docker) · [Unraid](#unraid) · [Access to your media](#access-to-your-media) · [Graphics card](#hardware-transcoding-graphics-card) · [HTTPS and remote access](#https-and-remote-access) · [Updates](#updates) · [Configuration file](#configuration-file) · [Uninstall](#uninstall)
 
 ## Requirements
 
@@ -131,6 +132,21 @@ services:
 - **Graphics card:** uncomment `devices: /dev/dri` and `group_add` (Intel / AMD), or the `nvidia` reservation (requires the NVIDIA Container Toolkit on the host).
 - **DLNA:** use `network_mode: host`, otherwise TVs cannot see the server.
 - **Backups on another disk:** add a volume such as `/mnt/nas/noxa:/backups` and choose `/backups` in *Settings → Maintenance → Backups*.
+
+## Unraid
+
+Noxa runs on Unraid with its Docker image, from a ready-made template:
+
+1. Open a terminal on the Unraid server (the *>_* icon at the top right) and download the template:
+   ```bash
+   wget -O /boot/config/plugins/dockerMan/templates-user/my-Noxa.xml \
+     https://raw.githubusercontent.com/xenix13/Noxa/main/deploy/unraid/noxa.xml
+   ```
+2. In *Docker*, click *Add Container* and pick **Noxa** in the *Template* list.
+3. Choose your movies, TV shows and (optionally) photos folders; they are mounted **read-only** on `/media/movies`, `/media/shows` and `/media/photos`. Settings and cache go to `/mnt/user/appdata/noxa`.
+4. Apply, open the web UI, and enter the setup code shown in the container log (*Docker → Noxa → Logs*).
+
+The container runs as `nobody:users` (99:100), like most Unraid containers, so `appdata` keeps its usual owner. For hardware transcoding, pass `/dev/dri` (Intel / AMD) in the template's advanced settings, or follow the *Requires* notes of the template for NVIDIA.
 
 ## Access to your media
 
