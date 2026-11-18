@@ -146,7 +146,13 @@ Noxa builds on [ffmpeg](https://ffmpeg.org), [hls.js](https://github.com/video-d
 
 This product uses the TMDB API but is not endorsed or certified by [TMDB](https://www.themoviedb.org). Map tiles © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
 
-The demo titles in the screenshots are fictional; their posters and videos were generated for this documentation ([`tools/screenshots`](tools/screenshots)).
+The screenshots show free films from [Wikimedia Commons](https://commons.wikimedia.org) ([`tools/screenshots`](tools/screenshots)):
+
+- Blender Foundation open movies, © Blender Foundation, [www.blender.org](https://www.blender.org): *Big Buck Bunny*, *Sintel*, *Tears of Steel* and *Caminandes: Llama Drama* and *Llamigos* (CC BY 3.0), *Elephants Dream* (CC BY 2.5), *Cosmos Laundromat* and *Caminandes: Gran Dillama* (CC BY-SA 3.0), *Spring* (CC BY 4.0).
+- Public domain films: *Night of the Living Dead*, *Nosferatu*, *Charade*, *His Girl Friday*, *The General*.
+- Photos released under CC0 by their authors (mostly Wilfredor) on Wikimedia Commons.
+
+Plot summaries were written for this documentation; the screenshots change none of these works beyond resizing.
 
 ## License
 

@@ -106,7 +106,9 @@ async function browse(main, ctx, o) {
       total = r.total;
       start += r.photos.length;
       if (!r.photos.length) total = start;
-      count.textContent = plural(total, '{n} photo', '{n} photos');
+      // root of the Albums tab: no loose photos, so count the albums rather than show "0 photos"
+      if (start === r.photos.length && r.albums.length && !total) count.textContent = plural(r.albums.length, '{n} album', '{n} albums');
+      else count.textContent = plural(total, '{n} photo', '{n} photos');
       addPhotos(r.photos);
       if (!total && !r.albums.length && start === 0) {
         content.replaceChildren(h('div.empty', o.view === 'favorites' ? tr('Aucun favori : l’étoile de la visionneuse ajoute une photo ici.') : tr('Aucune photo ici.')));

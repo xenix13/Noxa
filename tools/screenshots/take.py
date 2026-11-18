@@ -33,9 +33,11 @@ media, out = sys.argv[1], sys.argv[2]
 os.makedirs(out, exist_ok=True)
 work = tempfile.mkdtemp()
 webm = os.path.join(work, "player.webm")
-subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-t", "20", "-i",
-                "mandelbrot=s=1280x720:r=24:maxiter=400:start_scale=1.2:end_scale=0.3", "-c:v", "libvpx-vp9",
-                "-b:v", "1M", "-deadline", "realtime", "-cpu-used", "8", webm], check=True)
+# the player screenshot shows a real frame of the film (Chromium here cannot decode H.264: a short VP9 clip)
+PLAYER = "Tears of Steel"
+clip_src = os.path.join(media, "Movies", "Tears of Steel (2012)", "Tears of Steel (2012).mkv")
+subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", "200", "-t", "20", "-i", clip_src, "-an", "-vf", "scale=1280:-2",
+                "-c:v", "libvpx-vp9", "-b:v", "1500k", "-deadline", "realtime", "-cpu-used", "8", webm], check=True)
 
 ctx = Ctx(os.path.join(work, "data"), STATIC)
 server = Server(("127.0.0.1", 0), make_handler(build_app(ctx)))
@@ -47,7 +49,10 @@ st, r = admin.call("POST", "/api/setup", {"username": "alex", "password": "demo-
                                           "language": "en"}, headers={"X-Setup-Code": ctx.setup_code})
 assert st == 200, r
 libs = {}
-for name, kind, sub in (("Movies", "movie", "Movies"), ("Shows", "show", "Shows"), ("Photos", "photo", "Photos")):
+LIBS = [("Movies", "movie", "Movies"), ("Shows", "show", "Shows")]
+if os.path.isdir(os.path.join(media, "Photos")):
+    LIBS.append(("Photos", "photo", "Photos"))
+for name, kind, sub in LIBS:
     st, r = admin.call("POST", "/api/admin/libraries", {"name": name, "kind": kind, "paths": [os.path.join(media, sub)]})
     assert st == 200, r
     libs[name] = r.get("id") or r.get("library", {}).get("id")
@@ -63,21 +68,21 @@ for name, display in (("sam", "Sam"), ("kids", "Kids")):
 db = ctx.db
 # the scan and the .nfo metadata finish in the background: wait until every demo title is there
 for _ in range(300):
-    if (db.scalar("SELECT COUNT(*) FROM items WHERE type='movie'") >= 12
-            and db.scalar("SELECT COUNT(*) FROM items WHERE type='show' AND title IN "
-                          "('Harbor Lights', 'Signal Lost', 'Kitchen Atlas')") == 3):
+    if (db.scalar("SELECT COUNT(*) FROM items WHERE type='movie'") >= 11
+            and db.scalar("SELECT COUNT(*) FROM items WHERE type='episode'") >= 3
+            and ("Photos" not in libs or db.scalar("SELECT COUNT(*) FROM items WHERE type='photo'") >= 19)):
         break
     time.sleep(1)
 movies = db.all("SELECT id, title, duration_ms FROM items WHERE type='movie' ORDER BY title")
 by_title = {m["title"]: m for m in movies}
-episodes = db.all("SELECT id, title, duration_ms, parent_id FROM items WHERE type='episode' ORDER BY id")
+episodes = db.all("SELECT id, title, duration_ms, parent_id FROM items WHERE type='episode' ORDER BY title")
 shows = db.all("SELECT id, title FROM items WHERE type='show' ORDER BY title")
 show_by_title = {s["title"]: s for s in shows}
 uid = db.scalar("SELECT id FROM users WHERE username='alex'")
 now = int(time.time())
 
 # continue watching: a few movies and an episode in progress
-for title, frac in (("The Quiet Orbit", 0.42), ("Glass Tide", 0.67), ("Velvet Circuit", 0.18)):
+for title, frac in (("Sintel", 0.42), ("Charade", 0.31), ("Cosmos Laundromat", 0.55)):
     m = by_title[title]
     admin.call("POST", "/api/progress", {"id": str(m["id"]), "position": int(m["duration_ms"] * frac),
                                          "duration": m["duration_ms"], "state": "stopped"})
@@ -87,11 +92,11 @@ for e in episodes[:2]:
 e = episodes[2]
 admin.call("POST", "/api/progress", {"id": str(e["id"]), "position": int(e["duration_ms"] * 0.3),
                                      "duration": e["duration_ms"], "state": "stopped"})
-for t in ("Halcyon Drift", "Low Light Requiem", "Paper Lanterns"):
+for t in ("Spring", "Nosferatu", "His Girl Friday"):
     db.run("INSERT OR IGNORE INTO watchlist(user_id, item_id, added_at) VALUES(?,?,?)", (uid, by_title[t]["id"], now))
 db.run("INSERT OR IGNORE INTO watchlist(user_id, item_id, added_at) VALUES(?,?,?)",
-       (uid, show_by_title["Signal Lost"]["id"], now))
-for t, v in (("Northbound Static", 5), ("Salt & Ember", 4), ("Pinewatch", 3)):
+       (uid, show_by_title["Caminandes"]["id"], now))
+for t, v in (("Big Buck Bunny", 5), ("The General", 5), ("Night of the Living Dead", 4)):
     db.run("INSERT OR REPLACE INTO ratings(user_id, item_id, value, updated_at) VALUES(?,?,?,?)",
            (uid, by_title[t]["id"], v, now))
 
@@ -100,8 +105,8 @@ usb = os.path.join(work, "usb-disk")
 os.makedirs(usb)
 st, r = admin.call("POST", "/api/admin/cold/stores", {"kind": "local", "name": "USB disk", "conf": {"path": usb}})
 assert st == 200, r
-admin.call("POST", "/api/admin/cold/archive", {"ids": [by_title[t]["id"] for t in ("Pinewatch", "Paper Lanterns",
-                                                                                   "Seven Summers South")],
+admin.call("POST", "/api/admin/cold/archive", {"ids": [by_title[t]["id"] for t in ("Elephants Dream", "Spring",
+                                                                                   "Big Buck Bunny")],
                                                "store": r["id"]})
 for _ in range(600):
     st, c = admin.call("GET", "/api/admin/cold")
@@ -184,21 +189,22 @@ with sync_playwright() as pw:
     save(page, "home.jpg")
     go(page, f"/#/library/{libs['Movies']}", ".grid .card")
     save(page, "library.jpg")
-    go(page, f"/#/item/{by_title['The Quiet Orbit']['id']}", ".detail-actions", 1200)
+    go(page, f"/#/item/{by_title['Sintel']['id']}", ".detail-actions", 1200)
     save(page, "movie.jpg")
-    go(page, f"/#/item/{show_by_title['Harbor Lights']['id']}", ".episode", 1500)
+    go(page, f"/#/item/{show_by_title['Caminandes']['id']}", ".episode", 1500)
     save(page, "show.jpg", full=True, clip={"x": 0, "y": 0, "width": 1440, "height": 1400})
 
-    go(page, f"/#/play/{by_title['Northbound Static']['id']}", "video", 6000)
+    go(page, f"/#/play/{by_title[PLAYER]['id']}", "video", 6000)
     page.mouse.move(700, 500)
     page.mouse.move(720, 760)
     page.wait_for_timeout(800)
     save(page, "player.jpg")
 
-    go(page, f"/#/library/{libs['Photos']}", None, 1000)
-    page.locator("text=All photos").first.click()
-    settle(page, 1500)
-    save(page, "photos.jpg")
+    if "Photos" in libs:
+        go(page, f"/#/library/{libs['Photos']}", None, 1000)
+        page.locator("text=Albums").first.click()
+        settle(page, 1500)
+        save(page, "photos.jpg")
 
     for name, route, wait in (("settings-dashboard.jpg", "/#/admin/dashboard", 1500),
                               ("settings-libraries.jpg", "/#/admin/libraries", 800),
@@ -240,7 +246,7 @@ with sync_playwright() as pw:
     p2.click("text=Alex")
     p2.wait_for_timeout(800)
     shots = []
-    for route, sel in (("/#/", ".hero-title"), (f"/#/item/{show_by_title['Signal Lost']['id']}", ".episode"),
+    for route, sel in (("/#/", ".hero-title"), (f"/#/item/{by_title['Sintel']['id']}", ".detail-actions"),
                        (f"/#/library/{libs['Movies']}", ".grid .card")):
         go(p2, route, sel, 1200)
         shots.append(Image.open(io.BytesIO(p2.screenshot())).convert("RGB"))
