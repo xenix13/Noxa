@@ -13,7 +13,10 @@ var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-ubuntu}"
 var_version="${var_version:-24.04}"
-var_unprivileged="${var_unprivileged:-1}"
+# Privileged with mount=cifs: Noxa mounts the NAS shares itself (Settings > Libraries > Network shares),
+# and Linux forbids SMB mounts in unprivileged containers. Set var_unprivileged=1 to mount them on the host instead.
+var_unprivileged="${var_unprivileged:-0}"
+var_mount_fs="${var_mount_fs:-cifs}"
 var_gpu="${var_gpu:-yes}"
 
 header_info "$APP"
@@ -33,6 +36,8 @@ function update_script() {
   if check_for_gh_release "noxa" "xenix13/Noxa"; then
     msg_info "Updating ${APP}"
     fetch_and_deploy_gh_release "noxa" "xenix13/Noxa" "binary" "latest" "" "noxa_*_all.deb"
+    # the units are copied by the package's setup script, not shipped as package files: restart them here
+    systemctl restart seance-mountd seance
     msg_ok "Updated ${APP}"
     msg_ok "Updated successfully!"
   fi

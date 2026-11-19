@@ -21,7 +21,9 @@ msg_ok "Installed Noxa"
 setup_hwaccel "seance"
 
 msg_info "Starting Noxa"
-systemctl restart seance
+# the .deb is installed with SYSTEMD_OFFLINE=1, so its own systemctl calls do not start anything
+systemctl enable -q --now seance-mountd seance
+systemctl restart seance-mountd seance
 msg_ok "Started Noxa"
 
 motd_ssh
