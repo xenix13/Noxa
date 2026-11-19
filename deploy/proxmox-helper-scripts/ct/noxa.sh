@@ -36,6 +36,8 @@ function update_script() {
   if check_for_gh_release "noxa" "xenix13/Noxa"; then
     msg_info "Updating ${APP}"
     fetch_and_deploy_gh_release "noxa" "xenix13/Noxa" "binary" "latest" "" "noxa_*_all.deb"
+    # the units are copied by the package's setup script, not shipped as package files: restart them here
+    systemctl restart seance-mountd seance
     msg_ok "Updated ${APP}"
     msg_ok "Updated successfully!"
   fi
