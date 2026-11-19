@@ -117,6 +117,16 @@ python3 tools/screenshots/take.py /srv/media docs/images     # starts a throwawa
 
 The Blender films are upscaled to 1080p (they were made in HD); landscape artwork becomes a 2:3 poster over a blurred copy of itself.
 
+The animation at the top of the README (`docs/images/demo.webp`) is recorded from the generated library, with a 20-second clip of a real film for the player:
+
+```bash
+python3 tools/screenshots/demo_library.py /srv/demolib
+CLIP=/path/to/a/film.mkv python3 tools/screenshots/record_demo.py /srv/demolib /tmp/rec   # frames + frames.txt
+ffmpeg -f concat -safe 0 -i /tmp/rec/frames.txt -vf "fps=15,scale=960:-1" -c:v libwebp_anim -quality 70 -loop 0 docs/images/demo.webp
+```
+
+`docs/images/social-preview.png` (1280×640) is the image GitHub shows when the repository is shared; it is uploaded by hand in the repository's *Settings → General → Social preview*.
+
 Run `take.py` as a regular user (as root every folder looks writable and the Libraries page warns about it). Set `CHROMIUM=/path/to/chrome` if Playwright's own browser is not installed.
 
 ## Contributing

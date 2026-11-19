@@ -17,7 +17,7 @@
 
 [Install](docs/installation.md) · [Getting started](docs/getting-started.md) · [Features](#features) · [Documentation](#documentation) · [Releases](https://github.com/xenix13/Noxa/releases)
 
-<img src="docs/images/home.jpg" alt="Noxa home screen" width="100%">
+<img src="docs/images/demo.webp" alt="A short tour of Noxa: home screen, movie library, movie page, player, TV show and photo albums" width="100%">
 
 </div>
 

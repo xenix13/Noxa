@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Noxa</Name>
+  <Repository>ghcr.io/xenix13/noxa:latest</Repository>
+  <Registry>https://github.com/xenix13/Noxa/pkgs/container/noxa</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/xenix13/Noxa/issues</Support>
+  <Project>https://github.com/xenix13/Noxa</Project>
+  <Overview>Noxa is a lightweight, self-hosted media server for your movies, TV shows, anime and photos. It plays files directly whenever it can and only transcodes when a client needs it, with optional hardware acceleration (Intel / AMD VAAPI, NVIDIA). No account, no telemetry. Clients: web browser, Android TV, Android and desktop (Windows, macOS, Linux). Also: linked servers (share catalogues and accounts between Noxa servers), cold storage for titles you rarely watch, a photo library and a DLNA server.[br][br]After the first start, open the web UI: it asks for the setup code shown in the container log.</Overview>
+  <Category>MediaServer:Video MediaServer:Photos</Category>
+  <WebUI>http://[IP]:[PORT:8420]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/xenix13/Noxa/main/deploy/unraid/noxa.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/xenix13/Noxa/main/docs/images/logo.png</Icon>
+  <ExtraParams>--user 99:100</ExtraParams>
+  <PostArgs/>
+  <Requires>For hardware transcoding with Intel or AMD, pass /dev/dri (below). With NVIDIA, install the Nvidia Driver plugin and add --runtime=nvidia to Extra Parameters, with the NVIDIA_VISIBLE_DEVICES variable.</Requires>
+  <Config Name="Web UI port" Target="8420" Default="8420" Mode="tcp" Description="Web interface and apps." Type="Port" Display="always" Required="true" Mask="false">8420</Config>
+  <Config Name="Linked servers port" Target="8421" Default="8421" Mode="tcp" Description="TLS port for linked servers. Only needed if another Noxa server must reach this one." Type="Port" Display="advanced" Required="false" Mask="false">8421</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/noxa" Mode="rw" Description="Database, image and subtitle cache, settings." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/noxa</Config>
+  <Config Name="Movies" Target="/media/movies" Default="/mnt/user/movies" Mode="ro" Description="Your movies (read only). In Noxa, add a library pointing to /media/movies." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/movies</Config>
+  <Config Name="TV shows" Target="/media/shows" Default="/mnt/user/tv" Mode="ro" Description="Your TV shows and anime (read only). In Noxa, add a library pointing to /media/shows." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/tv</Config>
+  <Config Name="Photos" Target="/media/photos" Default="" Mode="ro" Description="Optional photo library (read only), added in Noxa as a Photos library pointing to /media/photos." Type="Path" Display="always" Required="false" Mask="false"/>
+  <Config Name="Backups" Target="/backups" Default="" Mode="rw" Description="Optional folder for backups (Settings, Backups: /backups)." Type="Path" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Intel / AMD GPU" Target="" Default="/dev/dri" Mode="" Description="Optional: hardware transcoding with VAAPI. Leave empty if you have no GPU." Type="Device" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Secure cookies" Target="SEANCE_COOKIE_SECURE" Default="0" Mode="" Description="Set to 1 when Noxa is reached through an HTTPS reverse proxy." Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
+  <Config Name="Trust proxy" Target="SEANCE_TRUST_PROXY" Default="0" Mode="" Description="Set to 1 behind a reverse proxy, so Noxa sees the real client IP." Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
+</Container>
