@@ -13,7 +13,10 @@ var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-ubuntu}"
 var_version="${var_version:-24.04}"
-var_unprivileged="${var_unprivileged:-1}"
+# Privileged with mount=cifs: Noxa mounts the NAS shares itself (Settings > Libraries > Network shares),
+# and Linux forbids SMB mounts in unprivileged containers. Set var_unprivileged=1 to mount them on the host instead.
+var_unprivileged="${var_unprivileged:-0}"
+var_mount_fs="${var_mount_fs:-cifs}"
 var_gpu="${var_gpu:-yes}"
 
 header_info "$APP"
