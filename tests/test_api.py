@@ -130,7 +130,7 @@ class SeanceTest(unittest.TestCase):
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         cls.admin = Client(cls.base)
-        st, r = cls.admin.call("POST", "/api/setup", {"username": "colas", "password": "motdepasse1"},
+        st, r = cls.admin.call("POST", "/api/setup", {"username": "alex", "password": "motdepasse1"},
                                headers={"X-Setup-Code": cls.ctx.setup_code})
         assert st == 200, r
         st, r = cls.admin.call("PUT", "/api/admin/settings", {"tmdb_key": TMDB.key})
@@ -1650,12 +1650,12 @@ class SeanceTest(unittest.TestCase):
             self.assertEqual(c.call("POST", "/api/login", {"username": "tom", "password": ""})[0], 401)
             # depuis la session de l'admin : « Qui regarde ? »
             dev = Client(self.base)
-            dev.call("POST", "/api/login", {"username": "colas", "password": "motdepasse1"})
+            dev.call("POST", "/api/login", {"username": "alex", "password": "motdepasse1"})
             st, profiles = dev.call("GET", "/api/profiles")
             by = {p["display_name"]: p for p in profiles}
             self.assertEqual(by["Tom"]["needs"], "pin")
-            self.assertEqual(by["colas"]["needs"], "password")
-            self.assertTrue(by["colas"]["current"])
+            self.assertEqual(by["alex"]["needs"], "password")
+            self.assertTrue(by["alex"]["current"])
             self.assertEqual(dev.call("POST", f"/api/profiles/{kid['id']}/switch", {"pin": "0000"})[0], 400)
             st, r = dev.call("POST", f"/api/profiles/{kid['id']}/switch", {"pin": "1234"})
             self.assertEqual(st, 200, r)
@@ -1675,17 +1675,17 @@ class SeanceTest(unittest.TestCase):
             st, home = dev.call("GET", "/api/home")
             self.assertNotIn("Animes", [row["library"]["title"] for row in home["rows"]])
             # retour sur le compte admin : mot de passe exigé (pas de PIN)
-            self.assertEqual(dev.call("POST", f"/api/profiles/{by['colas']['id']}/switch", {"password": "faux"})[0], 400)
-            st, r = dev.call("POST", f"/api/profiles/{by['colas']['id']}/switch", {"password": "motdepasse1"})
+            self.assertEqual(dev.call("POST", f"/api/profiles/{by['alex']['id']}/switch", {"password": "faux"})[0], 400)
+            st, r = dev.call("POST", f"/api/profiles/{by['alex']['id']}/switch", {"password": "motdepasse1"})
             self.assertEqual(st, 200)
             st, me = dev.call("GET", "/api/me")
-            self.assertEqual(me["user"]["username"], "colas")
+            self.assertEqual(me["user"]["username"], "alex")
             # PIN personnel
             self.assertEqual(dev.call("PUT", "/api/me/pin", {"pin": "12", "password": "motdepasse1"})[0], 400)
             self.assertEqual(dev.call("PUT", "/api/me/pin", {"pin": "4321", "password": "faux"})[0], 400)
             self.assertEqual(dev.call("PUT", "/api/me/pin", {"pin": "4321", "password": "motdepasse1"})[0], 200)
             st, profiles = dev.call("GET", "/api/profiles")
-            self.assertEqual({p["display_name"]: p for p in profiles}["colas"]["needs"], "pin")
+            self.assertEqual({p["display_name"]: p for p in profiles}["alex"]["needs"], "pin")
             dev.call("PUT", "/api/me/pin", {"pin": "", "password": "motdepasse1"})
         finally:
             self.ctx.throttle.fails.clear()
@@ -1721,7 +1721,7 @@ class SeanceTest(unittest.TestCase):
         self.lea.call("PUT", "/api/me/prefs", {"home_order": [], "nav_order": [], "nav_hidden": []})
         self.assertEqual(self.lea.call("GET", "/api/admin/users")[0], 403)
         st, users = self.admin.call("GET", "/api/admin/users")
-        me = [u for u in users if u["username"] == "colas"][0]
+        me = [u for u in users if u["username"] == "alex"][0]
         self.assertEqual(self.admin.call("DELETE", f"/api/admin/users/{me['id']}")[0], 400)
 
     def test_admin_update_check(self):

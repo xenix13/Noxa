@@ -40,7 +40,7 @@ class SecurityTest(unittest.TestCase):
         cls.port = cls.server.server_address[1]
         cls.base = f"http://127.0.0.1:{cls.port}"
         cls.admin = Client(cls.base)
-        st, r = cls.admin.call("POST", "/api/setup", {"username": "colas", "password": "motdepasse1"},
+        st, r = cls.admin.call("POST", "/api/setup", {"username": "alex", "password": "motdepasse1"},
                                headers={"X-Setup-Code": cls.ctx.setup_code})
         assert st == 200, r
         cls.lib_dir = os.path.join(cls.work, "series")
@@ -129,7 +129,7 @@ class SecurityTest(unittest.TestCase):
         st, open_ = self.admin.call("POST", "/api/admin/users", {"username": "invite", "managed": True})
         st, teen = self.admin.call("POST", "/api/admin/users", {"username": "ado", "managed": True, "max_age": 7})
         c = Client(self.base)
-        c.call("POST", "/api/login", {"username": "colas", "password": "motdepasse1"})
+        c.call("POST", "/api/login", {"username": "alex", "password": "motdepasse1"})
         self.assertEqual(c.call("POST", f"/api/profiles/{kid['id']}/switch", {})[0], 200)
         st, r = c.call("POST", f"/api/profiles/{open_['id']}/switch", {})
         self.assertEqual(st, 403, r)  # profil sans PIN et sans limite d'âge

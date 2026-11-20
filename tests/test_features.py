@@ -63,7 +63,7 @@ class FeaturesTest(unittest.TestCase):
         cls.port = cls.server.server_address[1]
         cls.base = f"http://127.0.0.1:{cls.port}"
         cls.admin = Client(cls.base)
-        st, r = cls.admin.call("POST", "/api/setup", {"username": "colas", "password": "motdepasse1"},
+        st, r = cls.admin.call("POST", "/api/setup", {"username": "alex", "password": "motdepasse1"},
                                headers={"X-Setup-Code": cls.ctx.setup_code})
         assert st == 200, r
         cls.admin.call("PUT", "/api/admin/settings", {"tmdb_key": TMDB.key})
@@ -292,7 +292,7 @@ class FeaturesTest(unittest.TestCase):
             self.assertEqual((st, ts[:1], h["Content-Type"]), (200, b"\x47", "video/mp2t"))
             st, p2 = self.admin.call("POST", f"/api/live/{voyage['id']}/play")
             self.assertEqual(p2["session"], p["session"])
-            self.assertEqual(self.admin.call("GET", "/api/admin/live")[1]["sessions"][0]["viewers"], ["Léa", "colas"])
+            self.assertEqual(self.admin.call("GET", "/api/admin/live")[1]["sessions"][0]["viewers"], ["Léa", "alex"])
             # limite de chaînes simultanées
             self.admin.call("PUT", "/api/admin/live/settings", {"max_sessions": 1})
             st, err = self.lea.call("POST", f"/api/live/{brume['id']}/play")
@@ -400,7 +400,7 @@ class FeaturesTest(unittest.TestCase):
         conn, ev = self.events(self.lea, gid, 2)
         try:
             self.assertEqual([e["type"] for e in ev], ["members", "state"])
-            self.assertEqual({m["name"] for m in ev[0]["members"]}, {"colas", "Léa"})
+            self.assertEqual({m["name"] for m in ev[0]["members"]}, {"alex", "Léa"})
             # l'hôte est prêt : la lecture démarre pour tout le monde
             st, s = self.admin.call("POST", f"/api/together/{gid}/cmd", {"action": "ready"})
             self.assertEqual((s["playing"], s["waiting"]), (True, False), s)
@@ -410,12 +410,12 @@ class FeaturesTest(unittest.TestCase):
             # un saut pendant la lecture : on attend que chacun ait rechargé
             self.lea.call("POST", f"/api/together/{gid}/cmd", {"action": "play", "position": 12000})
             st, s = self.lea.call("POST", f"/api/together/{gid}/cmd", {"action": "seek", "position": 60000})
-            self.assertEqual((s["waiting"], s["waiting_for"]), (True, ["colas"]), s)
+            self.assertEqual((s["waiting"], s["waiting_for"]), (True, ["alex"]), s)
             st, s = self.admin.call("POST", f"/api/together/{gid}/cmd", {"action": "ready"})
             self.assertFalse(s["waiting"])
             # coupure réseau chez quelqu'un : tout le groupe attend
             st, s = self.admin.call("POST", f"/api/together/{gid}/cmd", {"action": "buffering"})
-            self.assertEqual((s["waiting"], s["waiting_for"]), (True, ["colas"]))
+            self.assertEqual((s["waiting"], s["waiting_for"]), (True, ["alex"]))
             self.admin.call("POST", f"/api/together/{gid}/cmd", {"action": "ready"})
             # Léa change de langue : tout le monde attend à sa position, plus longtemps qu'une simple coupure
             st, s = self.lea.call("POST", f"/api/together/{gid}/cmd",
@@ -465,7 +465,7 @@ class FeaturesTest(unittest.TestCase):
         t.join(10)
         states = [e for e in got if e["type"] == "state"]
         self.assertEqual([s["action"] for s in states], ["sync", "resume", "pause"], got)
-        self.assertEqual((states[-1]["by"], states[-1]["position"]), ("colas", 3000))
+        self.assertEqual((states[-1]["by"], states[-1]["position"]), ("alex", 3000))
         self.admin.call("POST", f"/api/together/{gid}/leave")
         self.lea.call("POST", f"/api/together/{gid}/leave")
 
@@ -502,13 +502,13 @@ class FeaturesTest(unittest.TestCase):
         old = syncplay.GONE_AFTER
         syncplay.GONE_AFTER = 0
         try:
-            # (Léa a encore sa liste en direct ouverte ; colas aussi, le temps du test)
-            q = self.ctx.together.watch({"id": self.ctx.db.scalar("SELECT id FROM users WHERE username='colas'")})
+            # (Léa a encore sa liste en direct ouverte ; alex aussi, le temps du test)
+            q = self.ctx.together.watch({"id": self.ctx.db.scalar("SELECT id FROM users WHERE username='alex'")})
             time.sleep(0.05)
             self.ctx.together.reap()
             members = {m["name"] for m in self.lea.call("GET", f"/api/together/{gid}")[1]["members"]}
-            self.assertEqual(members, {"colas", "Léa"})
-            self.ctx.together.unwatch(q)  # colas ferme Noxa
+            self.assertEqual(members, {"alex", "Léa"})
+            self.ctx.together.unwatch(q)  # alex ferme Noxa
             time.sleep(0.05)
             self.ctx.together.reap()
             members = {m["name"] for m in self.lea.call("GET", f"/api/together/{gid}")[1]["members"]}
