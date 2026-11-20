@@ -550,6 +550,24 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(d2["play_target"]["season"], 2)
         self.admin.call("POST", f"/api/items/{show['id']}/watched", {"watched": False})
 
+    def test_next_up_not_hidden_by_finished_shows(self):
+        """15 series finished more recently (nothing left to watch) must not push a pending next episode out."""
+        show, d, eps = self.episodes("Les Veilleurs", "Séries")
+        c = self.admin
+        c.call("POST", f"/api/items/{eps[0]['id']}/watched", {"watched": True})
+        db = self.ctx.db
+        uid = db.scalar("SELECT id FROM users WHERE is_admin=1 ORDER BY id LIMIT 1")
+        t = int(time.time()) + 60
+        for i in range(15):
+            db.run("INSERT INTO progress(user_id,rating_key,updated_at,type,show_key,watched,last_watched_at,meta) "
+                   "VALUES(?,?,?,?,?,1,?,'{}')", (uid, str(990000 + i), t + i, "episode", str(980000 + i), t + i))
+        try:
+            st, home = c.call("GET", "/api/home")
+            self.assertIn(eps[1]["id"], [x["id"] for x in home["continue"] if x.get("next_up")])
+        finally:
+            db.run("DELETE FROM progress WHERE user_id=? AND CAST(rating_key AS INTEGER) >= 990000", (uid,))
+            c.call("POST", f"/api/items/{show['id']}/watched", {"watched": False})
+
     def test_mark_watched_from_continue_and_undo(self):
         show, d, eps = self.episodes("Les Veilleurs", "Séries")
         c = self.admin
