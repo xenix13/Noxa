@@ -206,11 +206,19 @@ def register(app, ctx, x):
             items.append(c)
             if r["show_key"]:
                 shows_in_progress.add(r["show_key"])
+        # shows with an episode finished in the last 60 days AND an episode still unwatched, newest first: completed
+        # series are left out in SQL, so a dozen of them cannot push a show with a new episode out of the row
         recent_shows = db.all(
-            "SELECT show_key, MAX(last_watched_at) AS t FROM progress WHERE user_id=? AND watched=1 "
-            "AND show_key IS NOT NULL AND last_watched_at > ? GROUP BY show_key ORDER BY t DESC LIMIT 12",
-            (uid, int(time.time()) - 60 * 86400))
+            "SELECT show_key, t FROM (SELECT show_key, MAX(last_watched_at) AS t FROM progress WHERE user_id=? "
+            "AND watched=1 AND show_key IS NOT NULL AND last_watched_at > ? GROUP BY show_key) "
+            "WHERE EXISTS (SELECT 1 FROM items e WHERE e.show_id=CAST(show_key AS INTEGER) AND e.type='episode' "
+            "AND NOT EXISTS (SELECT 1 FROM progress q WHERE q.user_id=? AND q.rating_key=CAST(e.id AS TEXT) "
+            "AND q.watched=1)) ORDER BY t DESC LIMIT 100",
+            (uid, int(time.time()) - 60 * 86400, uid))
+        next_ups = 0
         for r in recent_shows:
+            if next_ups >= 12:
+                break
             if r["show_key"] in shows_in_progress or not r["show_key"].isdigit() or int(r["show_key"]) in hidden:
                 continue
             watched = {w["rating_key"]: w["last_watched_at"] or 0 for w in db.all(
@@ -230,6 +238,7 @@ def register(app, ctx, x):
                     if c["section"] in allowed and visible(user, ep):
                         c.update(next_up=True, position=0, watched=False, _t=r["t"])
                         items.append(c)
+                        next_ups += 1
                     break
         items.sort(key=lambda c: c.pop("_t", 0), reverse=True)
         return items[:24]
