@@ -173,6 +173,7 @@ def build_app(ctx):
     app.begin = lambda req: i18n.set_lang((req.headers.get("X-Lang") or "").strip())
     app.translate = i18n.tr
     app.default_lang = lambda: i18n.default_language(db)
+    app.lang_auto = lambda: not i18n.configured_language(db)
 
     def setup_allowed(req):
         if req.user and req.user["is_admin"]:

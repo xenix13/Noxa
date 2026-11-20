@@ -137,6 +137,36 @@ class TranslationsTest(unittest.TestCase):
         self.assertEqual(i18n.tr("Introuvable", "fr"), "Introuvable")
 
 
+class DefaultLanguageTest(unittest.TestCase):
+    """A new server, before setup: English by default, and the interface follows the browser's language."""
+
+    def test_new_server_defaults_to_english_and_browser(self):
+        work = tempfile.mkdtemp()
+        old = i18n.DEFAULT
+        i18n.DEFAULT = "en"  # the real default (tests/__init__.py pins French for the rest of the suite)
+        try:
+            ctx = Ctx(os.path.join(work, "data"), STATIC)
+            server = Server(("127.0.0.1", 0), make_handler(build_app(ctx)))
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                st, page, h = Client(base).call("GET", "/", raw=True)
+                page = page.decode()
+                self.assertIn('data-default-lang="en"', page)
+                self.assertIn('data-auto-lang="1"', page)  # no server language yet: the browser decides
+                st, r = Client(base).call("POST", "/api/login", {"username": "x", "password": "y"})
+                self.assertEqual(r["error"], "Incorrect username or password")
+                ctx.db.set_setting("default_language", "fr")  # chosen at setup: kept, no more browser guess
+                st, page, h = Client(base).call("GET", "/", raw=True)
+                self.assertIn('data-default-lang="fr"', page.decode())
+                self.assertNotIn('data-auto-lang="1"', page.decode())
+            finally:
+                server.shutdown()
+        finally:
+            i18n.DEFAULT = old
+            shutil.rmtree(work, ignore_errors=True)
+
+
 class LanguageApiTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

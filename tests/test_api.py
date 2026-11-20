@@ -2135,6 +2135,10 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(update.progress(log)[:2], (80, "Redémarrage de Noxa"))
         self.assertEqual(update.progress(log + ["[terminé, code 0]"]), (100, "Terminé", True, True))
         self.assertEqual(update.progress(log[:2] + ["[terminé, code 1]"]), (25, "Échec", True, False))
+        # install scripts print English since 4.1.3: both languages are recognised
+        log_en = ["==> System packages", "==> Fetching the code (x)", "==> Copying the application to /opt/seance",
+                  "==> System user 'seance'", "==> systemd service"]
+        self.assertEqual(update.progress(log_en)[:2], (80, "Redémarrage de Noxa"))
         self.assertTrue(update.newer("3.10.0", "3.9.2"))
         self.assertFalse(update.newer("3.6.1", "3.6.1"))
         shutil.rmtree(work, ignore_errors=True)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Prépare le système pour Noxa : utilisateur, dossiers, configuration, services systemd, carte graphique.
-# Commun à install.sh (installation depuis GitHub) et au paquet .deb (postinst). En root.
+# Prepares the system for Noxa: user, folders, configuration, systemd services, graphics card.
+# Shared by install.sh (install from GitHub) and the .deb package (postinst). As root.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/seance}"
@@ -8,7 +8,7 @@ DATA_DIR="${DATA_DIR:-/var/lib/seance}"
 CONF_DIR="${CONF_DIR:-/etc/seance}"
 UNITS="$APP_DIR/deploy"
 
-echo "==> Utilisateur système 'seance'"
+echo "==> System user 'seance'"
 if ! id seance >/dev/null 2>&1; then
   useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin seance
 fi
@@ -21,39 +21,39 @@ chmod 700 "$DATA_DIR"
 
 if [ ! -f "$CONF_DIR/seance.env" ]; then
   cat > "$CONF_DIR/seance.env" <<'ENVFILE'
-# Port d'écoute de Noxa
+# Port Noxa listens on
 SEANCE_PORT=8420
 SEANCE_HOST=0.0.0.0
-# 1 si Noxa est servi en HTTPS derrière un reverse proxy (Caddy, nginx, Nginx Proxy Manager…)
+# 1 if Noxa is served over HTTPS behind a reverse proxy (Caddy, nginx, Nginx Proxy Manager…)
 SEANCE_COOKIE_SECURE=0
-# 1 pour lire l'adresse réelle des visiteurs dans X-Forwarded-For
-# (uniquement si Noxa n'est joignable qu'à travers ce proxy)
+# 1 to read the visitors' real address from X-Forwarded-For
+# (only if Noxa can be reached through that proxy only)
 SEANCE_TRUST_PROXY=0
-# Journaux détaillés
+# Detailed logs
 SEANCE_DEBUG=0
-# Port des serveurs liés (liaison TLS entre vos serveurs Noxa, ouverte à la première invitation)
+# Linked servers port (TLS link between your Noxa servers, opened with the first invitation)
 SEANCE_FED_PORT=8421
 ENVFILE
 fi
 
-echo "==> Commande d'administration « noxa »"
+echo "==> Admin command \"noxa\""
 cat > /usr/local/bin/noxa <<CMD
 #!/bin/sh
-# Commandes de secours de Noxa, en root :
-#   noxa list-users                 comptes et état de leur double authentification
-#   noxa reset-2fa <identifiant>    désactive la double authentification d'un compte
-if [ "\$(id -u)" -ne 0 ]; then echo "À lancer en root : sudo noxa …" >&2; exit 1; fi
+# Noxa rescue commands, as root:
+#   noxa list-users                 accounts and the state of their two-factor authentication
+#   noxa reset-2fa <username>       turns off two-factor authentication for an account
+if [ "\$(id -u)" -ne 0 ]; then echo "Run as root: sudo noxa …" >&2; exit 1; fi
 cd "$APP_DIR" && exec runuser -u seance -- /usr/bin/python3 -m seance --data "$DATA_DIR" "\$@"
 CMD
 chmod 755 /usr/local/bin/noxa
-ln -sf noxa /usr/local/bin/nexis  # ancien nom de la commande (Nexis)
+ln -sf noxa /usr/local/bin/nexis  # former name of the command (Nexis)
 
-echo "==> Service systemd"
+echo "==> systemd service"
 cp "$UNITS/seance.service" /etc/systemd/system/seance.service
 cp "$UNITS/seance-mountd.service" /etc/systemd/system/seance-mountd.service
-# Carte graphique (transcodage matériel) : le service doit voir /dev/nvidia* ou /dev/dri, masqués sinon
+# Graphics card (hardware transcoding): the service must see /dev/nvidia* or /dev/dri, hidden otherwise
 if [ -e /dev/nvidia0 ] || ls /dev/dri/renderD* >/dev/null 2>&1; then
-  echo "==> Carte graphique détectée : le service y a accès (transcodage matériel, à activer dans Administration)"
+  echo "==> Graphics card found: the service can use it (hardware transcoding, to turn on in Settings)"
   GPU_GROUPS=""
   for g in video render; do getent group "$g" >/dev/null && GPU_GROUPS="$GPU_GROUPS $g"; done
   mkdir -p /etc/systemd/system/seance.service.d
@@ -71,10 +71,10 @@ systemctl restart seance-mountd || true
 systemctl restart seance || true
 sleep 2
 
-# Conteneur LXC non privilégié sans « nesting » : le bac à sable systemd échoue (226/NAMESPACE).
+# Unprivileged LXC container without "nesting": the systemd sandbox fails (226/NAMESPACE).
 if ! systemctl is-active --quiet seance && \
    [ "$(systemctl show -p ExecMainStatus --value seance)" = "226" ]; then
-  echo "==> Bac à sable systemd indisponible dans ce conteneur : service en version allégée"
+  echo "==> systemd sandbox not available in this container: the service runs with fewer protections"
   mkdir -p /etc/systemd/system/seance.service.d
   cat > /etc/systemd/system/seance.service.d/lxc.conf <<'DROPIN'
 [Service]
@@ -97,29 +97,29 @@ DROPIN
 fi
 
 if ! systemctl is-active --quiet seance; then
-  echo "Le service n'a pas démarré. Regarde : journalctl -u seance -n 50" >&2
+  echo "The service did not start. See: journalctl -u seance -n 50" >&2
   exit 1
 fi
 
 PORT=$(grep -E '^SEANCE_PORT=' "$CONF_DIR/seance.env" | cut -d= -f2 || true)
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 if ! systemctl is-active --quiet seance-mountd; then
-  echo "Attention : le service de montage seance-mountd n'a pas démarré (journalctl -u seance-mountd -n 30)."
+  echo "Warning: the mount service seance-mountd did not start (journalctl -u seance-mountd -n 30)."
 fi
 if [ -r /proc/self/uid_map ] && [ "$(awk 'NR==1{print $2}' /proc/self/uid_map)" != "0" ]; then
   echo
-  echo "Note : ce conteneur LXC est NON privilégié. Linux y interdit le montage SMB :"
-  echo "l'onglet « Partages réseau » pourra lister les partages du NAS mais pas les monter."
-  echo "Solutions : conteneur privilégié avec « features: mount=cifs », ou montage depuis l'hôte (README)."
+  echo "Note: this LXC container is UNPRIVILEGED. Linux forbids SMB mounts in it:"
+  echo "the Network shares page can list the NAS shares but not mount them."
+  echo "Fix: a privileged container with \"features: mount=cifs\", or mount the shares on the host (README)."
 fi
 echo
-echo "Noxa tourne sur http://${IP:-<ip>}:${PORT:-8420}"
+echo "Noxa is running at http://${IP:-<ip>}:${PORT:-8420}"
 for d in /mnt/*/ /mnt/seance/*/; do
   [ -d "$d" ] || continue
   if ! runuser -u seance -- ls "$d" >/dev/null 2>&1; then
-    echo "Attention : l'utilisateur 'seance' ne peut pas lire $d (droits du montage)."
+    echo "Warning: the 'seance' user cannot read $d (mount permissions)."
   fi
 done
 if [ -f "$DATA_DIR/setup-code.txt" ]; then
-  echo "Code d'installation (à saisir dans la page d'accueil) : $(cat "$DATA_DIR/setup-code.txt")"
+  echo "Setup code (asked on the first page): $(cat "$DATA_DIR/setup-code.txt")"
 fi

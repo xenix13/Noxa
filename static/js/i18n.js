@@ -8,11 +8,19 @@ export const LANGUAGES = [{ id: 'fr', name: 'Français' }, { id: 'en', name: 'En
 const DICTS = { en };
 const STORE = 'nexis.lang';
 
+// Before any choice: the server's language, or, when no administrator chose one yet (first setup), the
+// browser's: French for a French browser, English for everything else.
+function browserLang() {
+  const first = ((navigator.languages && navigator.languages[0]) || navigator.language || '').toLowerCase();
+  return first.startsWith('fr') ? 'fr' : 'en';
+}
+
 function initial() {
   let saved = null;
   try { saved = localStorage.getItem(STORE); } catch { /* stockage indisponible */ }
-  const fallback = document.documentElement.dataset.defaultLang;
-  return [saved, fallback].find((l) => LANGUAGES.some((x) => x.id === l)) || 'fr';
+  const root = document.documentElement;
+  const fallback = 'autoLang' in root.dataset ? browserLang() : root.dataset.defaultLang;
+  return [saved, fallback].find((l) => LANGUAGES.some((x) => x.id === l)) || 'en';
 }
 
 export let lang = initial();
