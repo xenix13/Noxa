@@ -1109,6 +1109,23 @@ class SeanceTest(unittest.TestCase):
         self.admin.call("DELETE", f"/api/admin/collections/{cid}")
         self.assertEqual(self.lea.call("GET", f"/api/collections/{cid}")[0], 404)
 
+    def test_finished_show_leaves_watchlist(self):
+        show, d, eps = self.episodes("Kaze no Michi", "Animes")
+        c = Client(self.base)
+        c.call("POST", "/api/login", {"username": "lea", "password": "motdepasse2"})
+        c.call("POST", f"/api/items/{show['id']}/watchlist", {"on": True})
+        try:
+            for ep in eps[:-1]:
+                c.call("POST", f"/api/items/{ep['id']}/watched", {"watched": True})
+            st, wl = c.call("GET", "/api/watchlist")
+            self.assertIn("Kaze no Michi", [x["title"] for x in wl])  # one episode left: still to watch
+            c.call("POST", f"/api/items/{eps[-1]['id']}/watched", {"watched": True})
+            st, wl = c.call("GET", "/api/watchlist")
+            self.assertNotIn("Kaze no Michi", [x["title"] for x in wl])  # last episode watched: removed
+        finally:
+            c.call("POST", f"/api/items/{show['id']}/watched", {"watched": False})
+            c.call("POST", f"/api/items/{show['id']}/watchlist", {"on": False})
+
     def test_watchlist_and_playlists(self):
         m = self.movie("Nuit polaire")
         show, d, eps = self.episodes("Kaze no Michi", "Animes")

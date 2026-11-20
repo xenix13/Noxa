@@ -83,7 +83,7 @@ A device can keep its own style (*This device*), e.g. *Classic* on the TV and *S
 ## Collections, watchlist and playlists
 
 - **Collections:** when a movie belongs to a saga according to TMDB, the collection is created automatically (poster, backdrop and summary included). It appears in the library's **Collections** tab and on the movies' pages. Admins can create, rename or delete their own collections (**⋯ → Collections…**).
-- **Watchlist:** the bookmark button adds a movie or show to your personal list (the *Watchlist* tab and a home row). A movie marked as watched leaves it.
+- **Watchlist:** the bookmark button adds a movie or show to your personal list (the *Watchlist* tab and a home row). A movie leaves it once watched, and a show once every episode is watched (specials aside).
 - **Playlists:** **⋯ → Add to a playlist…** on a movie, episode, season or show; *Play all* plays them in order. **Share with the household** makes a playlist visible to every account on the server, who can add to it and reorder it; only its creator can rename it, stop sharing or delete it, and everyone only sees the titles they can access.
 
 ## Discover and requests

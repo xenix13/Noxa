@@ -250,6 +250,11 @@ CARD_SQL = ("SELECT i.id, i.type, i.title, i.year, i.idx, i.img_version, i.durat
             "json_extract(i.probe, '$.video.transfer') AS vt, " + _COUNTS + _JOINS)
 AGE_EXPR = "COALESCE(sh.age, i.age)"
 EPISODE_ORDER = "ORDER BY (p.idx=0), p.idx, i.idx, i.id"
+# regular episodes of a show (?) not watched yet by a user (?); specials (season 0) do not count
+UNWATCHED_EPISODES_SQL = ("SELECT 1 FROM items e WHERE e.show_id=? AND e.type='episode' "
+                          "AND NOT EXISTS (SELECT 1 FROM items s WHERE s.id=e.parent_id AND s.idx=0) "
+                          "AND NOT EXISTS (SELECT 1 FROM progress q WHERE q.user_id=? AND q.rating_key=CAST(e.id AS TEXT) "
+                          "AND q.watched=1)")
 
 
 def img(item_id, kind, version):
@@ -493,6 +498,11 @@ def install(ctx, x):
         if watched:
             db.run("UPDATE progress SET watched=1, position_ms=0, view_count=view_count+1, "
                    "last_watched_at=?, updated_at=? WHERE user_id=? AND rating_key=?", (now, now, uid, c["id"]))
+            if c.get("type") == "episode" and str(c.get("show_id") or "").isdigit():
+                # last regular episode watched (specials, season 0, are often skipped): the show leaves the watchlist
+                left = db.scalar(UNWATCHED_EPISODES_SQL + " LIMIT 1", (int(c["show_id"]), uid))
+                if not left:
+                    db.run("DELETE FROM watchlist WHERE user_id=? AND item_id=?", (uid, int(c["show_id"])))
             recent = db.scalar("SELECT MAX(watched_at) FROM history WHERE user_id=? AND rating_key=?",
                                (uid, c["id"]))
             if (not recent or now - recent > 3 * 3600) and not get_prefs(uid).get("private_mode"):  # mode privé : pas d'historique
