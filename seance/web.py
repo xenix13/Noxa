@@ -128,7 +128,8 @@ class App:
         self.teardown = []
         self.begin = None        # callable(req) au début de chaque requête (langue des messages)
         self.translate = None    # callable(message) -> message dans la langue de la requête
-        self.default_lang = lambda: "fr"  # langue de l'interface avant la connexion (page d'accueil)
+        self.default_lang = lambda: "en"  # langue de l'interface avant la connexion (page d'accueil)
+        self.lang_auto = lambda: True  # aucune langue choisie pour le serveur : celle du navigateur
 
     def route(self, method, pattern, **opts):
         regex = re.compile("^" + pattern + "$")
@@ -182,7 +183,7 @@ class App:
                 raise HTTPError(404, "Fichier introuvable")
             full = os.path.join(root, "index.html")  # SPA fallback
         if full == os.path.join(root, "index.html"):
-            return self.index_page(root, full, req, self.default_lang())
+            return self.index_page(root, full, req, self.default_lang(), self.lang_auto())
         ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
         if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
             ctype += "; charset=utf-8"
@@ -218,13 +219,13 @@ class App:
 
 
     @staticmethod
-    def index_page(root, full, req, lang="fr"):
+    def index_page(root, full, req, lang="en", auto=False):
         """index.html qui charge le code et le style de l'interface à des adresses propres à cette version.
         Sans cela, un proxy (Nginx Proxy Manager « Cache Assets » : expires 30d) ou un cache trop zélé garde
         l'ancien code après une mise à jour, jusqu'à un Ctrl+F5."""
         version = ui_version(root)
         st = os.stat(full)
-        etag = f'W/"ix-{version}-{lang}-{st.st_mtime_ns:x}"'
+        etag = f'W/"ix-{version}-{lang}{"-auto" if auto else ""}-{st.st_mtime_ns:x}"'
         headers = {"Cache-Control": "no-cache", "ETag": etag, "Vary": "Accept-Encoding"}
         ctype = "text/html; charset=utf-8"
         if req and req.headers.get("If-None-Match") == etag:
@@ -237,7 +238,8 @@ class App:
         html = html.replace('  <link rel="stylesheet"', f'  <meta name="nexis-modules" data-base="/v/{version}/js/" content="{modules}">\n'
                             f'  <script>{BOOT_JS}</script>\n  <link rel="stylesheet"', 1)
         # langue par défaut du serveur : celle de l'interface tant que personne n'est connecté sur cet appareil
-        html = html.replace('<html lang="fr"', f'<html lang="{lang}" data-default-lang="{lang}"', 1)
+        auto_attr = ' data-auto-lang="1"' if auto else ""  # no server language yet: the browser's one
+        html = html.replace('<html lang="fr"', f'<html lang="{lang}" data-default-lang="{lang}"{auto_attr}', 1)
         if lang == "en":
             html = html.replace("Noxa : tes films, séries et animes, partout.", "Noxa: your movies, shows and anime, everywhere.")
             html = html.replace("Noxa a besoin de JavaScript.", "Noxa needs JavaScript.")
@@ -352,7 +354,9 @@ def _gzipped(full, etag):
 # autant d'allers-retours, longs quand le serveur est loin). api.js reprend ces réponses au lieu de redemander.
 BOOT_JS = (
     "(function(){var l=null;try{l=localStorage.getItem('nexis.lang')}catch(e){}"
-    "if(l!=='fr'&&l!=='en')l=document.documentElement.getAttribute('data-default-lang')||'fr';"
+    "var d=document.documentElement;if(l!=='fr'&&l!=='en')l=d.hasAttribute('data-auto-lang')?"
+    "((navigator.languages||[navigator.language||'']).join(',').toLowerCase().indexOf('fr')===0?'fr':'en')"
+    ":(d.getAttribute('data-default-lang')||'en');"
     "var o={headers:{'X-Seance':'1','X-Lang':l},credentials:'same-origin'},b={};"
     "function g(p){b[p]=fetch(p,o).then(function(r){return r.text().then(function(t){return{status:r.status,ok:r.ok,text:t}})})"
     "['catch'](function(){return null})}"

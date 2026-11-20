@@ -758,6 +758,15 @@ MIGRATIONS = [
     ALTER TABLE cold_cache ADD COLUMN probe TEXT;
     ALTER TABLE cold_jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'copy';
     """,
+    # 31 : finished shows leave "To watch" (every regular episode watched), as finished movies already did
+    """
+    DELETE FROM watchlist WHERE EXISTS (SELECT 1 FROM items sh WHERE sh.id=watchlist.item_id AND sh.type='show')
+      AND EXISTS (SELECT 1 FROM items e WHERE e.show_id=watchlist.item_id AND e.type='episode')
+      AND NOT EXISTS (SELECT 1 FROM items e WHERE e.show_id=watchlist.item_id AND e.type='episode'
+        AND NOT EXISTS (SELECT 1 FROM items s WHERE s.id=e.parent_id AND s.idx=0)
+        AND NOT EXISTS (SELECT 1 FROM progress q WHERE q.user_id=watchlist.user_id
+          AND q.rating_key=CAST(e.id AS TEXT) AND q.watched=1));
+    """,
 ]
 
 

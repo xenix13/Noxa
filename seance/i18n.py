@@ -14,7 +14,7 @@ import threading
 from .lang_en import EN
 
 LANGUAGES = {"fr": "Français", "en": "English"}
-DEFAULT = "fr"
+DEFAULT = "en"  # widest audience; a server keeps the language chosen at setup (default_language)
 DICTS = {"en": EN}
 
 _local = threading.local()
@@ -27,6 +27,11 @@ def valid(lang):
 
 def default_language(db):
     return valid(db.setting("default_language")) or DEFAULT
+
+
+def configured_language(db):
+    """Language an administrator chose for the server, or None (then the interface follows the browser)."""
+    return valid(db.setting("default_language"))
 
 
 def set_server_default(lang):

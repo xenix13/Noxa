@@ -130,7 +130,7 @@ class SeanceTest(unittest.TestCase):
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         cls.admin = Client(cls.base)
-        st, r = cls.admin.call("POST", "/api/setup", {"username": "colas", "password": "motdepasse1"},
+        st, r = cls.admin.call("POST", "/api/setup", {"username": "alex", "password": "motdepasse1"},
                                headers={"X-Setup-Code": cls.ctx.setup_code})
         assert st == 200, r
         st, r = cls.admin.call("PUT", "/api/admin/settings", {"tmdb_key": TMDB.key})
@@ -1109,6 +1109,23 @@ class SeanceTest(unittest.TestCase):
         self.admin.call("DELETE", f"/api/admin/collections/{cid}")
         self.assertEqual(self.lea.call("GET", f"/api/collections/{cid}")[0], 404)
 
+    def test_finished_show_leaves_watchlist(self):
+        show, d, eps = self.episodes("Kaze no Michi", "Animes")
+        c = Client(self.base)
+        c.call("POST", "/api/login", {"username": "lea", "password": "motdepasse2"})
+        c.call("POST", f"/api/items/{show['id']}/watchlist", {"on": True})
+        try:
+            for ep in eps[:-1]:
+                c.call("POST", f"/api/items/{ep['id']}/watched", {"watched": True})
+            st, wl = c.call("GET", "/api/watchlist")
+            self.assertIn("Kaze no Michi", [x["title"] for x in wl])  # one episode left: still to watch
+            c.call("POST", f"/api/items/{eps[-1]['id']}/watched", {"watched": True})
+            st, wl = c.call("GET", "/api/watchlist")
+            self.assertNotIn("Kaze no Michi", [x["title"] for x in wl])  # last episode watched: removed
+        finally:
+            c.call("POST", f"/api/items/{show['id']}/watched", {"watched": False})
+            c.call("POST", f"/api/items/{show['id']}/watchlist", {"on": False})
+
     def test_watchlist_and_playlists(self):
         m = self.movie("Nuit polaire")
         show, d, eps = self.episodes("Kaze no Michi", "Animes")
@@ -1633,12 +1650,12 @@ class SeanceTest(unittest.TestCase):
             self.assertEqual(c.call("POST", "/api/login", {"username": "tom", "password": ""})[0], 401)
             # depuis la session de l'admin : « Qui regarde ? »
             dev = Client(self.base)
-            dev.call("POST", "/api/login", {"username": "colas", "password": "motdepasse1"})
+            dev.call("POST", "/api/login", {"username": "alex", "password": "motdepasse1"})
             st, profiles = dev.call("GET", "/api/profiles")
             by = {p["display_name"]: p for p in profiles}
             self.assertEqual(by["Tom"]["needs"], "pin")
-            self.assertEqual(by["colas"]["needs"], "password")
-            self.assertTrue(by["colas"]["current"])
+            self.assertEqual(by["alex"]["needs"], "password")
+            self.assertTrue(by["alex"]["current"])
             self.assertEqual(dev.call("POST", f"/api/profiles/{kid['id']}/switch", {"pin": "0000"})[0], 400)
             st, r = dev.call("POST", f"/api/profiles/{kid['id']}/switch", {"pin": "1234"})
             self.assertEqual(st, 200, r)
@@ -1658,17 +1675,17 @@ class SeanceTest(unittest.TestCase):
             st, home = dev.call("GET", "/api/home")
             self.assertNotIn("Animes", [row["library"]["title"] for row in home["rows"]])
             # retour sur le compte admin : mot de passe exigé (pas de PIN)
-            self.assertEqual(dev.call("POST", f"/api/profiles/{by['colas']['id']}/switch", {"password": "faux"})[0], 400)
-            st, r = dev.call("POST", f"/api/profiles/{by['colas']['id']}/switch", {"password": "motdepasse1"})
+            self.assertEqual(dev.call("POST", f"/api/profiles/{by['alex']['id']}/switch", {"password": "faux"})[0], 400)
+            st, r = dev.call("POST", f"/api/profiles/{by['alex']['id']}/switch", {"password": "motdepasse1"})
             self.assertEqual(st, 200)
             st, me = dev.call("GET", "/api/me")
-            self.assertEqual(me["user"]["username"], "colas")
+            self.assertEqual(me["user"]["username"], "alex")
             # PIN personnel
             self.assertEqual(dev.call("PUT", "/api/me/pin", {"pin": "12", "password": "motdepasse1"})[0], 400)
             self.assertEqual(dev.call("PUT", "/api/me/pin", {"pin": "4321", "password": "faux"})[0], 400)
             self.assertEqual(dev.call("PUT", "/api/me/pin", {"pin": "4321", "password": "motdepasse1"})[0], 200)
             st, profiles = dev.call("GET", "/api/profiles")
-            self.assertEqual({p["display_name"]: p for p in profiles}["colas"]["needs"], "pin")
+            self.assertEqual({p["display_name"]: p for p in profiles}["alex"]["needs"], "pin")
             dev.call("PUT", "/api/me/pin", {"pin": "", "password": "motdepasse1"})
         finally:
             self.ctx.throttle.fails.clear()
@@ -1704,7 +1721,7 @@ class SeanceTest(unittest.TestCase):
         self.lea.call("PUT", "/api/me/prefs", {"home_order": [], "nav_order": [], "nav_hidden": []})
         self.assertEqual(self.lea.call("GET", "/api/admin/users")[0], 403)
         st, users = self.admin.call("GET", "/api/admin/users")
-        me = [u for u in users if u["username"] == "colas"][0]
+        me = [u for u in users if u["username"] == "alex"][0]
         self.assertEqual(self.admin.call("DELETE", f"/api/admin/users/{me['id']}")[0], 400)
 
     def test_admin_update_check(self):
@@ -2118,6 +2135,10 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(update.progress(log)[:2], (80, "Redémarrage de Noxa"))
         self.assertEqual(update.progress(log + ["[terminé, code 0]"]), (100, "Terminé", True, True))
         self.assertEqual(update.progress(log[:2] + ["[terminé, code 1]"]), (25, "Échec", True, False))
+        # install scripts print English since 4.1.3: both languages are recognised
+        log_en = ["==> System packages", "==> Fetching the code (x)", "==> Copying the application to /opt/seance",
+                  "==> System user 'seance'", "==> systemd service"]
+        self.assertEqual(update.progress(log_en)[:2], (80, "Redémarrage de Noxa"))
         self.assertTrue(update.newer("3.10.0", "3.9.2"))
         self.assertFalse(update.newer("3.6.1", "3.6.1"))
         shutil.rmtree(work, ignore_errors=True)

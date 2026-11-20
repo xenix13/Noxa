@@ -192,7 +192,7 @@ class RemoteBackupTest(unittest.TestCase):
         st, r = cls.admin.call("POST", "/api/setup", {"username": "admin", "password": "motdepasse1"},
                                headers={"X-Setup-Code": cls.ctx.setup_code})
         assert st == 200, r
-        cls.ctx.db.set_setting("server_name", "Salon de Colas")
+        cls.ctx.db.set_setting("server_name", "Living room")
 
     @classmethod
     def tearDownClass(cls):
@@ -226,8 +226,8 @@ class RemoteBackupTest(unittest.TestCase):
 
     def test_02_named_after_server(self):
         b = backup.create(self.ctx, distribute=False)
-        self.assertTrue(b["name"].startswith("nexis-salon-de-colas_"), b["name"])
-        self.assertEqual((b["server"], b["mine"]), ("Salon de Colas", True))
+        self.assertTrue(b["name"].startswith("nexis-living-room_"), b["name"])
+        self.assertEqual((b["server"], b["mine"]), ("Living room", True))
         self.assertTrue(backup.NAME.match("nexis-20260101-000000-auto.tar.gz"))  # anciens noms toujours reconnus
         self.assertEqual(backup.slug("Été à Nîmes !"), "ete-a-nimes")
 
@@ -273,7 +273,7 @@ class RemoteBackupTest(unittest.TestCase):
             st, files = self.admin.call("GET", f"/api/admin/backups/remotes/{r['id']}/files")
             self.assertEqual(st, 200, files)
             self.assertEqual([(f["name"], f["encrypted"], f["server"]) for f in files["files"]],
-                             [(b["name"] + ".enc", True, "salon-de-colas")])
+                             [(b["name"] + ".enc", True, "living-room")])
         # au-delà du nombre gardé (2), les plus anciennes copies automatiques d'ici sont retirées
         for _ in range(2):
             time.sleep(1.1)
@@ -284,7 +284,7 @@ class RemoteBackupTest(unittest.TestCase):
         # restaurer depuis Google Drive : téléchargée, déchiffrée, mise en place au redémarrage
         st, files = self.admin.call("GET", f"/api/admin/backups/remotes/{g['id']}/files")
         st, r = self.admin.call("POST", f"/api/admin/backups/remotes/{g['id']}/restore", {"id": files["files"][0]["id"]})
-        self.assertEqual((st, r["server"]), (200, "Salon de Colas"), r)
+        self.assertEqual((st, r["server"]), (200, "Living room"), r)
         self.assertTrue(os.path.isfile(os.path.join(self.ctx.data_dir, backup.PENDING, "seance.db")))
         shutil.rmtree(os.path.join(self.ctx.data_dir, backup.PENDING))
         st, lst = self.admin.call("GET", "/api/admin/backups/remotes")

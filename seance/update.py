@@ -135,13 +135,14 @@ def start():
     return {"started": True}
 
 
-# Étapes affichées par install.sh / setup-system.sh (« ==> … ») : de quoi montrer une progression
-STEPS = [("Paquets système", 10, "Mise à jour des paquets système"),
-         ("Récupération du code", 25, "Téléchargement de la nouvelle version"),
-         ("Copie de l'application", 45, "Installation des fichiers"),
-         ("Vérification des bibliothèques", 55, "Vérification des fichiers"),
-         ("Utilisateur système", 65, "Configuration du système"),
-         ("Service systemd", 80, "Redémarrage de Noxa")]
+# Étapes affichées par install.sh / setup-system.sh (« ==> … ») : de quoi montrer une progression.
+# Messages en anglais depuis 4.1.3, en français avant (un serveur peut lancer le script d'une autre version).
+STEPS = [(("System packages", "Paquets système"), 10, "Mise à jour des paquets système"),
+         (("Fetching the code", "Récupération du code"), 25, "Téléchargement de la nouvelle version"),
+         (("Copying the application", "Copie de l'application"), 45, "Installation des fichiers"),
+         (("Checking the bundled libraries", "Vérification des bibliothèques"), 55, "Vérification des fichiers"),
+         (("System user", "Utilisateur système"), 65, "Configuration du système"),
+         (("systemd service", "Service systemd"), 80, "Redémarrage de Noxa")]
 END = re.compile(r"^\[terminé, code (\d+)\]")
 
 
@@ -155,8 +156,8 @@ def progress(lines):
             percent, label = (100, "Terminé") if ok else (percent, "Échec")
             continue
         if line.startswith("==> "):
-            for key, pct, text in STEPS:
-                if line[4:].startswith(key) and pct >= percent:
+            for keys, pct, text in STEPS:
+                if line[4:].startswith(keys) and pct >= percent:
                     percent, label = pct, text
     return percent, label, done, ok
 

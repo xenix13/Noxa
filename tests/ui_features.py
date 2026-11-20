@@ -33,7 +33,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 base = f"http://127.0.0.1:{server.server_address[1]}"
 ctx.tasks.start()
 admin = Client(base)
-assert admin.call("POST", "/api/setup", {"username": "colas", "password": "motdepasse1", "display_name": "Colas"},
+assert admin.call("POST", "/api/setup", {"username": "alex", "password": "motdepasse1", "display_name": "Alex"},
                   headers={"X-Setup-Code": ctx.setup_code})[0] == 200
 admin.call("PUT", "/api/admin/settings", {"tmdb_key": TMDB.key})
 for name, kind, sub in (("Films", "movie", "films"), ("Séries", "show", "series"), ("Animes", "show", "animes")):
@@ -364,7 +364,7 @@ with sync_playwright() as pw:
     check(True, "chaîne suivante")
     page.goto(base + "/#/")
 
-    # --- regarder ensemble : Colas crée un groupe, Léa le rejoint
+    # --- regarder ensemble : Alex crée un groupe, Léa le rejoint
     page.goto(base + f"/#/item/{voyage}")
     page.click(".detail-actions button[aria-label='Regarder ensemble']")
     page.wait_for_selector(".modal:has-text('Regarder ensemble')")
@@ -376,7 +376,7 @@ with sync_playwright() as pw:
     bctx2, page2 = browser_ctx(browser, lea)
     page2.goto(base + "/#/")
     page2.wait_for_selector(".group-card:has-text('Soirée cinéma')")
-    check(page2.locator(".group-pill").count() == 1, "raccourci « Colas regarde » dans la barre")
+    check(page2.locator(".group-pill").count() == 1, "raccourci « Alex regarde » dans la barre")
     page2.screenshot(path=f"{out}/14-ensemble-accueil.png")
     page2.click(".group-card a:has-text('Rejoindre')")
     page2.wait_for_function("location.hash.includes('group=')")
@@ -386,14 +386,14 @@ with sync_playwright() as pw:
     g = next(iter(ctx.together.groups.values()))
     check(abs(t1 - t2) < 2.5, f"positions synchronisées ({t1:.1f} / {t2:.1f}, serveur {g.position_now() / 1000:.1f}, "
           f"{'lecture' if g.playing else 'pause'}, attente {g.waiting})")
-    # Colas met en pause : Léa est mise en pause aussi
+    # Alex met en pause : Léa est mise en pause aussi
     page.mouse.move(700, 420)
     page.keyboard.press(" ")
     page2.wait_for_function("document.querySelector('video').paused", timeout=10000)
-    page2.wait_for_selector(".toast:has-text('Colas a mis en pause')")
+    page2.wait_for_selector(".toast:has-text('Alex a mis en pause')")
     page2.mouse.move(700, 420)
     page2.screenshot(path=f"{out}/15-ensemble-pause.png")
-    # Léa saute plus loin : Colas suit
+    # Léa saute plus loin : Alex suit
     page2.keyboard.press(" ")
     page.wait_for_function("!document.querySelector('video').paused", timeout=10000)
     page2.keyboard.press("ArrowRight")
@@ -431,7 +431,7 @@ with sync_playwright() as pw:
     page4.wait_for_selector(".group-card:has-text('Vendredi soir')")
     page4.click(".group-card:has-text('Vendredi soir') a:has-text('Rejoindre le salon')")
     page4.wait_for_selector(".lobby-title:has-text('Vendredi soir')")
-    page.wait_for_selector(".lobby-member:has-text('Léa')", timeout=10000)  # arrivée visible chez Colas sans recharger
+    page.wait_for_selector(".lobby-member:has-text('Léa')", timeout=10000)  # arrivée visible chez Alex sans recharger
     check(page.locator(".topbar .group-pill.mine").count() == 1, "raccourci « ton groupe » dans la barre du haut")
     page.screenshot(path=f"{out}/16b-ensemble-salon.png")
     page.goto(base + f"/#/item/{voyage}")

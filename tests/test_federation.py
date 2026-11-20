@@ -80,7 +80,7 @@ class FederationTest(unittest.TestCase):
         cls.b, cls.sb, cls.base_b = start_server(cls.work, "b")
         cls.admin_a, cls.admin_b = Client(cls.base_a), Client(cls.base_b)
         for ctx, client, pw in ((cls.a, cls.admin_a, "motdepasseA"), (cls.b, cls.admin_b, "motdepasseB")):
-            st, r = client.call("POST", "/api/setup", {"username": "colas", "password": pw},
+            st, r = client.call("POST", "/api/setup", {"username": "alex", "password": pw},
                                 headers={"X-Setup-Code": ctx.setup_code})
             assert st == 200, r
         for client, name, kind, folder in ((cls.admin_a, "Films", "movie", "films_a"), (cls.admin_a, "Séries", "show", "series_a"),
@@ -102,9 +102,9 @@ class FederationTest(unittest.TestCase):
         cls.invite = inv["invite"]
         st, cls.preview = cls.admin_b.call("POST", "/api/admin/federation/join/preview", {"invite": inv["invite"]})
         assert st == 200, cls.preview
-        # colas : la même personne ; papa : par défaut, deux personnes
+        # alex : la même personne ; papa : par défaut, deux personnes
         st, cls.joined = cls.admin_b.call("POST", "/api/admin/federation/join",
-                                          {"invite": inv["invite"], "accounts": {"colas": {"merge": True}}})
+                                          {"invite": inv["invite"], "accounts": {"alex": {"merge": True}}})
         assert st == 200, cls.joined
         cls.peer_on_a = cls.a.db.scalar("SELECT id FROM peers")
         cls.peer_on_b = cls.b.db.scalar("SELECT id FROM peers")
@@ -186,7 +186,7 @@ class FederationTest(unittest.TestCase):
         self.assertEqual(st, 409, r)
 
     def test_02a_same_username_different_people(self):
-        self.assertEqual([c["username"] for c in self.preview["conflicts"]], ["colas", "papa"])
+        self.assertEqual([c["username"] for c in self.preview["conflicts"]], ["alex", "papa"])
         suggested = self.preview["conflicts"][1]["suggested"]
         self.assertEqual(suggested, "papa-" + re.sub(r"[^\w.-]+", "", self.b.fed.name().lower())[:12])
         # le papa de A garde son identifiant, celui de B est renommé, chacun avec son mot de passe, sur les deux serveurs
@@ -198,8 +198,8 @@ class FederationTest(unittest.TestCase):
 
     def test_02_accounts_replicated(self):
         # même identifiant des deux côtés : le compte de A l'emporte (mot de passe de A partout)
-        self.login(self.base_b, "colas", "motdepasseA")
-        st, _ = Client(self.base_b).call("POST", "/api/login", {"username": "colas", "password": "motdepasseB"})
+        self.login(self.base_b, "alex", "motdepasseA")
+        st, _ = Client(self.base_b).call("POST", "/api/login", {"username": "alex", "password": "motdepasseB"})
         self.assertEqual(st, 401)
         # compte qui n'existait que sur B : présent sur A
         self.login(self.base_a, "lea", "motdepasseL")
@@ -308,9 +308,9 @@ class FederationTest(unittest.TestCase):
         st, r = self.admin_a.call("POST", "/api/progress", {"id": rk, "position": 42000, "duration": 600000,
                                                             "stream": p["stream"]})
         self.assertEqual(st, 200, r)
-        colas_b = self.login(self.base_b, "colas", "motdepasseA")
+        alex_b = self.login(self.base_b, "alex", "motdepasseA")
         for _ in range(50):
-            st, d = colas_b.call("GET", f"/api/items/{remote}")
+            st, d = alex_b.call("GET", f"/api/items/{remote}")
             if d.get("position") == 42000:
                 break
             time.sleep(0.1)
@@ -394,12 +394,12 @@ class FederationTest(unittest.TestCase):
 
     def test_07_progress_comes_back(self):
         rk, remote = self.remote_episode()
-        colas_b = self.login(self.base_b, "colas", "motdepasseA")
-        st, r = colas_b.call("POST", f"/api/items/{remote}/watched", {"watched": True})
+        alex_b = self.login(self.base_b, "alex", "motdepasseA")
+        st, r = alex_b.call("POST", f"/api/items/{remote}/watched", {"watched": True})
         self.assertEqual(st, 200, r)
         # titre présent sur les deux : vu chez B -> vu sur notre copie
         brume_b = self.b.db.scalar("SELECT id FROM items WHERE title='Brume' AND peer_id IS NULL")
-        st, r = colas_b.call("POST", f"/api/items/{brume_b}/watched", {"watched": True})
+        st, r = alex_b.call("POST", f"/api/items/{brume_b}/watched", {"watched": True})
         self.sync()
         st, d = self.admin_a.call("GET", f"/api/items/{rk}")
         self.assertTrue(d["watched"], d)
@@ -454,22 +454,22 @@ class FederationTest(unittest.TestCase):
         st, body = fed_raw(port, "GET", "/fed/hello", ok)
         self.assertEqual(st, 200, body)
         # administration au nom d'un compte : seulement s'il est administrateur ici, et si ce serveur l'accepte
-        colas = self.a.db.scalar("SELECT uid FROM users WHERE username='colas'")
+        alex = self.a.db.scalar("SELECT uid FROM users WHERE username='alex'")
         lea = self.a.db.scalar("SELECT uid FROM users WHERE username='lea'")
-        st, _ = fed_raw(port, "GET", "/api/admin/users", dict(ok, **{"X-Fed-User": colas}))
+        st, _ = fed_raw(port, "GET", "/api/admin/users", dict(ok, **{"X-Fed-User": alex}))
         self.assertEqual(st, 200)
         st, _ = fed_raw(port, "GET", "/api/admin/users", dict(ok, **{"X-Fed-User": lea}))
         self.assertEqual(st, 403)
         self.a.db.set_setting("fed_remote_admin", "0")
         try:
-            st, _ = fed_raw(port, "GET", "/api/admin/users", dict(ok, **{"X-Fed-User": colas}))
+            st, _ = fed_raw(port, "GET", "/api/admin/users", dict(ok, **{"X-Fed-User": alex}))
             self.assertEqual(st, 403)
         finally:
             self.a.db.set_setting("fed_remote_admin", None)
-        st, _ = fed_raw(port, "GET", "/api/me", dict(ok, **{"X-Fed-User": colas}))
+        st, _ = fed_raw(port, "GET", "/api/me", dict(ok, **{"X-Fed-User": alex}))
         self.assertEqual(st, 403)  # le reste de l'API reste fermé
         # avatar d'un compte : route avec paramètre, servie (et pas la page de l'interface)
-        st, body = fed_raw(port, "GET", f"/fed/avatar/{colas}", ok)
+        st, body = fed_raw(port, "GET", f"/fed/avatar/{alex}", ok)
         self.assertEqual(st, 404, body[:80])
         # l'interface n'est pas servie sur ce port, et les routes entre serveurs pas sur l'autre
         st, _ = fed_raw(port, "GET", "/", ok)
@@ -676,7 +676,7 @@ class FederationTest(unittest.TestCase):
         self.admin_b.call("PUT", "/api/admin/servers", {"remote_admin": True})
         # les routes entre serveurs restent fermées au reste de l'API (pas de « /api/me » au nom d'un compte)
         st, r = self.a.fed.call(self.a.fed.peer(self.peer_on_a), "GET", "/api/me",
-                                user=self.a.db.one("SELECT * FROM users WHERE username='colas'"))
+                                user=self.a.db.one("SELECT * FROM users WHERE username='alex'"))
         self.assertEqual(st, 403)
 
     def test_16_backups_copied_between_servers(self):
@@ -730,10 +730,10 @@ class FederationTest(unittest.TestCase):
 
     def test_17_prefs_follow_account(self):
         """Les préférences d'un compte le suivent d'un serveur lié à l'autre (bibliothèques et fond d'écran traduits)."""
-        colas_b = self.login(self.base_b, "colas", "motdepasseA")
+        alex_b = self.login(self.base_b, "alex", "motdepasseA")
         films_a = self.lib(self.admin_a, "Films")                    # bibliothèque de A, vue depuis A
-        films_a_on_b = self.lib(colas_b, "Films", server=True)        # la même, reçue par B
-        series_b = self.lib(colas_b, "Séries")                        # bibliothèque de B (à part ou fusion d'ici)
+        films_a_on_b = self.lib(alex_b, "Films", server=True)        # la même, reçue par B
+        series_b = self.lib(alex_b, "Séries")                        # bibliothèque de B (à part ou fusion d'ici)
         self.assertNotEqual(films_a["id"], films_a_on_b["id"])
         movie = self.admin_a.call("GET", f"/api/libraries/{films_a['id']}/items")[1]["items"][0]
         with open(os.path.join(STATIC, "themes", "ville-neon.json"), encoding="utf-8") as f:
@@ -748,7 +748,7 @@ class FederationTest(unittest.TestCase):
             "my_themes": [neon]})
         self.assertEqual(st, 200, r)
         self.sync()
-        p = colas_b.call("GET", "/api/me")[1]["prefs"]
+        p = alex_b.call("GET", "/api/me")[1]["prefs"]
         self.assertEqual((p["theme"], p["accent"], p["sub_size"]), ("light", "#4c9aff", 125))
         self.assertEqual(p["hidden_libraries"], [films_a_on_b["id"]])
         self.assertEqual(p["start_page"], f"lib:{films_a_on_b['id']}")
@@ -758,13 +758,13 @@ class FederationTest(unittest.TestCase):
         self.assertEqual(p["lib_langs"], {films_a_on_b["id"]: {"audio_lang": "jpn"}})
         self.assertEqual((p["hidden_genres"], p["private_mode"], p["quiet_hours"]), (["Horreur"], True, "23:00-07:30"))
         self.assertEqual([t["id"] for t in p["my_themes"]], ["ville-neon"])  # thème installé : sur l'autre serveur aussi
-        st, d = colas_b.call("GET", f"/api/items/{p['muted_shows'][0]}")
+        st, d = alex_b.call("GET", f"/api/items/{p['muted_shows'][0]}")
         self.assertEqual((st, d["title"]), (200, movie["title"]))  # sourdine : même titre, numéro de B
         wid = int(p["wallpaper"].split("/")[3])
-        st, d = colas_b.call("GET", f"/api/items/{wid}")
+        st, d = alex_b.call("GET", f"/api/items/{wid}")
         self.assertEqual((st, d["title"]), (200, movie["title"]))  # le même film, avec son numéro sur B
         # dans l'autre sens : un changement fait sur B revient sur A
-        st, r = colas_b.call("PUT", "/api/me/prefs", {"theme": "oled", "hidden_libraries": [series_b["id"]]})
+        st, r = alex_b.call("PUT", "/api/me/prefs", {"theme": "oled", "hidden_libraries": [series_b["id"]]})
         self.assertEqual(st, 200, r)
         self.sync()
         p = self.admin_a.call("GET", "/api/me")[1]["prefs"]
@@ -776,7 +776,7 @@ class FederationTest(unittest.TestCase):
         st, r = self.admin_a.call("POST", "/api/me/prefs/reset")
         self.assertEqual((st, r["theme"]), (200, "dark"))
         self.sync()
-        p = colas_b.call("GET", "/api/me")[1]["prefs"]
+        p = alex_b.call("GET", "/api/me")[1]["prefs"]
         self.assertEqual((p["theme"], p["hidden_libraries"], p["home_pins"]), ("dark", [], []))
         # copier les réglages d'un compte vers un autre (administrateur)
         self.admin_a.call("PUT", "/api/me/prefs", {"theme": "light", "sub_size": 150})
@@ -802,7 +802,7 @@ class FederationTest(unittest.TestCase):
         self.assertEqual(self.titles(self.admin_a, films), ["Brume", "Le Grand Voyage", "Nuit Polaire"])
         # les comptes restent, des deux côtés, et ne bougent plus
         self.login(self.base_a, "lea", "motdepasseL")
-        self.login(self.base_b, "colas", "motdepasseA")
+        self.login(self.base_b, "alex", "motdepasseA")
         st, libs_b = self.admin_b.call("GET", "/api/libraries")
         self.assertEqual(sorted(l["title"] for l in libs_b), ["Animes", "Films", "Séries"])
         self.assertFalse(self.b.db.scalar("SELECT COUNT(*) FROM items WHERE peer_id IS NOT NULL"))

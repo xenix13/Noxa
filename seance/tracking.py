@@ -25,6 +25,7 @@ import zipfile
 from datetime import datetime, timezone
 
 from . import __version__ as VERSION
+from .catalog import UNWATCHED_EPISODES_SQL
 from .names import fold
 
 log = logging.getLogger("seance.tracking")
@@ -325,7 +326,9 @@ class Tracking:
                 if not row:
                     continue
                 t_list.add(row["id"])
-                if row["id"] not in mine and not (row["type"] == "movie" and row["id"] in seen):
+                finished_show = row["type"] == "show" and not db.scalar(UNWATCHED_EPISODES_SQL + " LIMIT 1",
+                                                                       (row["id"], uid))
+                if row["id"] not in mine and not (row["type"] == "movie" and row["id"] in seen) and not finished_show:
                     db.run("INSERT OR IGNORE INTO watchlist(user_id, item_id, added_at) VALUES(?,?,?)", (uid, row["id"], int(time.time())))
                     out["watchlist_in"] += 1
         add = {"movies": [], "shows": []}

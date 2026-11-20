@@ -48,7 +48,7 @@ server = Server(("127.0.0.1", 0), make_handler(build_app(ctx)))
 threading.Thread(target=server.serve_forever, daemon=True).start()
 base = f"http://127.0.0.1:{server.server_address[1]}"
 admin = Client(base)
-admin.call("POST", "/api/setup", {"username": "colas", "password": "motdepasse1"},
+admin.call("POST", "/api/setup", {"username": "alex", "password": "motdepasse1"},
            headers={"X-Setup-Code": ctx.setup_code})
 wait_scan(admin)
 st, lib = admin.call("POST", "/api/admin/libraries", {"name": "Films", "kind": "movie", "paths": [os.path.join(work, "films")]})
@@ -70,7 +70,7 @@ try:
         page = b.new_context(viewport={"width": 1280, "height": 720}, bypass_csp=True).new_page()
         page.on("console", lambda m: logs.append(f"{m.type}: {m.text}"))
         page.goto(base + "/#/login")
-        page.fill("input[autocomplete=username]", "colas")
+        page.fill("input[autocomplete=username]", "alex")
         page.fill("input[type=password]", "motdepasse1")
         page.click("button[type=submit]")
         page.wait_for_selector(".profile-tile, .hero-title, .empty", timeout=20000)

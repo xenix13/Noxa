@@ -1,11 +1,11 @@
-# Image Docker de Noxa : docker compose up -d (voir docker-compose.yml et le README).
+# Noxa Docker image: docker compose up -d (see docker-compose.yml and the README).
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 \
     SEANCE_HOST=0.0.0.0 SEANCE_PORT=8420 SEANCE_DATA=/data SEANCE_STATIC=/opt/seance/static SEANCE_DOCKER=1 \
     NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 
-# ffmpeg d'Ubuntu (NVENC, VAAPI, QSV compilés) ; pilotes VAAPI AMD, et Intel (n'existe qu'en amd64)
+# Ubuntu's ffmpeg (built with NVENC, VAAPI, QSV); AMD VAAPI drivers, and Intel (amd64 only)
 RUN apt-get update \
  && INTEL=$([ "$(dpkg --print-architecture)" = amd64 ] && echo intel-media-va-driver || true) \
  && apt-get install -y --no-install-recommends python3 ffmpeg ca-certificates openssl curl mesa-va-drivers $INTEL \

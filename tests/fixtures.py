@@ -274,7 +274,7 @@ class FakeSeerr:
 
     def __init__(self, key="cle-seerr-0123456789"):
         self.key = key
-        self.users = [{"id": 1, "displayName": "colas", "email": "colas@example.org"},
+        self.users = [{"id": 1, "displayName": "alex", "email": "alex@example.org"},
                       {"id": 2, "displayName": "Léa M.", "username": "lea", "email": "lea@example.org"}]
         self.media = {("movie", 5003): 5}   # disponible côté Seerr (déjà téléchargé)
         self.requests = []
@@ -314,7 +314,7 @@ class FakeSeerr:
         acting = int(h.headers.get("X-API-User") or 1)
         path = u.path
         if path == "/api/v1/auth/me":
-            return self.send(h, 200, {"id": 1, "displayName": "colas"})
+            return self.send(h, 200, {"id": 1, "displayName": "alex"})
         if path == "/api/v1/settings/public":
             return self.send(h, 200, {"applicationTitle": "Seerr", "mediaServerType": 2})
         if path == "/api/v1/media":
