@@ -116,6 +116,14 @@ Then open `http://<server-ip>:8420`, enter the **setup code** printed by the ins
 
 Apps are served by your own server and keep themselves up to date. Details in [Apps and offline viewing](docs/apps.md).
 
+### Community apps
+
+These apps are made by the community, not by the Noxa project. They are not reviewed or supported here: for help, contact their authors. Building your own? Open a [discussion](https://github.com/xenix13/Noxa/discussions) so it can be listed.
+
+| App | Device | Made by | What it does |
+|---|---|---|---|
+| [Noxa Player](https://apps.apple.com/us/app/noxa-player/id6837519034) | iPhone | Taylor Emery | Browse your movies and shows, or flip through channels built from your library with *Retro TV* |
+
 ## Documentation
 
 | Guide | What's inside |
