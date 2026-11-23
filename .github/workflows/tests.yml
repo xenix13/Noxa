@@ -128,12 +128,14 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
   # Appli Android TV : compilée sur test (vérification) et sur main, où elle est jointe à la publication.
+  # Also built for pull requests (fix/<version> branches change the apps too): nothing is published, the APKs are
+  # left as the run's "android-apps" artifact so they can be tried on a TV before merging.
   # Signature : secrets NEXIS_KEYSTORE (clé en base64) et NEXIS_KEYSTORE_PASSWORD (voir le README).
   android:
     needs: [api, release]
     if: >-
-      !failure() && !cancelled() && github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test')
+      !failure() && !cancelled() && (github.event_name == 'pull_request' || (github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test')))
     runs-on: ubuntu-latest
     permissions:
       contents: write
