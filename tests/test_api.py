@@ -547,10 +547,12 @@ class SeanceTest(unittest.TestCase):
             st, r = c.call("GET", f"/api/libraries/{lib}/items?sort=watched&size=100")
             ids = [x["id"] for x in r["items"]]
             self.assertEqual(ids[:2], [recent["id"], old["id"]])  # default: most recently watched first
+            self.assertEqual(len(ids), len(movies))  # never-watched titles listed last
             st, r = c.call("GET", f"/api/libraries/{lib}/items?sort=watched&dir=asc&size=100")
             ids = [x["id"] for x in r["items"]]
-            self.assertEqual(ids[:2], [old["id"], recent["id"]])  # not seen in a while first
-            self.assertEqual(len(ids), len(movies))  # never-watched titles still listed, after the watched ones
+            # ascending: never watched counts as the oldest date, then the oldest watch first
+            self.assertEqual(ids[-2:], [old["id"], recent["id"]])
+            self.assertEqual(len(ids), len(movies))
             st, r = c.call("GET", f"/api/libraries/{lib}/items?sort=title&dir=desc&size=100")
             titles = [x["title"].lower() for x in r["items"]]
             self.assertEqual(titles, sorted(titles, reverse=True))

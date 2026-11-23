@@ -15,7 +15,8 @@ from .web import HTTPError
 RK = r"(?P<rk>\d{1,12})"
 SID = r"(?P<sid>[A-Za-z0-9_-]{8,40})"
 # Library sorts: SQL expression (? = the user's id) and whether it reads newest / highest first by default.
-# Titles without a value (no year, never watched…) always come last, whichever the direction.
+# Titles without a value (no year, no rating…) always come last, whichever the direction. Exception: for "watched",
+# never watched counts as the oldest date (first in ascending order, last in descending order; issue #14).
 SORTS = {
     "title": ("i.sort_title COLLATE NOCASE", False),
     "added": ("i.added_at", True),
@@ -36,8 +37,9 @@ def sort_order(sort, direction, uid):
     if direction in ("asc", "desc"):
         desc = direction == "desc"
     args = [uid] * expr.count("?")
-    return (f"({expr}) IS NULL, {expr} {'DESC' if desc else 'ASC'}, i.sort_title COLLATE NOCASE",
-            args + args)
+    nulls_first = sort == "watched" and not desc
+    return (f"({expr}) IS {'NOT ' if nulls_first else ''}NULL, {expr} {'DESC' if desc else 'ASC'}, "
+            "i.sort_title COLLATE NOCASE", args + args)
 WATCHED_RATIO = 0.90
 MIN_RESUME_MS = 30_000
 PREPARE_WINDOW_MS = 4 * 60 * 1000  # au départ : sous-titres prêts sur les 4 minutes qui suivent
