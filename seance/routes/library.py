@@ -255,11 +255,13 @@ def register(app, ctx, x):
         cont = continue_row(user, allowed) if prefs["show_continue"] else []
         hero = rows[0]["items"][0] if rows and rows[0]["items"] else None
         choice = prefs.get("home_hero") or "auto"
+        # a different shuffle each hour: (id + hour) * K mod p, not id * K + hour (that only shifts every
+        # title by one, so the first title never changed)
         if choice == "random":  # un film ou une série au hasard (le même pendant une heure)
             libs = [int(l["library"]["id"]) for l in rows] or [0]
             af, aa = age_filter(user)
             pick = db.one(CARD_SQL + f"WHERE i.type IN ('movie','show') AND i.library_id IN ({','.join('?' * len(libs))}) "
-                          "AND i.backdrop IS NOT NULL AND i.backdrop<>''" + af + " ORDER BY (i.id * 2654435761 + ?) % 1000003 LIMIT 1",
+                          "AND i.backdrop IS NOT NULL AND i.backdrop<>''" + af + " ORDER BY ((i.id + ?) * 2654435761) % 1000003 LIMIT 1",
                           [*libs, *aa, int(time.time() // 3600)])
             hero = attach_state(user["id"], [card(pick)])[0] if pick else hero
         elif choice == "watchlist":
@@ -284,7 +286,7 @@ def register(app, ctx, x):
         rows = db.all(CARD_SQL + f"WHERE i.type='movie' AND i.library_id IN ({','.join('?' * len(libs))}) AND i.duration_ms "
                       "BETWEEN 1200000 AND 5399999 AND NOT EXISTS (SELECT 1 FROM progress pr WHERE pr.user_id=? AND "
                       "pr.rating_key=CAST(i.id AS TEXT) AND pr.watched=1)" + af +
-                      " ORDER BY (COALESCE(i.rating, 5) >= 6.5) DESC, (i.id * 2654435761 + ?) % 1000003 LIMIT 24",
+                      " ORDER BY (COALESCE(i.rating, 5) >= 6.5) DESC, ((i.id + ?) * 2654435761) % 1000003 LIMIT 24",
                       [*libs, user["id"], *aa, int(time.time() // 86400)])
         return attach_state(user["id"], [card(r) for r in rows])
 
