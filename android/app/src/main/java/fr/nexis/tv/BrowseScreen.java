@@ -202,7 +202,7 @@ final class BrowseScreen extends Screen {
             return true;
         }
         Ui.dialog(act).setTitle(Tr.t("Quitter Noxa ?"))
-                .setPositiveButton(Tr.t("Quitter"), (d, w) -> act.finish())
+                .setPositiveButton(Tr.t("Quitter"), (d, w) -> act.quit())
                 .setNegativeButton(Tr.t("Rester"), null)
                 .show();
         return true;
