@@ -830,8 +830,8 @@ class SeanceTest(unittest.TestCase):
             self.admin.call("POST", "/api/admin/scan", {"library": self.libs["Films"]})
             wait_scan(self.admin)
             row2 = self.ctx.db.one("SELECT * FROM items WHERE key=?", (new,))
-            self.assertNotEqual(row2["id"], row["id"])     # nouvelle fiche…
-            self.assertEqual(self.ctx.subtitles.missing(row2), [])  # … mêmes sous-titres, déjà prêts
+            self.assertEqual(row2["id"], row["id"])        # same item, moved to the new file…
+            self.assertEqual(self.ctx.subtitles.missing(row2), [])  # … same subtitles, already exported
             # un second scan sans changement n'écrit rien
             before = self.ctx.db.one("SELECT updated_at, probe FROM items WHERE id=?", (row2["id"],))
             time.sleep(1.1)
@@ -842,6 +842,64 @@ class SeanceTest(unittest.TestCase):
             os.rename(new, old)
             self.admin.call("POST", "/api/admin/scan", {"library": self.libs["Films"]})
             wait_scan(self.admin)
+
+    def test_random_banner_changes_every_hour(self):
+        """The "random title" banner must not stay on the same title hour after hour."""
+        from unittest import mock
+        from seance.routes import library as lib_routes
+        c = self.admin
+        c.call("PUT", "/api/me/prefs", {"home_hero": "random"})
+        try:
+            picks = set()
+            real = time.time()
+            for hour in range(12):
+                with mock.patch.object(lib_routes.time, "time", return_value=real + hour * 3600):
+                    st, r = c.call("GET", "/api/home")
+                self.assertEqual(st, 200)
+                if r["hero"]:
+                    picks.add(r["hero"]["id"])
+            self.assertGreater(len(picks), 1, picks)
+        finally:
+            c.call("PUT", "/api/me/prefs", {"home_hero": "auto"})
+
+    def test_upgraded_episode_keeps_watched_state(self):
+        """A Radarr / Sonarr upgrade (new file name, old file deleted) is the same episode: still watched, not "new"."""
+        lib = self.libs["Séries"]
+        season = os.path.join(self.media, "series", "Les Veilleurs", "Season 01")
+        old = os.path.join(season, "Les.Veilleurs.S01E02.720p.WEB.mkv")
+        new = os.path.join(season, "Les.Veilleurs.S01E02.1080p.BluRay.mkv")
+        db = self.ctx.db
+        row = db.one("SELECT * FROM items WHERE key=?", (old,))
+        self.assertIsNotNone(row)
+        c = self.admin
+        c.call("POST", f"/api/items/{row['id']}/watched", {"watched": True})
+        from seance import scanner
+        old_recent = scanner.RECENT_SECONDS
+        try:
+            # 1. the new file is still being copied and the old one is already gone: nothing is deleted yet
+            scanner.RECENT_SECONDS = 45
+            os.rename(old, new)
+            os.utime(new)
+            c.call("POST", "/api/admin/scan", {"library": lib})
+            wait_scan(c)
+            self.assertIsNotNone(db.one("SELECT id FROM items WHERE id=?", (row["id"],)))
+            # 2. copy finished: the item moves to the new file
+            scanner.RECENT_SECONDS = 0
+            c.call("POST", "/api/admin/scan", {"library": lib})
+            wait_scan(c)
+            row2 = db.one("SELECT * FROM items WHERE key=?", (new,))
+            self.assertEqual(row2["id"], row["id"])
+            self.assertEqual(row2["added_at"], row["added_at"])  # not announced as a new episode
+            self.assertEqual(db.scalar("SELECT COUNT(*) FROM items WHERE parent_id=? AND idx=2", (row["parent_id"],)), 1)
+            st, it = c.call("GET", f"/api/items/{row['id']}")
+            self.assertTrue(it["watched"])
+        finally:
+            scanner.RECENT_SECONDS = old_recent
+            c.call("POST", f"/api/items/{row['id']}/watched", {"watched": False})
+            if os.path.exists(new):
+                os.rename(new, old)
+            c.call("POST", "/api/admin/scan", {"library": lib})
+            wait_scan(c)
 
     def test_prepare_waits_for_all_subtitles(self):
         m = self.movie("Nuit polaire")
