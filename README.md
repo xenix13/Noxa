@@ -116,6 +116,14 @@ Then open `http://<server-ip>:8420`, enter the **setup code** printed by the ins
 
 Apps are served by your own server and keep themselves up to date. Details in [Apps and offline viewing](docs/apps.md).
 
+### Community apps
+
+These apps are made by the community, not by the Noxa project. They are not reviewed or supported here: for help, contact their authors. Building your own? Open a [discussion](https://github.com/xenix13/Noxa/discussions) so it can be listed.
+
+| App | Device | Made by | What it does |
+|---|---|---|---|
+| [Noxa Player](https://apps.apple.com/us/app/noxa-player/id6837519034) | iPhone | Taylor Emery | Browse your movies and shows, or flip through channels built from your library with *Retro TV* |
+
 ## Documentation
 
 | Guide | What's inside |
@@ -134,7 +142,13 @@ Apps are served by your own server and keep themselves up to date. Details in [A
 
 ## Project status
 
-Noxa **4.0** is the first stable release. Releases follow [semantic versioning](https://semver.org): servers update themselves from the interface, and a *Test* update channel lets you try new features before they reach *Stable*. See the [changelog](https://github.com/xenix13/Noxa/releases).
+Noxa **4.0** is the first stable release. Servers update themselves from the interface, and a *Test* update channel lets you try new features before they reach *Stable*. See the [changelog](https://github.com/xenix13/Noxa/releases).
+
+Version numbers:
+
+- **x.0** (5.0, 6.0…): major releases, with the big changes.
+- **x.5** (4.5, 5.5…): minor updates that bring new features.
+- **Other numbers** (4.1 to 4.4, and 4.1.2, 4.1.3…): fixes only, with no new features.
 
 ## Contributing
 
