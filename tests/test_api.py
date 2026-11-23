@@ -532,6 +532,40 @@ class SeanceTest(unittest.TestCase):
         st, dd = self.admin.call("GET", f"/api/items/{eps[0]['id']}")
         self.assertFalse(dd["watched"])
 
+    def test_sort_by_last_watched(self):
+        """Issue #14: sort a library by last watched, both directions; never-watched titles always last."""
+        movies = list(self.items("Films").values())
+        self.assertGreaterEqual(len(movies), 3)
+        old, recent = movies[0], movies[1]
+        c, db = self.admin, self.ctx.db
+        uid = db.scalar("SELECT id FROM users WHERE is_admin=1 ORDER BY id LIMIT 1")
+        try:
+            for m, when in ((old, 1_600_000_000), (recent, 1_700_000_000)):
+                c.call("POST", f"/api/items/{m['id']}/watched", {"watched": True})
+                db.run("UPDATE progress SET last_watched_at=? WHERE user_id=? AND rating_key=?", (when, uid, m["id"]))
+            lib = self.libs["Films"]
+            st, r = c.call("GET", f"/api/libraries/{lib}/items?sort=watched&size=100")
+            ids = [x["id"] for x in r["items"]]
+            self.assertEqual(ids[:2], [recent["id"], old["id"]])  # default: most recently watched first
+            st, r = c.call("GET", f"/api/libraries/{lib}/items?sort=watched&dir=asc&size=100")
+            ids = [x["id"] for x in r["items"]]
+            self.assertEqual(ids[:2], [old["id"], recent["id"]])  # not seen in a while first
+            self.assertEqual(len(ids), len(movies))  # never-watched titles still listed, after the watched ones
+            st, r = c.call("GET", f"/api/libraries/{lib}/items?sort=title&dir=desc&size=100")
+            titles = [x["title"].lower() for x in r["items"]]
+            self.assertEqual(titles, sorted(titles, reverse=True))
+            # the sort picked in a library is kept in the account
+            st, p = c.call("PUT", "/api/me/prefs", {"lib_sorts": {str(lib): {"sort": "watched", "dir": "asc"}}})
+            self.assertEqual(p["lib_sorts"][str(lib)], {"sort": "watched", "dir": "asc"})
+            st, p = c.call("PUT", "/api/me/prefs", {"lib_sorts": {str(lib): {"sort": "drop table", "dir": "asc"}}})
+            self.assertEqual(st, 400)  # unknown sort refused
+            st, p = c.call("GET", "/api/me")
+            self.assertEqual(p["prefs"]["lib_sorts"][str(lib)], {"sort": "watched", "dir": "asc"})
+        finally:
+            for m in (old, recent):
+                c.call("POST", f"/api/items/{m['id']}/watched", {"watched": False})
+            c.call("PUT", "/api/me/prefs", {"lib_sorts": {}})
+
     def test_library_permissions(self):
         show, d, eps = self.episodes("Les Veilleurs", "Séries")
         self.assertEqual(self.lea.call("GET", f"/api/libraries/{self.libs['Séries']}/items")[0], 404)

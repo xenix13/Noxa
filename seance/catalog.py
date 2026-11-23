@@ -14,8 +14,30 @@ from .web import HTTPError
 
 RK = r"(?P<rk>\d{1,12})"
 SID = r"(?P<sid>[A-Za-z0-9_-]{8,40})"
-SORTS = {"title": "i.sort_title COLLATE NOCASE", "added": "i.added_at DESC", "year": "i.year DESC, i.sort_title",
-         "rating": "i.rating DESC, i.sort_title", "release": "i.released DESC, i.sort_title"}
+# Library sorts: SQL expression (? = the user's id) and whether it reads newest / highest first by default.
+# Titles without a value (no year, never watched…) always come last, whichever the direction.
+SORTS = {
+    "title": ("i.sort_title COLLATE NOCASE", False),
+    "added": ("i.added_at", True),
+    "year": ("i.year", True),
+    "release": ("i.released", True),
+    "rating": ("i.rating", True),
+    "mine": ("(SELECT st.stars FROM stars st WHERE st.user_id=? AND st.item_id=i.id)", True),
+    # last time this user finished the movie, or an episode of the show
+    "watched": ("(CASE WHEN i.type='movie' THEN (SELECT p.last_watched_at FROM progress p WHERE p.user_id=? "
+                "AND p.rating_key=CAST(i.id AS TEXT) AND p.watched=1) ELSE (SELECT MAX(p.last_watched_at) FROM progress p "
+                "WHERE p.user_id=? AND p.show_key=CAST(i.id AS TEXT) AND p.watched=1) END)", True),
+}
+
+
+def sort_order(sort, direction, uid):
+    """ORDER BY clause and its arguments for a library sort ("asc" / "desc", or None for the sort's default)."""
+    expr, desc = SORTS.get(sort, SORTS["title"])
+    if direction in ("asc", "desc"):
+        desc = direction == "desc"
+    args = [uid] * expr.count("?")
+    return (f"({expr}) IS NULL, {expr} {'DESC' if desc else 'ASC'}, i.sort_title COLLATE NOCASE",
+            args + args)
 WATCHED_RATIO = 0.90
 MIN_RESUME_MS = 30_000
 PREPARE_WINDOW_MS = 4 * 60 * 1000  # au départ : sous-titres prêts sur les 4 minutes qui suivent
@@ -74,6 +96,7 @@ DEFAULT_PREFS = {
     "home_hero": "auto",  # auto (reprise, sinon ajout récent), recent, resume, random, watchlist, none
     # langues par bibliothèque : {id : {audio_lang, sub_mode, sub_lang}} (sinon les langues générales)
     "lib_langs": {},
+    "lib_sorts": {},  # library id -> {"sort": one of SORTS, "dir": "asc" | "desc"}: last sort picked there
     # lecteur
     "skip_back": 10,
     "skip_forward": 30,
@@ -192,6 +215,11 @@ def validate_prefs(data):
                 and (lv.get("audio_lang") in (None, "") or LANG.match(str(lv.get("audio_lang"))))
                 and (lv.get("sub_lang") in (None, "") or LANG.match(str(lv.get("sub_lang"))))
                 and lv.get("sub_mode") in (None, "never", "foreign", "always") for lk, lv in v.items())
+        elif k == "lib_sorts":
+            ok = isinstance(v, dict) and len(v) <= 100 and all(
+                isinstance(lk, str) and lk.isdigit() and len(lk) <= 6 and isinstance(lv, dict)
+                and set(lv) <= {"sort", "dir"} and lv.get("sort") in SORTS and lv.get("dir") in ("asc", "desc")
+                for lk, lv in v.items())
         elif k == "text_size":
             ok = v in ("s", "m", "l", "xl")
         elif k == "density":

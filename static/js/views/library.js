@@ -1,6 +1,6 @@
 import { bulkSelection } from './bulk.js';
 import { canDownload, downloadDialog } from './item.js';
-import { get } from '../api.js';
+import { get, put } from '../api.js';
 import { state } from '../app.js';
 import { clear, fmtDuration, h, icon, img, posterCard, progressBar, select, spinner, store, toast } from '../ui.js';
 import { pinButton } from '../pins.js';
@@ -13,13 +13,19 @@ const PAGE = 60;
 const FILTERS = ['genre', 'watched', 'decade', 'duration', 'res', 'hdr', 'audio', 'subs', 'rating'];
 const MODES = [['poster', 'grid', 'Affiches'], ['wide', 'wide', 'Vignettes'], ['list', 'list', 'Liste']];
 
+// tris qui montrent d'abord le plus récent ou le plus haut (comme côté serveur, catalog.SORTS)
+const DESC_FIRST = new Set(['added', 'year', 'release', 'rating', 'mine', 'watched']);
+
 export async function renderLibrary(main, sid, ctx) {
   const lib = state.me.libraries.find((l) => l.id === sid);
   if (!lib) { clear(main, h('div.empty', tr('Bibliothèque introuvable.'))); return; }
   if (lib.type === 'photo') { await renderPhotos(main, lib, ctx); return; }
   if (lib.type === 'audiobook') { await renderBooks(main, lib, ctx); return; }
   document.title = `${lib.title} · Noxa`;
-  const sort = ctx.query.get('sort') || 'title';
+  // tri : celui de l'adresse, sinon le dernier choisi dans cette bibliothèque (gardé dans le compte), sinon le titre
+  const saved = ((state.me.prefs || {}).lib_sorts || {})[String(sid)] || {};
+  const sort = ctx.query.get('sort') || saved.sort || 'title';
+  const dir = ctx.query.get('dir') || (!ctx.query.get('sort') && saved.dir) || (DESC_FIRST.has(sort) ? 'desc' : 'asc');
   const genre = ctx.query.get('genre') || '';
   const view = ctx.query.get('view') || '';
   // première page des titres demandée en même temps que les filtres (un aller-retour de moins si le serveur est loin)
@@ -28,6 +34,7 @@ export async function renderLibrary(main, sid, ctx) {
   firstQ.set('start', 0);
   firstQ.set('size', PAGE);
   firstQ.set('sort', sort);
+  firstQ.set('dir', dir);
   let firstPage = get(`/api/libraries/${sid}/items?${firstQ}`);
   firstPage.catch(() => {}); // erreur reprise par more()
   const [genres, collections, facets] = await Promise.all([
@@ -59,8 +66,21 @@ export async function renderLibrary(main, sid, ctx) {
   };
   const pick = (key, options, label) => select(options, ctx.query.get(key) || '',
     { onchange: (e) => setQuery(key, e.target.value), 'aria-label': label });
+  const setSort = (s, d) => {
+    const all = { ...((state.me.prefs || {}).lib_sorts || {}), [String(sid)]: { sort: s, dir: d } };
+    if (state.me.prefs) state.me.prefs.lib_sorts = all;
+    put('/api/me/prefs', { lib_sorts: all }).catch(() => {}); // retenu pour la prochaine visite, sur tous les appareils
+    const q = new URLSearchParams(ctx.query);
+    q.set('sort', s);
+    q.set('dir', d);
+    location.hash = `#/library/${sid}?${q}`;
+  };
   const sortSel = select([['title', tr('Titre')], ['added', tr('Date d’ajout')], ['year', tr('Année')], ['release', tr('Date de sortie')],
-    ['rating', tr('Note')], ['mine', tr('Ma note')]], sort, { onchange: (e) => setQuery('sort', e.target.value), 'aria-label': tr('Trier') });
+    ['rating', tr('Note')], ['mine', tr('Ma note')], ['watched', tr('Dernier visionnage')]], sort,
+  { onchange: (e) => setSort(e.target.value, DESC_FIRST.has(e.target.value) ? 'desc' : 'asc'), 'aria-label': tr('Trier') });
+  const dirLabel = dir === 'desc' ? tr('Ordre décroissant') : tr('Ordre croissant');
+  const dirBtn = h('button.btn.small', { type: 'button', title: dirLabel, 'aria-label': dirLabel,
+    onclick: () => setSort(sort, dir === 'desc' ? 'asc' : 'desc') }, icon(dir === 'desc' ? 'down' : 'up'));
   const genreSel = pick('genre', [['', tr('Tous les genres')], ...genres.map((g) => [g.id, g.title])], tr('Genre'));
 
   // panneau des autres filtres (ouvert d'office si l'un d'eux est actif)
@@ -128,7 +148,7 @@ export async function renderLibrary(main, sid, ctx) {
   const cards = new Map();
   const bulk = bulkSelection(grid, cards, { downloadDialog, canDownload });
   clear(main, h('div.page-head', h('h1', lib.title), server, count,
-    h('div.filters', sortSel, genreSel, filterBtn, random, modes, bulk.button, pin)), panel, viewTabs, grid, sentinel, bulk.bar);
+    h('div.filters', sortSel, dirBtn, genreSel, filterBtn, random, modes, bulk.button, pin)), panel, viewTabs, grid, sentinel, bulk.bar);
 
   const render = (c) => { cards.set(String(c.id), c); return mode === 'list' ? listRow(c) : mode === 'wide' ? wideLibCard(c) : posterCard(c); };
   let start = 0, total = Infinity, loading = false;
@@ -141,6 +161,7 @@ export async function renderLibrary(main, sid, ctx) {
       q.set('start', start);
       q.set('size', PAGE);
       q.set('sort', sort);
+      q.set('dir', dir);
       const early = start === 0 ? firstPage : null;
       firstPage = null;
       const r = await (early || get(`/api/libraries/${sid}/items?${q}`));

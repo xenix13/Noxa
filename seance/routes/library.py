@@ -3,7 +3,7 @@ import json
 import time
 
 from .. import collections_api, i18n
-from ..catalog import CARD_SQL, EPISODE_ORDER, IMG_PATH, LANG, LANG_NAMES, MIN_RESUME_MS, RK, SORTS, WATCHED_RATIO, stream_lists
+from ..catalog import CARD_SQL, EPISODE_ORDER, IMG_PATH, LANG, LANG_NAMES, MIN_RESUME_MS, RK, WATCHED_RATIO, sort_order, stream_lists
 from ..names import fold
 from ..web import HTTPError, Response
 
@@ -131,14 +131,11 @@ def register(app, ctx, x):
         args += fargs
         start = req.int_arg("start", 0, 0)
         size = req.int_arg("size", 60, 1, 200)
-        order = SORTS.get(req.arg("sort", "title"), SORTS["title"])
-        if req.arg("sort") == "mine":  # ma note (étoiles), les titres notés d'abord
-            order = "(SELECT st.stars FROM stars st WHERE st.user_id=? AND st.item_id=i.id) DESC NULLS LAST, i.sort_title"
+        order, order_args = sort_order(req.arg("sort", "title"), req.arg("dir"), req.user["id"])
         af, aa = age_filter(req.user)
         where += af
         args += aa
         total = db.scalar(f"SELECT COUNT(*) FROM items i LEFT JOIN items sh ON sh.id=i.show_id {where}", args)
-        order_args = [req.user["id"]] if req.arg("sort") == "mine" else []
         rows = db.all(CARD_SQL + where + f" ORDER BY {order} LIMIT ? OFFSET ?", [*args, *order_args, size, start])
         items = attach_state(req.user["id"], [card(r) for r in rows])
         return {"total": total, "items": items}
