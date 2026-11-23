@@ -249,6 +249,7 @@ class Scanner:
             existing = {k: r for k, r in existing.items()
                         if os.path.dirname(k) in scoped or (vanished and k.startswith(vanished))}
         seen = set()
+        self._replaced = set()
         deferred = 0
         deferred_dirs = set()
         extras = []
@@ -282,7 +283,10 @@ class Scanner:
         archived = {r["item_id"] for r in db.all(
             "SELECT DISTINCT c.item_id FROM cold_copies c JOIN items i ON i.id=c.item_id WHERE i.library_id=? "
             "AND c.verified_at IS NOT NULL", (lib["id"],))}
+        # an upgrade from Radarr / Sonarr renames the file: the item moved to the new file is kept
+        # (watched state, metadata), and so is one whose folder has a file still being copied
         gone = [r["id"] for k, r in existing.items() if k not in seen and r["id"] not in archived
+                and r["id"] not in self._replaced and os.path.dirname(k) not in deferred_dirs
                 and any(k.startswith(os.path.join(r0, "")) for r0 in reachable)]
         for i in range(0, len(gone), 500):
             chunk = gone[i:i + 500]
@@ -411,10 +415,30 @@ class Scanner:
                 self._new_media(row["id"], info)
             return
         title, year = parse_movie(path, root)
+        # same folder (its own folder, or the same title and year when movies share a folder)
+        old = self._orphan([r for r in db.all("SELECT id, key FROM items WHERE library_id=? AND type='movie' "
+                                              "AND peer_id IS NULL AND key LIKE ? ESCAPE '\\'",
+                                              (lib["id"], like_prefix(folder)))
+                            if os.path.dirname(r["key"]) == folder
+                            and (own_folder or parse_movie(r["key"], root) == (title, year))])
+        if old:
+            return self._replace(old, path, size, mtime, info, dur)
         new_id = self._insert(library_id=lib["id"], type="movie", key=path, title=title, year=year, duration_ms=dur,
                      file_size=size, file_mtime=mtime, probe=json.dumps(info), poster=poster, backdrop=backdrop,
                      added_at=self._added_at(lib, mtime))
         self._new_media(new_id, info)
+
+    def _replace(self, row, path, size, mtime, info, dur):
+        """Moves an item whose file vanished to its replacement (same id: watched state, ratings, lists stay)."""
+        self.ctx.db.run("UPDATE items SET key=?, file_size=?, file_mtime=?, probe=?, duration_ms=? WHERE id=?",
+                        (path, size, mtime, json.dumps(info), dur, row["id"]))
+        self._replaced.add(row["id"])
+        self._new_media(row["id"], info)
+        log.info("Fichier remplacé : %s", path)
+
+    def _orphan(self, rows):
+        """First of these items whose file is no longer on disk (the file a Radarr / Sonarr upgrade replaced)."""
+        return next((r for r in rows if r["id"] not in self._replaced and not os.path.exists(r["key"])), None)
 
     def _new_media(self, item_id, info):
         hook = getattr(self.ctx, "on_new_media", None)
@@ -464,6 +488,10 @@ class Scanner:
             season_id = self._insert(library_id=lib["id"], type="season", key=s_key, parent_id=show_id,
                                      show_id=show_id, idx=parsed["season"], poster=poster,
                                      title="Spéciaux" if parsed["season"] == 0 else f"Saison {parsed['season']}")
+        old = self._orphan(db.all("SELECT id, key FROM items WHERE type='episode' AND parent_id=? AND idx=? "
+                                  "AND peer_id IS NULL", (season_id, parsed["episode"])))
+        if old:
+            return self._replace(old, path, size, mtime, info, dur)
         folder = os.path.dirname(path)
         base = os.path.splitext(os.path.basename(path))[0]
         still = None
