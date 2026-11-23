@@ -134,7 +134,13 @@ Apps are served by your own server and keep themselves up to date. Details in [A
 
 ## Project status
 
-Noxa **4.0** is the first stable release. Releases follow [semantic versioning](https://semver.org): servers update themselves from the interface, and a *Test* update channel lets you try new features before they reach *Stable*. See the [changelog](https://github.com/xenix13/Noxa/releases).
+Noxa **4.0** is the first stable release. Servers update themselves from the interface, and a *Test* update channel lets you try new features before they reach *Stable*. See the [changelog](https://github.com/xenix13/Noxa/releases).
+
+Version numbers:
+
+- **x.0** (5.0, 6.0…): major releases, with the big changes.
+- **x.5** (4.5, 5.5…): minor updates that bring new features.
+- **Other numbers** (4.1 to 4.4, and 4.1.2, 4.1.3…): fixes only, with no new features.
 
 ## Contributing
 

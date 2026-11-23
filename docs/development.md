@@ -91,7 +91,7 @@ French text in the code is the **translation key**:
 - Changes reach `main` only through a pull request from `test`, reviewed and merged by the maintainer.
 - `docker-compose.yml` uses `ghcr.io/xenix13/noxa:latest` on both branches (CI checks it on `main`); switch the tag to `:test` by hand to try the test channel.
 - Commit messages, pull requests and release notes (`docs/releases/`) are written in English.
-- Versions follow [semantic versioning](https://semver.org).
+- Version numbers: **x.0** are major releases, **x.5** minor updates with new features, and every other number (x.1 to x.4, x.y.z) is a fix release with no new feature. New features wait for the next x.5 or x.0.
 
 ## Former name (Nexis)
 
