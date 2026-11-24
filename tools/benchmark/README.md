@@ -1,5 +1,7 @@
 # Media server benchmark
 
+Results so far: [24 November 2026](../../docs/benchmarks/2026-11-24.md). Please share yours in the [Discussions](https://github.com/xenix13/Noxa/discussions), with `summary.md` and `results.json`.
+
 Compares Noxa, Jellyfin and Plex on the same machine, with the same test library and the same limits. The whole run is automatic: it installs what is missing, builds the test library, starts each server in turn, sets it up through its own API, measures it, and removes it.
 
 ## Run it on Proxmox VE (simplest)
@@ -7,7 +9,7 @@ Compares Noxa, Jellyfin and Plex on the same machine, with the same test library
 On the Proxmox host, as root, create a ready-to-use VM. It's a Debian 12 VM with 4 cores, 8 GB and 24 GB, and the script installs Docker, the three servers and the test library in it, which takes 15 to 25 minutes:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/test/tools/benchmark/proxmox-vm.sh -o noxa-bench-vm.sh
+curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/main/tools/benchmark/proxmox-vm.sh -o noxa-bench-vm.sh
 bash noxa-bench-vm.sh
 ```
 
@@ -29,8 +31,6 @@ curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/main/tools/benchmark/r
 ```
 
 The run takes about an hour. At the end it prints a summary and tells you where the files are (`/opt/noxa-bench/results/<date>/`).
-
-Until the kit reaches `main`, add `NOXA_BENCH_BRANCH=test` in front of `bash`: `curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/test/tools/benchmark/run.sh | NOXA_BENCH_BRANCH=test bash`.
 
 To check that everything works first (about 10 minutes, the numbers mean nothing):
 

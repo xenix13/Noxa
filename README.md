@@ -124,6 +124,22 @@ These apps are made by the community, not by the Noxa project. They are not revi
 |---|---|---|---|---|
 | [Noxa Player](https://apps.apple.com/us/app/noxa-player/id6837519034) | iPhone | Taylor Emery | Browse your movies and shows, or flip through channels built from your library with *Retro TV* | [Discussion](https://github.com/xenix13/Noxa/discussions/15) |
 
+## Benchmark
+
+Noxa, Jellyfin and Plex were measured on the same machine, each one limited to 2 CPU cores and 4 GB, with the same test library. These are the [first results](docs/benchmarks/2026-11-24.md) (Noxa 4.1.4, Jellyfin 10.10.7, Plex 1.43.5):
+
+| | Noxa | Jellyfin | Plex |
+|---|---|---|---|
+| Memory, idle | **53 MB** | 189 MB | 249 MB |
+| Memory, 3 direct streams | **69 MB** | 225 MB | 268 MB |
+| Memory, 1 conversion | **261 MB** | 435 MB | 467 MB |
+| Library page (median) | **5 ms** | 11 ms | 18 ms |
+| Software conversion, HEVC 10-bit 1080p → 720p | 1.10× real time | **1.46×** | 1.42× |
+
+Noxa uses much less memory and answers faster, but **its video conversion is slower**. That's what this benchmark revealed, and it is now on the roadmap. The full table, the known causes and the limits of the test are in the [results page](docs/benchmarks/2026-11-24.md).
+
+The benchmark is public, so anyone can run it on their own hardware. On a Proxmox VE host it creates its own VM, and on any Debian or Ubuntu machine it's one command. See [tools/benchmark](tools/benchmark/README.md). Results from other machines are welcome in the [Discussions](https://github.com/xenix13/Noxa/discussions).
+
 ## Documentation
 
 | Guide | What's inside |

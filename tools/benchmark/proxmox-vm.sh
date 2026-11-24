@@ -7,11 +7,11 @@
 #   bash proxmox-vm.sh delete   remove the VM and its files
 #
 # Settings (environment variables): VMID, STORAGE (VM disk), BRIDGE (vmbr0), CORES (4), MEMORY (8192 MB),
-# DISK (24G), NOXA_BENCH_BRANCH (test). Nothing else on the host is changed, except that the "local" storage is
+# DISK (24G), NOXA_BENCH_BRANCH (main). Nothing else on the host is changed, except that the "local" storage is
 # allowed to hold cloud-init "snippets" if no storage does yet.
 set -euo pipefail
 
-BRANCH="${NOXA_BENCH_BRANCH:-test}"
+BRANCH="${NOXA_BENCH_BRANCH:-main}"
 HOME_DIR=/root/noxa-bench
 KEY="$HOME_DIR/ssh-key"
 NAME=noxa-bench
