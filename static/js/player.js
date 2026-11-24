@@ -484,7 +484,7 @@ export async function renderPlayer(root, rk, ctx) {
     subsRefresh = setTimeout(() => { if (seq === startSeq && !destroyed) fn(seq); }, SUBS_REFRESH);
   }
   const partialOf = (res) => {
-    const v = res.headers.get('X-Seance-Partial');
+    const v = res.headers.get('X-Noxa-Partial');
     return v === null ? null : Number(v);
   };
   async function refreshAss(seq) {

@@ -63,11 +63,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Vérifier les thèmes
-        run: python3 -m seance.themes check-files static/themes
+        run: python3 -m noxa.themes check-files static/themes
       - name: Index des thèmes (main)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          python3 -m seance.themes build static/themes
+          python3 -m noxa.themes build static/themes
           if ! git diff --quiet -- static/themes/index.json; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -91,7 +91,7 @@ jobs:
       - name: Version
         id: v
         run: |
-          echo "version=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("seance/__init__.py").read()).group(1))')" >> "$GITHUB_OUTPUT"
+          echo "version=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("noxa/__init__.py").read()).group(1))')" >> "$GITHUB_OUTPUT"
           OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
           echo "image=ghcr.io/$OWNER/noxa" >> "$GITHUB_OUTPUT"
           echo "old=ghcr.io/$OWNER/nexis" >> "$GITHUB_OUTPUT"  # ancien nom (Nexis) : les installations existantes continuent de se mettre à jour
@@ -153,7 +153,7 @@ jobs:
           KEYSTORE_B64: ${{ secrets.NEXIS_KEYSTORE }}
           NEXIS_KEYSTORE_PASSWORD: ${{ secrets.NEXIS_KEYSTORE_PASSWORD }}
         run: |
-          V=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("seance/__init__.py").read()).group(1))')
+          V=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("noxa/__init__.py").read()).group(1))')
           CODE=$(python3 -c "a,b,c=(int(x) for x in '$V'.split('.')[:3]); print(a*10000+b*100+c)")
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/nexis.p12"
@@ -248,7 +248,7 @@ jobs:
             apps/desktop/dist/latest*.yml
 
   # Publication des applications : avec la version (main), ou dans la pré-version « apps-test » (test). Chaque serveur
-  # Noxa lit cette publication pour sa page Applications et les mises à jour des applications (seance/apps.py).
+  # Noxa lit cette publication pour sa page Applications et les mises à jour des applications (noxa/apps.py).
   apps:
     needs: [desktop, android]
     if: >-
@@ -273,7 +273,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          V=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("seance/__init__.py").read()).group(1))')
+          V=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("noxa/__init__.py").read()).group(1))')
           # versions des applications (indépendantes de celle du serveur), lues par les applications pour se mettre à jour
           python3 - > out/noxa-apps.json <<'PY'
           import json, re

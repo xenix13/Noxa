@@ -68,7 +68,7 @@ An alert is sent once, repeated once a day while the problem lasts, and clears i
 - **External storages:** each backup can also go to one or more storages, each keeping its own number of copies: **S3** (AWS, Backblaze B2, Wasabi, Scaleway, OVH, MinIO…), **Google Drive** (an OAuth app created once on console.cloud.google.com, type "TVs and Limited Input devices", Drive API enabled; Noxa only sees the files it created) or **OneDrive** (an app registered once on portal.azure.com with public client flows allowed; Noxa only writes to its app folder). Step-by-step instructions are shown in the add window.
 - **Encryption:** with a passphrase (*Encryption of off-server copies*), copies sent to S3, Google Drive and OneDrive are encrypted (AES-256, `.tar.gz.enc`): the provider cannot read them. Keep the passphrase somewhere else: without it those copies cannot be restored.
 - **Restore:** *Restore* on a backup of the list (including a linked server's copy), *Restore from a file…* (from your device, `.tar.gz` or `.enc`), *Restore from a server file…* (a path, e.g. on a mounted disk), or *See backups* of an external storage then *Restore*. Noxa checks the archive, restarts and puts it in place before opening the database; the previous state is kept in `data/before-restore-<date>`. A backup from a newer Noxa is refused; an older one is upgraded at start-up.
-- **Replace a dead server:** install Noxa on the new machine, create the admin account, then *Restore from a file…* with a backup downloaded from a linked server or an external storage. The server takes over the old one's identity, so linked servers recognize it. From the console, with Noxa stopped: `python3 -m seance --data /var/lib/seance restore archive.tar.gz` (add `--passphrase "…"` for an `.enc` archive).
+- **Replace a dead server:** install Noxa on the new machine, create the admin account, then *Restore from a file…* with a backup downloaded from a linked server or an external storage. The server takes over the old one's identity, so linked servers recognize it. From the console, with Noxa stopped: `python3 -m noxa --data /var/lib/seance restore archive.tar.gz` (add `--passphrase "…"` for an `.enc` archive).
 
 ## Two-factor authentication
 
@@ -83,7 +83,7 @@ Everyone who signs in with a password can turn it on in *Settings → Profile an
 ## Security
 
 - **Mount your media read-only.** Noxa only needs to read it, and *Settings → Libraries* flags a folder it could write to.
-- **Expose Noxa to the Internet only behind an HTTPS reverse proxy**, with `SEANCE_COOKIE_SECURE=1` and `SEANCE_TRUST_PROXY=1` ([details](installation.md#https-and-remote-access)). Turn on 2FA for administrators.
+- **Expose Noxa to the Internet only behind an HTTPS reverse proxy**, with `NOXA_COOKIE_SECURE=1` and `NOXA_TRUST_PROXY=1` ([details](installation.md#https-and-remote-access)). Turn on 2FA for administrators.
 - Noxa runs as an unprivileged `seance` user, in a systemd sandbox when the system allows it. Mounting shares goes through `seance-mountd`, a separate root helper that can only mount read-only under `/mnt/seance/` and only accepts requests from the `seance` user.
 - Passwords are hashed; secrets of external services (SMB, S3, OpenSubtitles…) are never sent back to the interface. Third-party scripts and the subtitle renderers shipped in the repository are checked against their SHA-256 at install time.
 - Only add IPTV playlists from providers you trust.
@@ -98,7 +98,7 @@ noxa list-users              # accounts and their 2FA state
 noxa reset-2fa <username>    # turn 2FA off for an account (lost phone, admin locked out)
 ```
 
-With Docker: `docker compose exec noxa python3 -m seance reset-2fa <username>`.
+With Docker: `docker compose exec noxa python3 -m noxa reset-2fa <username>`.
 
 Reset a password:
 

@@ -34,7 +34,7 @@ for _k, _v in (("SEANCE_FSTAB", "fstab"), ("SEANCE_MOUNTINFO", "mountinfo"), ("S
     os.environ[_k] = os.path.join(SMB, _v)
 open(os.environ["SEANCE_FSTAB"], "w").close()
 open(os.environ["SEANCE_MOUNTINFO"], "w").close()
-from seance import mountd  # noqa: E402
+from noxa import mountd  # noqa: E402
 _mounts = mountd.Mounts()
 _mounts.env["unprivileged"] = False
 _msrv = mountd.make_server(_mounts, os.environ["SEANCE_MOUNTD_SOCK"], allowed_uids={os.getuid()})
@@ -42,8 +42,8 @@ threading.Thread(target=_msrv.serve_forever, daemon=True).start()
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
-from seance.api import Ctx, build_app  # noqa: E402
-from seance.web import Server, make_handler  # noqa: E402
+from noxa.api import Ctx, build_app  # noqa: E402
+from noxa.web import Server, make_handler  # noqa: E402
 from tests.test_api import STATIC, Client, media_root, wait_scan  # noqa: E402
 
 out = sys.argv[1] if len(sys.argv) > 1 else "captures"

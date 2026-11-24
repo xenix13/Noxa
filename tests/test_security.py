@@ -17,10 +17,10 @@ import unittest
 from tests.test_api import STATIC, Client  # noqa: F401
 from tests.fixtures import ff
 
-from seance import media, mountd
-from seance.api import Ctx, build_app
-from seance.livetv import LiveError, stream_url_ok
-from seance.web import Server, make_handler
+from noxa import media, mountd
+from noxa.api import Ctx, build_app
+from noxa.livetv import LiveError, stream_url_ok
+from noxa.web import Server, make_handler
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -96,9 +96,12 @@ class SecurityTest(unittest.TestCase):
         conn.close()
         # requête non GET sans l'en-tête anti-CSRF
         self.assertEqual(self.admin.call("PUT", "/api/me/prefs", {"theme": "oled"}, csrf=False)[0], 403)
+        # apps older than 4.5 send the same header under the former internal name
+        self.assertEqual(self.admin.call("PUT", "/api/me/prefs", {"theme": "oled"}, csrf=False,
+                                         headers={"X-Seance": "1"})[0], 200)
 
     def test_idle_connection_closed(self):
-        from seance import web
+        from noxa import web
         self.assertLessEqual(web.IDLE_TIMEOUT, 300)
         handler = make_handler(build_app(self.ctx))
         self.assertEqual(handler.timeout, web.IDLE_TIMEOUT)
@@ -214,7 +217,7 @@ class SecurityTest(unittest.TestCase):
 
     def test_gzip_bomb_rejected(self):
         import gzip
-        from seance import livetv
+        from noxa import livetv
         bomb = os.path.join(self.work, "bombe.m3u.gz")
         with gzip.open(bomb, "wb") as f:
             f.write(b"#" * (8 * 1024 * 1024))

@@ -24,6 +24,6 @@
   <Config Name="Photos" Target="/media/photos" Default="" Mode="ro" Description="Optional photo library (read only), added in Noxa as a Photos library pointing to /media/photos." Type="Path" Display="always" Required="false" Mask="false"/>
   <Config Name="Backups" Target="/backups" Default="" Mode="rw" Description="Optional folder for backups (Settings, Backups: /backups)." Type="Path" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Intel / AMD GPU" Target="" Default="/dev/dri" Mode="" Description="Optional: hardware transcoding with VAAPI. Leave empty if you have no GPU." Type="Device" Display="advanced" Required="false" Mask="false"/>
-  <Config Name="Secure cookies" Target="SEANCE_COOKIE_SECURE" Default="0" Mode="" Description="Set to 1 when Noxa is reached through an HTTPS reverse proxy." Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
-  <Config Name="Trust proxy" Target="SEANCE_TRUST_PROXY" Default="0" Mode="" Description="Set to 1 behind a reverse proxy, so Noxa sees the real client IP." Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
+  <Config Name="Secure cookies" Target="NOXA_COOKIE_SECURE" Default="0" Mode="" Description="Set to 1 when Noxa is reached through an HTTPS reverse proxy." Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
+  <Config Name="Trust proxy" Target="NOXA_TRUST_PROXY" Default="0" Mode="" Description="Set to 1 behind a reverse proxy, so Noxa sees the real client IP." Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
 </Container>

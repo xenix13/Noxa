@@ -14,9 +14,9 @@ from urllib.parse import parse_qs, urlparse
 
 from tests.test_api import STATIC, Client, media_root, wait_scan
 
-from seance import opensubs, tasks
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import opensubs, tasks
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 SRT = "1\n00:00:01,000 --> 00:00:03,000\nBonjour {n}\n\n".encode()
 

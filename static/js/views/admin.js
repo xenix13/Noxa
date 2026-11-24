@@ -1419,7 +1419,7 @@ async function backupsPage(body, ctx) {
         }
         toast(tr('Envoi de la sauvegarde…'));
         try {
-          const headers = { 'X-Seance': '1', 'Content-Type': 'application/octet-stream' };
+          const headers = { 'X-Noxa': '1', 'Content-Type': 'application/octet-stream' };
           if (pass) headers['X-Backup-Passphrase'] = pass;
           const r = await fetch(adminUrl(restore ? '/api/admin/backups/restore-file' : '/api/admin/backups/upload'), { method: 'POST', body: f, credentials: 'same-origin', headers });
           const j = await r.json();

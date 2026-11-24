@@ -74,7 +74,7 @@ function createWindow() {
 
 // ------------------------------------------------------------------ choix du serveur
 async function probe(base) {
-  const res = await net.fetch(`${base}/api/status`, { headers: { 'X-Seance': '1' }, signal: AbortSignal.timeout(8000) });
+  const res = await net.fetch(`${base}/api/status`, { headers: { 'X-Noxa': '1' }, signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const j = await res.json();
   if (!j || typeof j.version !== 'string') throw new Error('not nexis');

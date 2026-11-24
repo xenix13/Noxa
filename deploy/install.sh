@@ -7,8 +7,9 @@
 #   sudo ./deploy/install.sh
 set -euo pipefail
 
-REPO_URL="${SEANCE_REPO:-https://github.com/xenix13/Noxa.git}"
-BRANCH="${SEANCE_BRANCH:-main}"
+# NOXA_*: since 4.5; SEANCE_* (former name) still read, updates started by older servers pass those
+REPO_URL="${NOXA_REPO:-${SEANCE_REPO:-https://github.com/xenix13/Noxa.git}}"
+BRANCH="${NOXA_BRANCH:-${SEANCE_BRANCH:-main}}"
 APP_DIR=/opt/seance
 DATA_DIR=/var/lib/seance
 CONF_DIR=/etc/seance
@@ -33,7 +34,7 @@ fi
 # Run from a clone: use that folder. Run through "curl | bash": clone or update the repository.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 # (never the installed folder itself: /opt/seance/deploy/install.sh would erase itself while copying)
-if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/install.sh" ] && [ -f "$SCRIPT_DIR/../seance/api.py" ] \
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/install.sh" ] && [ -f "$SCRIPT_DIR/../noxa/api.py" ] \
    && [ "$(cd "$SCRIPT_DIR/.." && pwd)" != "$APP_DIR" ]; then
   SRC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 else
@@ -51,8 +52,9 @@ echo "   version: $(git -C "$SRC_DIR" rev-parse --short HEAD 2>/dev/null || echo
 
 echo "==> Copying the application to $APP_DIR"
 mkdir -p "$APP_DIR" "$DATA_DIR" "$CONF_DIR" /mnt/seance
-rm -rf "$APP_DIR/seance" "$APP_DIR/static.new" "$APP_DIR/deploy"
-cp -r "$SRC_DIR/seance" "$APP_DIR/seance"
+rm -rf "$APP_DIR/noxa" "$APP_DIR/seance" "$APP_DIR/static.new" "$APP_DIR/deploy"
+cp -r "$SRC_DIR/noxa" "$APP_DIR/noxa"
+cp -r "$SRC_DIR/seance" "$APP_DIR/seance"  # former package name: still starts Noxa from older service files
 cp -r "$SRC_DIR/static" "$APP_DIR/static.new"
 cp -r "$SRC_DIR/deploy" "$APP_DIR/deploy"
 rm -rf "$APP_DIR/static"

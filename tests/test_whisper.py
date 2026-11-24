@@ -14,9 +14,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client, media_root, wait_scan
 
-from seance import tasks, whisper
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import tasks, whisper
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 FAKE_CLI = """#!/usr/bin/env python3
 import sys

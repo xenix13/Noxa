@@ -48,7 +48,7 @@ CTID=120 MEMORY=6144 STORAGE=local-zfs PRIVILEGED=0 \
 | `BRIDGE` | `vmbr0` | Network bridge |
 | `CORES`, `MEMORY`, `SWAP`, `DISK` | `4`, `4096` MB, `2048` MB, `16` GB | Resources |
 | `PRIVILEGED` | `1` | `0` for an unprivileged container (mount shares on the host instead) |
-| `SEANCE_BRANCH` | `main` | `test` to install the test channel |
+| `NOXA_BRANCH` | `main` | `test` to install the test channel |
 
 <details>
 <summary>Creating the container by hand instead</summary>
@@ -119,8 +119,8 @@ services:
       - "8420:8420"
       - "8421:8421"          # only for linked servers
     environment:
-      SEANCE_COOKIE_SECURE: "0"   # "1" behind an HTTPS reverse proxy
-      SEANCE_TRUST_PROXY: "0"     # "1" behind a reverse proxy
+      NOXA_COOKIE_SECURE: "0"   # "1" behind an HTTPS reverse proxy
+      NOXA_TRUST_PROXY: "0"     # "1" behind a reverse proxy
     volumes:
       - ./data:/data
       - /mnt/movies:/media/movies:ro   # one line per media folder, read-only
@@ -248,8 +248,8 @@ On your home network, `http://<ip>:8420` is all you need. To watch from outside,
 Then tell Noxa it is behind a proxy, in `/etc/seance/seance.env` (Docker: the `environment` section):
 
 ```
-SEANCE_COOKIE_SECURE=1
-SEANCE_TRUST_PROXY=1
+NOXA_COOKIE_SECURE=1
+NOXA_TRUST_PROXY=1
 ```
 
 and restart it (`systemctl restart seance`). A minimal Caddy example:
@@ -273,7 +273,7 @@ With nginx, add `proxy_read_timeout 120s;` and `proxy_buffering off;` (needed fo
 **Update channel:** *Stable* (the `main` branch, released versions) or *Test* (the `test` branch, new features being validated), on the same page. New features land on *Test* first, then on *Stable*. Switching back to *Stable* and updating returns the server to the latest stable version. To install the test channel directly:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/test/deploy/install.sh | SEANCE_BRANCH=test bash
+curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/test/deploy/install.sh | NOXA_BRANCH=test bash
 ```
 
 Apps (desktop, Android, Android TV) update themselves from your server; see [Apps](apps.md#updates).
@@ -284,13 +284,15 @@ Most settings live in the interface. A few server-level options are environment 
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SEANCE_PORT` | `8420` | Web port |
-| `SEANCE_HOST` | `0.0.0.0` | Listening address |
-| `SEANCE_DATA` | `/var/lib/seance` (Docker: `/data`) | Data folder (database, caches, subtitles, backups) |
-| `SEANCE_COOKIE_SECURE` | `0` | `1` when Noxa is reached over HTTPS |
-| `SEANCE_TRUST_PROXY` | `0` | `1` behind a reverse proxy (real client IP from `X-Forwarded-For`) |
-| `SEANCE_FED_PORT` | `8421` | Linked-servers port |
-| `SEANCE_DEBUG` | `0` | `1` logs the ffmpeg commands and more details |
+| `NOXA_PORT` | `8420` | Web port |
+| `NOXA_HOST` | `0.0.0.0` | Listening address |
+| `NOXA_DATA` | `/var/lib/seance` (Docker: `/data`) | Data folder (database, caches, subtitles, backups) |
+| `NOXA_COOKIE_SECURE` | `0` | `1` when Noxa is reached over HTTPS |
+| `NOXA_TRUST_PROXY` | `0` | `1` behind a reverse proxy (real client IP from `X-Forwarded-For`) |
+| `NOXA_FED_PORT` | `8421` | Linked-servers port |
+| `NOXA_DEBUG` | `0` | `1` logs the ffmpeg commands and more details |
+
+Before 4.5 these variables were named `SEANCE_…` (`SEANCE_PORT`, `SEANCE_COOKIE_SECURE`…). The old names still work, so existing `seance.env` files and Docker setups need no change. When both are set, the `NOXA_…` one wins.
 
 Logs: `journalctl -u seance -f` (Docker: `docker logs -f noxa`).
 

@@ -21,8 +21,8 @@ import unittest
 
 from tests.test_api import hls_segment, STATIC, Client, media_root, wait_scan
 
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 
 def start_server(work, name):
@@ -481,7 +481,7 @@ class FederationTest(unittest.TestCase):
                         json.dumps({"token": "z" * 32, "uid": "0" * 32, "fingerprint": "0" * 64}))
         self.assertEqual(st, 403)
         # invitation dont l'empreinte ne correspond pas au serveur contacté
-        from seance.federation import decode_invite, encode_invite
+        from noxa.federation import decode_invite, encode_invite
         st, inv = self.admin_a.call("POST", "/api/admin/federation/invite", {"address": f"127.0.0.1:{port}"})
         data = decode_invite(inv["invite"])
         data["f"] = "ab" * 32
@@ -681,7 +681,7 @@ class FederationTest(unittest.TestCase):
 
     def test_16_backups_copied_between_servers(self):
         """Une sauvegarde de A est recopiée chez B, rangée sous le nom de A ; B garde celles de chaque serveur à part."""
-        from seance import backup
+        from noxa import backup
         self.a.db.set_setting("server_name", "Serveur Salon")
         self.b.db.set_setting("server_name", "Serveur Bureau")
         b_a = backup.create(self.a, "auto", distribute=False)

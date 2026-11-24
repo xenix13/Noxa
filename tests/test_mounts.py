@@ -77,7 +77,7 @@ class MountdTest(unittest.TestCase):
             f.write("UUID=abc / ext4 defaults 0 1\n")
         open(cls.mountinfo, "w").close()
         import importlib
-        from seance import mountd
+        from noxa import mountd
         cls.m = importlib.reload(mountd)
         cls.mounts = cls.m.Mounts()
         cls.mounts.env["unprivileged"] = False

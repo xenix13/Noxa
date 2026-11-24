@@ -13,9 +13,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client
 
-from seance import themes
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import themes
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 NEON = {"schema": 1, "id": "essai-neon", "name": {"fr": "Essai néon", "en": "Neon test"}, "author": "quelquun", "version": 1,
         "dark": True, "colors": {"bg": "#07060d", "surface": "#120f22", "surface2": "#1d1836", "text": "#f3f0ff",
@@ -94,7 +94,7 @@ class ThemesTest(unittest.TestCase):
         self.assertIn("dark", self.problems(dict(NEON, dark=False)))
 
     def test_02_bundled_themes(self):
-        """Thèmes fournis : tous valides, et index.json à jour (sinon : python3 -m seance.themes build static/themes)."""
+        """Thèmes fournis : tous valides, et index.json à jour (sinon : python3 -m noxa.themes build static/themes)."""
         path = os.path.join(STATIC, "themes")
         ts, errors = themes.load_dir(path)
         self.assertEqual(errors, [])

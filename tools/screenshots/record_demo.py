@@ -23,8 +23,8 @@ sys.path.insert(0, ROOT)
 from PIL import Image  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
-from seance.api import Ctx, build_app  # noqa: E402
-from seance.web import Server, make_handler  # noqa: E402
+from noxa.api import Ctx, build_app  # noqa: E402
+from noxa.web import Server, make_handler  # noqa: E402
 from tests.test_api import STATIC, Client, wait_scan  # noqa: E402
 from tests.ui_smoke_stub import STUB, serve_webm  # noqa: E402
 
@@ -159,7 +159,7 @@ def go(page, route, sel=None, wait=600):
 def login(page, user="alex", password="demo-password-1"):
     c = page.context
     st = c.request.post(base + "/api/login", data=json.dumps({"username": user, "password": password}),
-                        headers={"Content-Type": "application/json", "X-Seance": "1"})
+                        headers={"Content-Type": "application/json", "X-Noxa": "1"})
     assert st.ok, st.text()
 
 

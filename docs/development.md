@@ -12,10 +12,10 @@ Requirements: Python 3.9+, ffmpeg / ffprobe. Optional: Pillow (only used by some
 
 ```bash
 git clone https://github.com/xenix13/Noxa.git && cd Noxa
-python3 -m seance --data ./data --port 8420
+python3 -m noxa --data ./data --port 8420
 ```
 
-Open `http://localhost:8420`; the setup code is printed in the console. Edit a file in `static/` and reload the page; restart the server after changing Python code. `--debug` (or `SEANCE_DEBUG=1`) logs the ffmpeg commands.
+Open `http://localhost:8420`; the setup code is printed in the console. Edit a file in `static/` and reload the page; restart the server after changing Python code. `--debug` (or `NOXA_DEBUG=1`) logs the ffmpeg commands.
 
 ## Tests
 
@@ -34,7 +34,7 @@ The suite builds a small library with ffmpeg (H.264, HEVC, 10-bit, multi-audio, 
 ## Code layout
 
 ```
-seance/                 the server (Python package; "seance" is the internal name)
+noxa/                   the server (Python package)
   __main__.py           command line, start-up
   api.py                assembles the server; routes/ holds the HTTP routes by topic
   web.py                HTTP server, static files, security headers
@@ -72,13 +72,13 @@ tools/screenshots/      demo library and documentation screenshots
 French text in the code is the **translation key**:
 
 - Interface: `tr('Paramètres')` (`static/js/i18n.js`), translations in `static/js/i18n/en.js`.
-- Server messages: `tr("Introuvable")` (`seance/i18n.py`), translations in `seance/lang_en.py`, where `{}` stands for a variable part.
+- Server messages: `tr("Introuvable")` (`noxa/i18n.py`), translations in `noxa/lang_en.py`, where `{}` stands for a variable part.
 - Android TV app: `Tr.t("…")` (`Tr.java`).
 - Plurals: `plural(n, '{n} film', '{n} films')`. The same word with two meanings takes a context: `tr('bouton|Lecture')`.
 
 `tests/test_i18n.py` checks that every interface string and every server error message has its translation.
 
-**Adding a language:** create `static/js/i18n/<code>.js` and `seance/lang_<code>.py`, then add the code to `LANGUAGES` in `i18n.js` and `i18n.py`. Pull requests for new languages are very welcome.
+**Adding a language:** create `static/js/i18n/<code>.js` and `noxa/lang_<code>.py`, then add the code to `LANGUAGES` in `i18n.js` and `i18n.py`. Pull requests for new languages are very welcome.
 
 ## Apps
 
@@ -89,7 +89,7 @@ French text in the code is the **translation key**:
 ## Releases and branches
 
 - `test`: where new work lands first; the *Test* update channel and the `:test` Docker image follow it.
-- `main`: stable releases. Every push to `main` with a new version in `seance/__init__.py` makes CI publish the GitHub release `v<version>` with the `.deb`, the Docker images (`latest` and `<version>`), the Android TV APK and the desktop / Android apps. Hand-written notes are taken from `docs/releases/v<version>.md` when that file exists.
+- `main`: stable releases. Every push to `main` with a new version in `noxa/__init__.py` (and the same in `seance/__init__.py`, which servers before 4.5 read) makes CI publish the GitHub release `v<version>` with the `.deb`, the Docker images (`latest` and `<version>`), the Android TV APK and the desktop / Android apps. Hand-written notes are taken from `docs/releases/v<version>.md` when that file exists.
 - Changes reach `main` only through a pull request from `test`, reviewed and merged by the maintainer.
 - `docker-compose.yml` uses `ghcr.io/xenix13/noxa:latest` on both branches (CI checks it on `main`); switch the tag to `:test` by hand to try the test channel.
 - Commit messages, pull requests and release notes (`docs/releases/`) are written in English.
@@ -101,7 +101,7 @@ The project was called **Nexis** until 4.0. A few invisible identifiers keep tha
 
 - Android application ids `fr.nexis.app` and `fr.nexis.tv` (Android only updates an app over one with the same id), and the bridges `window.NexisAndroid` / `window.nexisNative`;
 - HTTP headers `X-Nexis-Server` and `X-Nexis-Device`, the `NEXIS1-` linked-server invitations, the `nexis-` prefix of backup files, browser storage keys (`nexis.*`) and the desktop app's data folder;
-- the internal name `seance` (Python package, system user, service, folders).
+- the former internal name `seance`, for the system user, the service, the folders and the `seance_session` cookie. A small `seance` Python package is also kept: servers before 4.5 read its version to find updates, and older service files start Noxa through it. Environment variables are `NOXA_…`, and the old `SEANCE_…` names are still read.
 
 The Docker image is published as `ghcr.io/xenix13/noxa` and, for existing installs, `ghcr.io/xenix13/nexis`; the `.deb` package `noxa` replaces `nexis`; `nexis` is kept as an alias of the `noxa` command.
 

@@ -4,13 +4,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT="$(realpath "${1:-dist}")"
-VERSION=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("seance/__init__.py").read()).group(1))')
+VERSION=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("noxa/__init__.py").read()).group(1))')
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 PKG="$WORK/noxa_${VERSION}_all"
 
 mkdir -p "$PKG/DEBIAN" "$PKG/opt/seance" "$OUT"
-cp -r seance static deploy "$PKG/opt/seance/"
+cp -r noxa seance static deploy "$PKG/opt/seance/"
 find "$PKG" -name __pycache__ -type d -prune -exec rm -rf {} +
 ( cd "$PKG/opt/seance/static/vendor" && sha256sum -c --quiet hls.min.js.sha256 )
 ( cd "$PKG/opt/seance/static/vendor/qrcode" && sha256sum -c --quiet qrcode.mjs.sha256 )

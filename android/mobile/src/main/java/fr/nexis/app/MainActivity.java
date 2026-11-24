@@ -328,7 +328,7 @@ public class MainActivity extends Activity {
         HttpURLConnection c = (HttpURLConnection) new URL(base + "/api/status").openConnection();
         c.setConnectTimeout(8000);
         c.setReadTimeout(8000);
-        c.setRequestProperty("X-Seance", "1");
+        c.setRequestProperty("X-Noxa", "1");
         try {
             if (c.getResponseCode() != 200) throw new Exception("HTTP " + c.getResponseCode());
             JSONObject j = new JSONObject(read(c.getInputStream(), 65536));

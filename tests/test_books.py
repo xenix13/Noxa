@@ -13,8 +13,8 @@ import unittest
 
 from tests.test_api import STATIC, Client, wait_scan
 
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 def tone(path, seconds, **tags):
     meta = [a for k, v in tags.items() for a in ("-metadata", f"{k}={v}")]

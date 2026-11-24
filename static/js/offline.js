@@ -162,7 +162,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) resu
 // le serveur répond-il ? (on vérifie avant de déclarer la connexion perdue)
 async function reachable() {
   try {
-    const r = await fetch('/api/status', { cache: 'no-store', headers: { 'X-Seance': '1' }, signal: AbortSignal.timeout(10000) });
+    const r = await fetch('/api/status', { cache: 'no-store', headers: { 'X-Noxa': '1' }, signal: AbortSignal.timeout(10000) });
     return r.status < 500;
   } catch { return false; }
 }
@@ -229,7 +229,7 @@ async function transfer(rec, upto, cache) {
   const fetchChunk = async (n) => {
     const start = n * size;
     const end = Math.min(rec.size || Infinity, start + size) - 1;
-    const res = await fetch(`/api/downloads/${rec.job}/file`, { headers: { Range: `bytes=${start}-${end}`, 'X-Seance': '1' },
+    const res = await fetch(`/api/downloads/${rec.job}/file`, { headers: { Range: `bytes=${start}-${end}`, 'X-Noxa': '1' },
       credentials: 'same-origin' });
     if (res.status === 404) { const e = new Error('gone'); e.gone = true; throw e; }
     if (res.status !== 206 && res.status !== 200) throw new Error(`HTTP ${res.status}`);

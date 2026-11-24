@@ -276,7 +276,7 @@ async function servicesPage(body) {
     if (!f) return;
     lbResult.replaceChildren(spinner());
     try {
-      const r = await fetch('/api/me/letterboxd', { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-Seance': '1', 'X-Lang': lang } });
+      const r = await fetch('/api/me/letterboxd', { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-Noxa': '1', 'X-Lang': lang } });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
       lbResult.replaceChildren(h('div.status-box.ok', tr('Import terminé : {w} film(s) marqué(s) comme vu(s), {r} note(s), {l} ajout(s) à « À regarder ».', { w: j.watched, r: j.rated, l: j.watchlist })),
@@ -744,7 +744,7 @@ function accountPage(id, body, rerender) {
         const f = file.files[0];
         if (!f) return;
         try {
-          const r = await fetch('/api/me/wallpaper', { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-Seance': '1', 'X-Lang': lang } });
+          const r = await fetch('/api/me/wallpaper', { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-Noxa': '1', 'X-Lang': lang } });
           const j = await r.json();
           if (!r.ok) throw new Error(j.error || r.statusText);
           state.wallVersion = j.wallpaper_version;

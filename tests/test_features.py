@@ -14,9 +14,9 @@ import unittest
 from tests.test_api import STATIC, TMDB, Client, media_root, wait_scan  # noqa: F401  (TMDB : variables d'environnement)
 from tests.fixtures import ff
 
-from seance import tasks as tasks_mod
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import tasks as tasks_mod
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 
 def tone(path, seconds, a, b, c):
@@ -55,7 +55,7 @@ class FeaturesTest(unittest.TestCase):
         cls.work = tempfile.mkdtemp()
         cls.media = os.path.join(cls.work, "media")
         shutil.copytree(media_root(), cls.media)
-        from seance import scanner
+        from noxa import scanner
         scanner.RECENT_SECONDS = 0
         cls.ctx = Ctx(os.path.join(cls.work, "data"), STATIC)
         cls.server = Server(("127.0.0.1", 0), make_handler(build_app(cls.ctx)))
@@ -471,7 +471,7 @@ class FeaturesTest(unittest.TestCase):
 
     def test_watch_together_live_list_and_lobby(self):
         """Liste des groupes en direct, groupe créé à l'avance (salon), présence tant que Noxa est ouvert."""
-        from seance import syncplay
+        from noxa import syncplay
         got = []
 
         def listen():
@@ -524,7 +524,7 @@ class FeaturesTest(unittest.TestCase):
 
     def test_watch_together_feed_ends_with_session(self):
         """Déconnexion (ou compte supprimé) : la liste en direct s'arrête."""
-        from seance import syncplay
+        from noxa import syncplay
         c = Client(self.base)
         c.call("POST", "/api/login", {"username": "lea", "password": "motdepasse2"})
         old, syncplay.FEED_PING = syncplay.FEED_PING, 0.5

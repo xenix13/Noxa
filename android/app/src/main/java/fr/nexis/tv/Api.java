@@ -137,7 +137,7 @@ final class Api {
             c.setReadTimeout(60000);
             c.setRequestProperty("Accept", "application/json");
             c.setRequestProperty("User-Agent", VERSION_HEADER);
-            c.setRequestProperty("X-Seance", "1");  // exigé par le serveur pour toute requête qui modifie
+            c.setRequestProperty("X-Noxa", "1");  // exigé par le serveur pour toute requête qui modifie
             c.setRequestProperty("X-Lang", Tr.lang);  // messages d'erreur du serveur dans la langue de l'appli
             String ck = cookieHeader();
             if (!ck.isEmpty()) c.setRequestProperty("Cookie", ck);

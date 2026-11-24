@@ -72,7 +72,7 @@ public class NotifyJob extends JobService {
             HttpURLConnection c = (HttpURLConnection) new URL(srv + "/api/push/device").openConnection();
             c.setConnectTimeout(15000);
             c.setReadTimeout(20000);
-            c.setRequestProperty("X-Seance", "1");
+            c.setRequestProperty("X-Noxa", "1");
             c.setRequestProperty("X-Nexis-Device", token);
             int code = c.getResponseCode();
             if (code == 410) { p.edit().remove("push_token").apply(); cancel(ctx); return; }

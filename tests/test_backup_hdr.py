@@ -14,9 +14,9 @@ import unittest
 
 from tests.test_api import STATIC, Client
 
-from seance import backup, media, transcoder
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import backup, media, transcoder
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 
 def start(data):
@@ -145,7 +145,7 @@ class BackupTest(unittest.TestCase):
 
     def test_console_restore(self):
         b = backup.create(self.ctx)
-        from seance.__main__ import main
+        from noxa.__main__ import main
         rc = main(["--data", self.data, "restore", os.path.join(self.data, "backups", b["name"])])
         self.assertEqual(rc, 0)
         self.assertTrue(os.path.isfile(os.path.join(self.data, backup.PENDING, "seance.db")))

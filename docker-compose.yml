@@ -11,8 +11,8 @@ services:
       - "8421:8421"                  # linked servers (TLS): only needed if another Noxa server must reach this one
     environment:
       # behind an HTTPS reverse proxy (nginx, Caddy…): secure cookies and real client IP
-      SEANCE_COOKIE_SECURE: "0"
-      SEANCE_TRUST_PROXY: "0"
+      NOXA_COOKIE_SECURE: "0"
+      NOXA_TRUST_PROXY: "0"
     volumes:
       - ./data:/data                 # database, image and subtitle cache (must belong to uid 1000)
       - /mnt/films:/media/films:ro   # your media, read-only; add one line per folder

@@ -16,9 +16,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client, media_root, wait_scan
 
-from seance import tasks, tracking
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import tasks, tracking
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 CID, SECRET = "c" * 64, "s" * 64
 

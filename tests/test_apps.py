@@ -14,9 +14,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client
 
-from seance import __version__, apps
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import __version__, apps
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 FILES = {"noxa-android.apk": b"PK" + b"a" * 5000, "Noxa-Setup.exe": b"MZ" + b"w" * 7000, "latest.yml": b"version: 1.0.0\npath: Noxa-Setup.exe\n",
          "noxa-apps.json": json.dumps({"desktop": "1.0.0", "android": {"version": "1.0.0", "code": 1}}).encode()}

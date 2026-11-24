@@ -16,11 +16,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client, ffprobe_codec, hls_segment, media_root, wait_scan
 
-from seance import cold as cold_mod
-from seance import coldfree
-from seance import mountd
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import cold as cold_mod
+from noxa import coldfree
+from noxa import mountd
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 
 # ---------------------------------------------------------------------- faux serveurs

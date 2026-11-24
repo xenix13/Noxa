@@ -16,8 +16,8 @@ from tests.ui_smoke_stub import STUB, serve_webm  # noqa: E402
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
-from seance.api import Ctx, build_app  # noqa: E402
-from seance.web import Server, make_handler  # noqa: E402
+from noxa.api import Ctx, build_app  # noqa: E402
+from noxa.web import Server, make_handler  # noqa: E402
 
 out = sys.argv[1] if len(sys.argv) > 1 else "captures"
 webm = sys.argv[2]
@@ -25,7 +25,7 @@ os.makedirs(out, exist_ok=True)
 work = tempfile.mkdtemp()
 media = os.path.join(work, "media")
 shutil.copytree(media_root(), media)
-from seance import scanner  # noqa: E402
+from noxa import scanner  # noqa: E402
 scanner.RECENT_SECONDS = 0
 ctx = Ctx(os.path.join(work, "data"), STATIC)
 server = Server(("127.0.0.1", 0), make_handler(build_app(ctx)))
@@ -599,7 +599,7 @@ with sync_playwright() as pw:
     kctx.close()
 
     # --- double authentification : activation guidée, connexion en deux étapes, réinitialisation par l'admin
-    from seance import twofa
+    from noxa import twofa
     admin.call("POST", "/api/admin/users", {"username": "deux", "password": "motdepasse7", "display_name": "Deux"})
     dc = Client(base)
     dc.call("POST", "/api/login", {"username": "deux", "password": "motdepasse7"})
@@ -650,7 +650,7 @@ with sync_playwright() as pw:
 
     # --- mise à jour : indicateur pour les administrateurs, progression, attente du redémarrage, rechargement
     import json as _json
-    from seance import __version__ as cur_version
+    from noxa import __version__ as cur_version
     ctx.note_latest("999.0")
     bctx6 = browser.new_context(viewport={"width": 1440, "height": 900}, bypass_csp=True)
     bctx6.add_cookies(cookies(admin))

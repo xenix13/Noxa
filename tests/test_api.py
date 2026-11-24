@@ -26,10 +26,10 @@ TMDB = FakeTMDB()
 os.environ["SEANCE_TMDB_API"] = TMDB.url
 os.environ["SEANCE_TMDB_IMG"] = TMDB.url + "/img"
 
-from seance.api import Ctx, build_app  # noqa: E402
-from seance.subtitles import parse_subtitles  # noqa: E402
-from seance.transcoder import plan  # noqa: E402
-from seance.web import Server, make_handler  # noqa: E402
+from noxa.api import Ctx, build_app  # noqa: E402
+from noxa.subtitles import parse_subtitles  # noqa: E402
+from noxa.transcoder import plan  # noqa: E402
+from noxa.web import Server, make_handler  # noqa: E402
 
 STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 MEDIA_CACHE = os.path.join(tempfile.gettempdir(), "seance-test-media-v6")
@@ -53,7 +53,7 @@ class Client:
     def call(self, method, path, body=None, headers=None, csrf=True, raw=False, raw_body=None):
         h = {"Content-Type": "application/json"}
         if csrf:
-            h["X-Seance"] = "1"
+            h["X-Noxa"] = "1"
         h.update(headers or {})
         data = json.dumps(body).encode() if body is not None else (b"" if method != "GET" else None)
         if raw_body is not None:
@@ -123,7 +123,7 @@ class SeanceTest(unittest.TestCase):
         cls.work = tempfile.mkdtemp()
         cls.media = os.path.join(cls.work, "media")
         shutil.copytree(root, cls.media)
-        from seance import scanner
+        from noxa import scanner
         scanner.RECENT_SECONDS = 0  # les fichiers de test viennent d'être créés
         cls.ctx = Ctx(os.path.join(cls.work, "data"), STATIC)
         cls.server = Server(("127.0.0.1", 0), make_handler(build_app(cls.ctx)))
@@ -269,7 +269,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(plan(p)["mode"], "copy")
         self.assertEqual(plan(p, quality="720p")["mode"], "transcode")
         # sous-titres image (PGS) : incrustation par overlay, donc transcodage
-        from seance.transcoder import build_command
+        from noxa.transcoder import build_command
         p["subs"] = [{"index": 2, "codec": "hdmv_pgs_subtitle"}]
         p["video"]["width"] = 1920
         r = plan(p, burn_index=2)
@@ -318,7 +318,7 @@ class SeanceTest(unittest.TestCase):
 
     def test_hardware_transcoding(self):
         """Commandes NVIDIA / VAAPI, refus d'un moteur absent, repli automatique sur le processeur."""
-        from seance.transcoder import build_command, plan
+        from noxa.transcoder import build_command, plan
         p = {"container": "matroska,webm", "bitrate": 3_000_000, "subs": [{"index": 2, "codec": "hdmv_pgs_subtitle"}],
              "video": {"index": 0, "codec": "hevc", "profile": "Main 10", "pix_fmt": "yuv420p10le", "height": 1080,
                        "width": 1920}, "audio": [{"index": 1, "codec": "aac", "channels": 2}]}
@@ -652,7 +652,7 @@ class SeanceTest(unittest.TestCase):
         c.call("POST", f"/api/items/{show['id']}/watched", {"watched": False})
 
     def test_suggestions_from_recent_viewing(self):
-        from seance import suggest
+        from noxa import suggest
         self.admin.call("POST", "/api/admin/users", {"username": "sugg", "password": "motdepasse9", "display_name": "Sugg"})
         c = Client(self.base)
         c.call("POST", "/api/login", {"username": "sugg", "password": "motdepasse9"})
@@ -704,7 +704,7 @@ class SeanceTest(unittest.TestCase):
 
     def test_opinions_steer_suggestions(self):
         """J'aime / je n'aime pas / ne plus suggérer : retenus par titre, exclus ou pris en compte des suggestions."""
-        from seance import suggest
+        from noxa import suggest
         self.admin.call("POST", "/api/admin/users", {"username": "avis", "password": "motdepasse9", "display_name": "Avis"})
         c = Client(self.base)
         c.call("POST", "/api/login", {"username": "avis", "password": "motdepasse9"})
@@ -839,8 +839,8 @@ class SeanceTest(unittest.TestCase):
 
     def test_progressive_subtitles(self):
         """Gros fichier : la lecture démarre dès que les premières minutes sont prêtes, la suite arrive en route."""
-        import seance.routes.media as api_mod  # lecture : fenêtre de préparation des sous-titres
-        from seance import media, subcache
+        import noxa.routes.media as api_mod  # lecture : fenêtre de préparation des sous-titres
+        from noxa import media, subcache
         if not media.readrate_ok():
             # l'extraction n'est ralentie (pour l'observer en cours) qu'avec -readrate, écarté depuis ffmpeg 7
             self.skipTest(f"lecture limitée non utilisée avec ffmpeg {media.ffmpeg_major()}")
@@ -906,7 +906,7 @@ class SeanceTest(unittest.TestCase):
     def test_random_banner_changes_every_hour(self):
         """The "random title" banner must not stay on the same title hour after hour."""
         from unittest import mock
-        from seance.routes import library as lib_routes
+        from noxa.routes import library as lib_routes
         c = self.admin
         c.call("PUT", "/api/me/prefs", {"home_hero": "random"})
         try:
@@ -933,7 +933,7 @@ class SeanceTest(unittest.TestCase):
         self.assertIsNotNone(row)
         c = self.admin
         c.call("POST", f"/api/items/{row['id']}/watched", {"watched": True})
-        from seance import scanner
+        from noxa import scanner
         old_recent = scanner.RECENT_SECONDS
         try:
             # 1. the new file is still being copied and the old one is already gone: nothing is deleted yet
@@ -1051,7 +1051,7 @@ class SeanceTest(unittest.TestCase):
         self.lea.call("PUT", f"/api/items/{eps[0]['id']}/tracks", {"reset": True})
 
     def test_downmix_51_without_clipping(self):
-        from seance.transcoder import DOWNMIX, build_command
+        from noxa.transcoder import DOWNMIX, build_command
         work = tempfile.mkdtemp()
         try:
             src = os.path.join(work, "in.mkv")
@@ -1062,7 +1062,7 @@ class SeanceTest(unittest.TestCase):
                             "[a][b][c][d][e][f]join=inputs=6:channel_layout=5.1[o]",
                             "-map", "0:v", "-map", "[o]", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "ac3", src],
                            check=True, timeout=60)
-            from seance import media
+            from noxa import media
             info = media.probe(src)
             p = plan(info)
             self.assertEqual(p["mode"], "copy")
@@ -1092,7 +1092,7 @@ class SeanceTest(unittest.TestCase):
 
     # ---------------------------------------------------- détection des nouveautés
     def test_watcher_detects_new_episode_and_waits_for_copy(self):
-        from seance import scanner
+        from noxa import scanner
         lib = self.libs["Séries"]
         season = os.path.join(self.media, "series", "Les Veilleurs", "Season 01")
         src = os.path.join(season, "Les.Veilleurs.S01E01.720p.WEB.mkv")
@@ -1171,7 +1171,7 @@ class SeanceTest(unittest.TestCase):
 
     def test_watcher_cleans_origin_library_even_if_it_saw_nothing(self):
         """Origine du déplacement « muette » (cache SMB…) : l'arrivée dans Animes fait vérifier Séries."""
-        from seance import watcher as wmod
+        from noxa import watcher as wmod
         src = os.path.join(self.media, "series", "Les Veilleurs")
         dst = os.path.join(self.media, "animes", "Les Veilleurs")
         w = self.ctx.watcher
@@ -1576,7 +1576,7 @@ class SeanceTest(unittest.TestCase):
 
     def test_content_privacy_notifications(self):
         """Genres masqués, mode privé (pas d'historique, titre caché aux admins), choix des notifications, heures calmes."""
-        from seance import push as pushmod
+        from noxa import push as pushmod
         c, lib, db = self.lea, self.libs["Films"], self.ctx.db
         brume, polar = self.movie("Brume"), self.movie("Nuit polaire")
         old = {r["id"]: r["genres"] for r in db.all("SELECT id, genres FROM items WHERE id IN (?,?)", (brume["id"], polar["id"]))}
@@ -1881,7 +1881,7 @@ class SeanceTest(unittest.TestCase):
 
     def test_admin_update_check(self):
         from unittest import mock
-        from seance import __version__, update
+        from noxa import __version__, update
         with mock.patch.object(update, "check_latest", lambda: {"latest": "99.0.0", "changes": [{"title": "Nouveau"}], "source": "x/y (main)"}):
             st, u = self.admin.call("GET", "/api/admin/update")
         self.assertEqual((st, u["current"], u["available"]), (200, __version__, True))
@@ -1990,7 +1990,7 @@ class SeanceTest(unittest.TestCase):
     def test_ui_code_versioned_urls(self):
         """Le code de l'interface est chargé depuis /v/<empreinte>/ : une nouvelle version change les adresses,
         aucun cache (navigateur, proxy « Cache Assets ») ne peut resservir l'ancien code."""
-        from seance import web
+        from noxa import web
         st, page, h = self.admin.call("GET", "/", raw=True)
         html = page.decode()
         self.assertEqual(h["Cache-Control"], "no-cache")
@@ -2075,8 +2075,8 @@ class SeanceTest(unittest.TestCase):
         """Double authentification : activation, connexion en deux étapes, codes de secours, changement de profil,
         profils gérés exclus, réinitialisation par l'administrateur et en console."""
         import time as _t
-        from seance import twofa
-        from seance.__main__ import admin_command
+        from noxa import twofa
+        from noxa.__main__ import admin_command
         self.admin.call("POST", "/api/admin/users", {"username": "secu", "password": "motdepasse9", "display_name": "Sécu"})
         c = Client(self.base)
         c.call("POST", "/api/login", {"username": "secu", "password": "motdepasse9"})
@@ -2174,7 +2174,7 @@ class SeanceTest(unittest.TestCase):
 
 class UnitTests(unittest.TestCase):
     def test_totp_rfc6238_vectors(self):
-        from seance import twofa
+        from noxa import twofa
         secret = base64.b32encode(b"12345678901234567890").decode()
         for t, expected in ((59, "287082"), (1111111109, "081804"), (1234567890, "005924"), (2000000000, "279037")):
             self.assertEqual(twofa.code_at(secret, t // 30), expected, t)
@@ -2189,7 +2189,7 @@ class UnitTests(unittest.TestCase):
     def test_download_prep_yields_to_viewers(self):
         """Priorité discrète : la préparation se met en pause tant que quelqu'un regarde. Normale : une copie continue,
         une conversion ne s'arrête que si un spectateur fait lui-même convertir."""
-        from seance import downloads as dl
+        from noxa import downloads as dl
         viewing = {"v": True}
         transcodes = {"n": 0}
         mgr = dl.Downloads.__new__(dl.Downloads)
@@ -2247,7 +2247,7 @@ class UnitTests(unittest.TestCase):
     def test_update_source_and_command(self):
         """Mise à jour depuis l'interface : source validée, commande lancée sans rien venant de Noxa."""
         from unittest import mock
-        from seance import update
+        from noxa import update
         work = tempfile.mkdtemp()
         src = os.path.join(work, "source")
         with mock.patch.object(update, "SOURCE", src):
@@ -2299,7 +2299,7 @@ class UnitTests(unittest.TestCase):
         shutil.rmtree(work, ignore_errors=True)
 
     def test_throttle_pauses_ffmpeg_ahead(self):
-        from seance import transcoder as tr
+        from noxa import transcoder as tr
         work = tempfile.mkdtemp()
         t = tr.Transcoder(os.path.join(work, "t"), lambda: (4, 2))
         old = (tr.AHEAD_PAUSE, tr.AHEAD_RESUME, tr.KEEP_BEHIND)
@@ -2337,7 +2337,7 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(parse_subtitles(b"\x00\xff garbage"), [])
 
     def test_names(self):
-        from seance.names import parse_episode, parse_movie
+        from noxa.names import parse_episode, parse_movie
         self.assertEqual(parse_movie("/m/Inception.2010.1080p.BluRay.x264-GRP.mkv", "/m"), ("Inception", 2010))
         e = parse_episode("/s/Frieren/[SubsPlease] Sousou no Frieren - 12 (1080p).mkv", "/s")
         self.assertEqual((e["show"], e["season"], e["episode"]), ("Frieren", 1, 12))

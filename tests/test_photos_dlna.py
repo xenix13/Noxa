@@ -19,10 +19,10 @@ import xml.etree.ElementTree as ET
 
 from tests.test_api import STATIC, Client, media_root, wait_scan
 
-from seance import dlna as dlna_mod
-from seance.api import Ctx, build_app
-from seance.photos import read_info
-from seance.web import Server, make_handler
+from noxa import dlna as dlna_mod
+from noxa.api import Ctx, build_app
+from noxa.photos import read_info
+from noxa.web import Server, make_handler
 
 DIDL = "{urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/}"
 DC = "{http://purl.org/dc/elements/1.1/}"
@@ -318,7 +318,7 @@ class PhotosDlnaTest(unittest.TestCase):
 
     # ---------------------------------------------------------------- qualité automatique
     def test_20_auto_quality(self):
-        from seance.transcoder import auto_quality
+        from noxa.transcoder import auto_quality
         p4k = {"bitrate": 40_000_000, "video": {"height": 2160}}
         self.assertEqual(auto_quality(p4k, None), "original")       # pas de mesure : l'original
         self.assertEqual(auto_quality(p4k, 100_000), "original")    # réseau local rapide
@@ -361,7 +361,7 @@ class PhotosDlnaTest(unittest.TestCase):
     def test_21_readrate_only_with_ffmpeg_6(self):
         """-readrate fige la préparation avec ffmpeg 8 : utilisé seulement avec ffmpeg 5 et 6."""
         from unittest import mock
-        from seance import media
+        from noxa import media
         with mock.patch.object(media, "has_option", return_value=True):
             for major, ok in ((6, True), (5, True), (7, False), (8, False), (0, False)):
                 with mock.patch.object(media, "ffmpeg_major", return_value=major):
@@ -493,7 +493,7 @@ class PhotosDlnaTest(unittest.TestCase):
         conn.close()
 
     def test_31_push_notifications(self):
-        from seance import push as push_mod
+        from noxa import push as push_mod
         st, k = self.admin.call("GET", "/api/push/key")
         self.assertEqual(st, 200)
         self.assertEqual(len(push_mod.base64.urlsafe_b64decode(k["key"] + "=")), 65)  # point P-256 non compressé

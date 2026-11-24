@@ -22,8 +22,8 @@ sys.path.insert(0, ROOT)
 from PIL import Image  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
-from seance.api import Ctx, build_app  # noqa: E402
-from seance.web import Server, make_handler  # noqa: E402
+from noxa.api import Ctx, build_app  # noqa: E402
+from noxa.web import Server, make_handler  # noqa: E402
 from tests.test_api import STATIC, Client, wait_scan  # noqa: E402
 from tests.ui_smoke_stub import STUB, serve_webm  # noqa: E402
 
@@ -163,7 +163,7 @@ def go(page, route, sel=None, wait=600):
 def login(page, user="alex", password="demo-password-1"):
     c = page.context
     st = c.request.post(base + "/api/login", data=json.dumps({"username": user, "password": password}),
-                        headers={"Content-Type": "application/json", "X-Seance": "1"})
+                        headers={"Content-Type": "application/json", "X-Noxa": "1"})
     assert st.ok, st.text()
 
 
@@ -222,17 +222,17 @@ with sync_playwright() as pw:
     theme = json.load(open(os.path.join(ROOT, "static/themes/ville-neon.json")))
     for prefs in ({"my_themes": [theme]}, {"theme": "t:" + theme["id"], "ui_style": "sidebar"}):
         st = page.context.request.put(base + "/api/me/prefs", data=json.dumps(prefs),
-                                      headers={"Content-Type": "application/json", "X-Seance": "1"})
+                                      headers={"Content-Type": "application/json", "X-Noxa": "1"})
         print("prefs", st.status, st.text()[:200])
     go(page, "/#/", ".hero-title", 1500)
     save(page, "home-neon-sidebar.jpg")
     for prefs in ({"theme": "light", "ui_style": "glass"},):
         page.context.request.put(base + "/api/me/prefs", data=json.dumps(prefs),
-                                 headers={"Content-Type": "application/json", "X-Seance": "1"})
+                                 headers={"Content-Type": "application/json", "X-Noxa": "1"})
     go(page, "/#/", ".hero-title", 1500)
     save(page, "home-light-glass.jpg")
     page.context.request.put(base + "/api/me/prefs", data=json.dumps({"theme": "dark", "ui_style": "classic"}),
-                             headers={"Content-Type": "application/json", "X-Seance": "1"})
+                             headers={"Content-Type": "application/json", "X-Noxa": "1"})
 
     # phone
     phone = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,

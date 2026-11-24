@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from seance.markers import from_chapters
+from noxa.markers import from_chapters
 
 
 def chaps(*spec):
@@ -69,8 +69,8 @@ class ChapterImagesTest(unittest.TestCase):
         import subprocess
         import tempfile
         import types
-        from seance.chapters import ChapterImages
-        from seance import media
+        from noxa.chapters import ChapterImages
+        from noxa import media
         d = tempfile.mkdtemp()
         meta = os.path.join(d, "meta.txt")
         with open(meta, "w") as f:

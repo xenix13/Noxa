@@ -14,10 +14,10 @@ import unittest
 
 from tests.test_api import STATIC, Client
 
-from seance import i18n
-from seance.api import Ctx, build_app
-from seance.lang_en import EN
-from seance.web import Server, make_handler
+from noxa import i18n
+from noxa.api import Ctx, build_app
+from noxa.lang_en import EN
+from noxa.web import Server, make_handler
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JS_STRING = re.compile(r"'((?:[^'\\\n]|\\.)*)'")
@@ -124,7 +124,7 @@ class TranslationsTest(unittest.TestCase):
             self.assertEqual(k.count("{}"), v.count("{}"), k)
 
     def test_scheduled_tasks_are_translated(self):
-        from seance.tasks import TASKS
+        from noxa.tasks import TASKS
         for task in TASKS:
             for text in (task.name, task.description, *[o["label"] for o in task.options],
                          *[o["hint"] for o in task.options if o.get("hint")]):

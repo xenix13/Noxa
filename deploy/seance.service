@@ -10,7 +10,7 @@ Group=seance
 EnvironmentFile=-/etc/seance/seance.env
 Environment=PYTHONUNBUFFERED=1
 WorkingDirectory=/opt/seance
-ExecStart=/usr/bin/python3 -m seance --data /var/lib/seance --static /opt/seance/static
+ExecStart=/usr/bin/python3 -m noxa --data /var/lib/seance --static /opt/seance/static
 Restart=on-failure
 RestartSec=3
 

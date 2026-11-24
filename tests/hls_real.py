@@ -20,9 +20,9 @@ os.environ["SEANCE_TMDB_IMG"] = TMDB.url + "/img"
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
-from seance import scanner  # noqa: E402
-from seance.api import Ctx, build_app  # noqa: E402
-from seance.web import Server, make_handler  # noqa: E402
+from noxa import scanner  # noqa: E402
+from noxa.api import Ctx, build_app  # noqa: E402
+from noxa.web import Server, make_handler  # noqa: E402
 from tests.test_api import STATIC, Client, wait_scan  # noqa: E402
 
 hls_src = sys.argv[1]

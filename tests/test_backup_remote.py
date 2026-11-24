@@ -16,9 +16,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client
 
-from seance import backup, remote_storage
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import backup, remote_storage
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 
 class FakeCloud(BaseHTTPRequestHandler):

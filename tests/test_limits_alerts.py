@@ -12,9 +12,9 @@ import unittest
 
 from tests.test_api import STATIC, Client, media_root, wait_scan
 
-from seance import limits
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import limits
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 CAPS = {"video": ["h264", "hevc"], "audio": ["aac", "ac3", "eac3"], "containers": ["mp4", "matroska"]}
 
@@ -214,7 +214,7 @@ class LimitsAlertsTest(unittest.TestCase):
         # une tâche qui échoue vraiment
         self.ctx.db.set_setting("backup_dir", "/proc/nexis-impossible")
         try:
-            from seance import tasks
+            from noxa import tasks
             self.ctx.tasks._execute(tasks.Job(task, "test"))
         finally:
             self.ctx.db.set_setting("backup_dir", None)
