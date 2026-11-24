@@ -1,5 +1,5 @@
-"""Sauvegardes : chiffrement, noms par serveur, stockages externes (faux S3, Google Drive, OneDrive),
-restauration en une étape depuis un fichier ou un chemin.
+"""Backups: encryption, per-server names, external storages (fake S3, Google Drive, OneDrive),
+one-step restore from a file or a path.
 
 python3 -m unittest tests.test_backup_remote
 """
@@ -22,8 +22,8 @@ from noxa.web import Server, make_handler
 
 
 class FakeCloud(BaseHTTPRequestHandler):
-    """S3 (/s3/<bucket>/…), Google (/oauth/…, /drive/…, /upload/…) et Microsoft (/ms/…, /graph/…) en un seul faux."""
-    objects = {}       # nom -> octets (tous services confondus, préfixés)
+    """S3 (/s3/<bucket>/…), Google (/oauth/…, /drive/…, /upload/…) and Microsoft (/ms/…, /graph/…) in a single fake."""
+    objects = {}       # name -> bytes (all services together, prefixed)
     polls = {"g": 0, "m": 0}
     sessions = {}
     auth_seen = []
@@ -216,7 +216,7 @@ class RemoteBackupTest(unittest.TestCase):
             self.assertEqual(f.read(), data)
         with self.assertRaises(backup.BackupError):
             backup.decrypt_file(enc, out, "mauvaise phrase")
-        with open(enc, "r+b") as f:  # un octet modifié : refusé
+        with open(enc, "r+b") as f:  # one byte changed: refused
             f.seek(100)
             b = f.read(1)
             f.seek(100)
@@ -242,7 +242,7 @@ class RemoteBackupTest(unittest.TestCase):
         self.assertEqual(st, 200, r)
         dumped = json.dumps(r)
         for v in ("x" * 40, "GOCSPX-secret", "G-REFRESH", "M-REFRESH"):
-            self.assertNotIn(v, dumped)  # les secrets ne reviennent jamais à l'interface
+            self.assertNotIn(v, dumped)  # secrets never come back to the interface
         return r
 
     def link(self, rid):
@@ -255,7 +255,7 @@ class RemoteBackupTest(unittest.TestCase):
     def test_03_storages(self):
         st, r = self.admin.call("POST", "/api/admin/backups/remotes", {"kind": "s3", "conf": {
             "endpoint": self.fb + "/s3", "region": "eu-west-3", "bucket": "inconnu", "access_key": "AKIATEST", "secret_key": "x" * 40}})
-        self.assertEqual(st, 400)  # vérifié à l'ajout : compartiment introuvable
+        self.assertEqual(st, 400)  # checked when added: bucket not found
         s3 = self.add_remote("s3", {"endpoint": self.fb + "/s3", "region": "eu-west-3", "bucket": "sauvegardes",
                                     "prefix": "nexis", "access_key": "AKIATEST", "secret_key": "x" * 40})
         g = self.add_remote("gdrive", {"client_id": "123-abc.apps.googleusercontent.com", "client_secret": "GOCSPX-secret"})
@@ -264,7 +264,7 @@ class RemoteBackupTest(unittest.TestCase):
         self.assertEqual(c["user_code"], "GOOG-123")
         m = self.add_remote("onedrive", {"client_id": "11111111-2222-3333-4444-555555555555"})
         self.assertEqual(self.link(m["id"])["user_code"], "MS-456")
-        # phrase secrète : les copies envoyées hors du serveur sont chiffrées
+        # passphrase: the copies sent off the server are encrypted
         self.assertEqual(self.admin.call("PUT", "/api/admin/backups/settings", {"passphrase": "court"})[0], 400)
         st, v = self.admin.call("PUT", "/api/admin/backups/settings", {"passphrase": "phrase très secrète"})
         self.assertTrue(v["passphrase_set"])
@@ -280,14 +280,14 @@ class RemoteBackupTest(unittest.TestCase):
             self.assertEqual(st, 200, files)
             self.assertEqual([(f["name"], f["encrypted"], f["server"]) for f in files["files"]],
                              [(b["name"] + ".enc", True, "living-room")])
-        # au-delà du nombre gardé (2), les plus anciennes copies automatiques d'ici sont retirées
+        # beyond the number kept (2), the oldest automatic copies from here are removed
         for _ in range(2):
             time.sleep(1.1)
             nb = backup.create(self.ctx, "auto", distribute=False)
             backup.distribute(self.ctx, os.path.join(backup.directory(self.ctx), nb["name"]))
         self.assertEqual(sum(1 for k in FakeCloud.objects if k.startswith("s3:")), 2)
         self.assertNotIn(f"s3:nexis/{b['name']}.enc", FakeCloud.objects)
-        # restaurer depuis Google Drive : téléchargée, déchiffrée, mise en place au redémarrage
+        # restore from Google Drive: downloaded, decrypted, put in place at restart
         st, files = self.admin.call("GET", f"/api/admin/backups/remotes/{g['id']}/files")
         st, r = self.admin.call("POST", f"/api/admin/backups/remotes/{g['id']}/restore", {"id": files["files"][0]["id"]})
         self.assertEqual((st, r["server"]), (200, "Living room"), r)
@@ -307,7 +307,7 @@ class RemoteBackupTest(unittest.TestCase):
             data = f.read()
         st, r = self.admin.call("POST", "/api/admin/backups/restore-file", raw_body=data)
         self.assertEqual(st, 400)
-        self.assertIn("Phrase secrète incorrecte", r["error"])  # la phrase enregistrée n'est pas la bonne
+        self.assertIn("Phrase secrète incorrecte", r["error"])  # the saved passphrase is not the right one
         st, r = self.admin.call("POST", "/api/admin/backups/restore-file", raw_body=data,
                                 headers={"X-Backup-Passphrase": "autre phrase secrète"})
         self.assertEqual((st, r["restarting"]), (200, False), r)
@@ -317,7 +317,7 @@ class RemoteBackupTest(unittest.TestCase):
         shutil.copy(path, os.path.join(outside, "ma-sauvegarde.tar.gz"))
         st, r = self.admin.call("POST", "/api/admin/backups/restore-path", {"path": os.path.join(outside, "ma-sauvegarde.tar.gz")})
         self.assertEqual(st, 200, r)
-        self.assertTrue(os.path.isfile(os.path.join(outside, "ma-sauvegarde.tar.gz")))  # l'original reste en place
+        self.assertTrue(os.path.isfile(os.path.join(outside, "ma-sauvegarde.tar.gz")))  # the original stays in place
         shutil.rmtree(os.path.join(self.ctx.data_dir, backup.PENDING))
         st, r = self.admin.call("POST", "/api/admin/backups/restore-path", {"path": "/etc/passwd"})
         self.assertEqual(st, 400)

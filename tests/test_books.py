@@ -1,4 +1,4 @@
-"""Livres audio (bibliothèque).
+"""Audiobooks (library).
 
 python3 -m unittest tests.test_books
 """
@@ -34,7 +34,7 @@ class BooksTest(unittest.TestCase):
         tone(os.path.join(d, "02 Arrivée.mp3"), 3, title="Arrivée", album="Le Tour du monde en 80 jours", artist="Jules Verne")
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=blue:s=60x60", "-frames:v", "1",
                         os.path.join(d, "cover.jpg")], check=True)
-        # un .m4b à la racine, avec ses chapitres
+        # an .m4b at the root, with its chapters
         meta = os.path.join(cls.work, "chap.txt")
         with open(meta, "w") as f:
             f.write(";FFMETADATA1\ntitle=Contes\nartist=Perrault\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=2000\ntitle=Le Chat\n"
@@ -77,18 +77,18 @@ class BooksTest(unittest.TestCase):
         tour = r["books"][0]
         st, d = self.lea.call("GET", f"/api/books/{tour['id']}")
         self.assertEqual([c["t"] for c in d["chapter_list"]], ["Départ", "Arrivée"])
-        self.assertEqual(d["chapter_list"][1]["s"], d["files"][0]["duration"])  # 2e fichier : à la suite du 1er
+        self.assertEqual(d["chapter_list"][1]["s"], d["files"][0]["duration"])  # 2nd file: after the 1st
         self.assertEqual((d["narrator"], len(d["files"])), ("Lecteur A", 2))
         self.assertGreater(d["duration"], 4500)
         st, data, h = self.lea.call("GET", d["files"][1]["url"], headers={"Range": "bytes=0-99"}, raw=True)
         self.assertEqual((st, len(data), h["Content-Type"]), (206, 100, "audio/mpeg"))
         st, data, _ = self.lea.call("GET", f"/api/img?p={tour['thumb']}&w=100&h=100", raw=True)
-        self.assertEqual((st, data[:2]), (200, b"\xff\xd8"))  # cover.jpg du dossier
+        self.assertEqual((st, data[:2]), (200, b"\xff\xd8"))  # cover.jpg of the folder
         contes = r["books"][1]
         st, d = self.lea.call("GET", f"/api/books/{contes['id']}")
         self.assertEqual([c["t"] for c in d["chapter_list"]], ["Le Chat", "La Belle"])
         self.assertEqual(d["files"][0]["mime"], "audio/mp4")
-        # les livres ne se mêlent pas aux films et séries
+        # books do not mix with movies and shows
         st, home = self.lea.call("GET", "/api/home")
         self.assertNotIn("Contes", json.dumps(home))
 
@@ -103,7 +103,7 @@ class BooksTest(unittest.TestCase):
         st, r = self.lea.call("POST", f"/api/books/{b['id']}/progress", {"position": b["duration"]})
         self.assertTrue(r["finished"])
         self.assertEqual(self.lea.call("GET", f"/api/libraries/{self.lib['id']}/books")[1]["reading"], [])
-        self.assertEqual(self.admin.call("GET", f"/api/books/{b['id']}")[1].get("position"), None)  # propre à chacun
+        self.assertEqual(self.admin.call("GET", f"/api/books/{b['id']}")[1].get("position"), None)  # specific to each person
 
 
 if __name__ == "__main__":

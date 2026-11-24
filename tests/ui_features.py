@@ -1,7 +1,7 @@
-"""Parcours navigateur des nouveautés (Playwright) + captures : chapitres en vignettes, tâches planifiées,
-TV en direct, « Regarder ensemble ».
+"""Browser run of the new features (Playwright) + screenshots: chapter thumbnails, scheduled tasks,
+live TV, "Watch together".
 
-python3 tests/ui_features.py <dossier_captures> <video_test.webm>
+python3 tests/ui_features.py <screenshot_folder> <test_video.webm>
 """
 import os
 import shutil
@@ -45,7 +45,7 @@ admin.call("POST", "/api/admin/users", {"username": "lea", "password": "motdepas
 lea = Client(base)
 lea.call("POST", "/api/login", {"username": "lea", "password": "motdepasse2"})
 
-# TV en direct : liste M3U locale (fichiers vidéo de test) + guide XMLTV
+# live TV: local M3U list (test video files) + XMLTV guide
 films = os.path.join(media, "films")
 mp4 = os.path.join(films, "Le Grand Voyage (2019)", "Le Grand Voyage (2019).mp4")
 now = time.time()
@@ -113,7 +113,7 @@ with sync_playwright() as pw:
     browser = pw.chromium.launch()
     bctx, page = browser_ctx(browser, admin)
 
-    # --- web app installable : Chrome ne doit signaler aucun problème (manifeste, icônes, service worker)
+    # --- installable web app: Chrome must report no problem (manifest, icons, service worker)
     page.goto(base + "/#/")
     page.wait_for_selector(".topbar")
     page.evaluate("navigator.serviceWorker.ready")
@@ -122,13 +122,13 @@ with sync_playwright() as pw:
     check(errs == [], f"application installable ({errs})")
     check(cdp.send("Page.getAppManifest").get("errors") == [], "manifeste sans erreur")
 
-    # --- Seerr : plus que la connexion à Seerr
+    # --- Seerr: more than the connection to Seerr
     page.goto(base + "/#/admin/requests")
     page.wait_for_selector("text=Clé d’API de Seerr")
     check(page.locator("text=Relier Seerr").count() == 0, "section « Relier Seerr à Noxa » retirée")
     page.screenshot(path=f"{out}/01-admin-seerr.png", full_page=True)
 
-    # --- chapitres : fiche et lecteur
+    # --- chapters: title page and player
     page.goto(base + f"/#/item/{kaze}")
     page.wait_for_selector(".block:has-text('Chapitres') .chapter-card")
     check(page.locator(".block .chapter-card").count() == 5, "chapitres sur la fiche")
@@ -157,7 +157,7 @@ with sync_playwright() as pw:
     tnow = page.evaluate("document.querySelector('video').currentTime")
     check(40 <= tnow < 50, f"saut au chapitre choisi au clavier (Partie A) : {tnow}")
 
-    # --- fin d'épisode : compte à rebours réglable (5 s par défaut), annulable
+    # --- end of episode: configurable countdown (5 s by default), can be cancelled
     ep1 = page.evaluate("location.hash")
     page.evaluate("document.querySelector('video').dispatchEvent(new Event('ended'))")
     page.wait_for_selector(".next-card.end:not([hidden])")
@@ -173,7 +173,7 @@ with sync_playwright() as pw:
     page.wait_for_function(f"location.hash !== {ep1!r}", timeout=9000)
     check("/play/" in page.evaluate("location.hash"), "épisode suivant lancé à la fin du compte à rebours")
 
-    # --- lecteur réduit : la lecture continue pendant la navigation
+    # --- mini player: playback continues during navigation
     ep2 = page.evaluate("location.hash")
     page.wait_for_function("document.querySelector('video') && document.querySelector('video').currentTime > 1", timeout=60000)
     page.mouse.move(700, 420)
@@ -200,8 +200,8 @@ with sync_playwright() as pw:
     page.wait_for_function("!document.querySelector('#mini-dock .player')")
     check(True, "fermeture du lecteur réduit")
 
-    # --- « marquer comme vu » depuis Reprendre et à suivre, puis « Annuler »
-    ctx.db.run("UPDATE items SET duration_ms=7200000 WHERE id=?", (voyage,))  # fichiers de test : 12 s
+    # --- "mark as watched" from Continue and Up next, then "Undo"
+    ctx.db.run("UPDATE items SET duration_ms=7200000 WHERE id=?", (voyage,))  # test files: 12 s
     st, p = lea.call("POST", "/api/play", {"id": voyage})
     lea.call("POST", "/api/progress", {"id": voyage, "position": 600000, "duration": 7200000, "stream": p["stream"],
                                        "state": "playing"})
@@ -222,7 +222,7 @@ with sync_playwright() as pw:
     check(not d["watched"] and d["position"] == 600000, f"« Annuler » remet la reprise ({d['watched']}, {d['position']})")
     lctx.close()
 
-    # --- ordre de l'accueil et de la barre du haut (Réglages → Accueil / Barre du haut)
+    # --- order of the home page and of the top bar (Settings → Home / Top bar)
     lctx, lpage = browser_ctx(browser, lea)
     lpage.goto(base + "/#/settings")
     lpage.wait_for_selector(".settings-nav")
@@ -233,7 +233,7 @@ with sync_playwright() as pw:
     lpage.wait_for_selector(".layout-list")
     home_list = ".panel:has(h2:text-is('Accueil')) .layout-list"
     up = f"{home_list} button[aria-label='Monter Films']"
-    while lpage.is_enabled(up):  # jusqu'en haut de la liste
+    while lpage.is_enabled(up):  # up to the top of the list
         lpage.click(up)
         lpage.wait_for_timeout(250)
     lpage.click(f"{home_list} .layout-item[data-key='watchlist'] .toggle")
@@ -250,22 +250,22 @@ with sync_playwright() as pw:
     lpage.goto(base + "/#/")
     lpage.wait_for_selector(".row-title")
     rows = lpage.eval_on_selector_all(".content .row-title", "els => els.map((e) => e.textContent)")
-    # animations : une fois jouées, tout est visible (pas de rangée ni d'image restée transparente)
+    # animations: once played, everything is visible (no row or picture left transparent)
     lpage.wait_for_timeout(1500)
     stuck = lpage.evaluate("""[...document.querySelectorAll('.content .row, .content .card, .content img')]
       .filter((e) => e.getBoundingClientRect().top < innerHeight && getComputedStyle(e).opacity !== '1').length""")
     check(stuck == 0, f"animations terminées : {stuck} éléments encore transparents")
     check(rows and rows[0].startswith("Ajoutés récemment · Films") and "À regarder" not in rows, f"accueil réordonné : {rows}")
     lea.call("PUT", "/api/me/prefs", {"home_order": [], "home_hidden": [], "nav_order": [], "nav_hidden": []})
-    # --- fiche : titres similaires (genres, réalisateur, acteurs)
+    # --- title page: similar titles (genres, director, actors)
     lpage.goto(base + f"/#/item/{voyage}")
     lpage.wait_for_selector("section.block h2:text-is('Films similaires')")
     check(lpage.locator("section.block:has(h2:text-is('Films similaires')) .card:has-text('Brume')").count() == 1,
           "Brume dans les films similaires au Grand Voyage")
     lctx.close()
 
-    # --- tâches planifiées
-    # --- Paramètres : menu groupé, une page par sujet, recherche, anciennes adresses
+    # --- scheduled tasks
+    # --- Settings: grouped menu, one page per topic, search, old addresses
     page.goto(base + "/#/admin")
     page.wait_for_selector(".settings-head h2:text-is('Vue d’ensemble')")
     groups = [t.lower() for t in page.locator(".settings-group-title").all_inner_texts()]
@@ -284,7 +284,7 @@ with sync_playwright() as pw:
         page.wait_for_selector(".settings-body .panel")
         page.wait_for_timeout(400)
         page.screenshot(path=f"{out}/42-parametres-{sec}.png")
-    # photo de profil : choisie, recadrée, affichée dans la barre du haut ; plus de lien « Administration » dans le menu
+    # profile picture: picked, cropped, shown in the top bar; no more "Administration" link in the menu
     pic = os.path.join(work, "photo.png")
     import subprocess as _sp
     _sp.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=s=640x480", "-frames:v", "1", "-y", pic], check=True)
@@ -331,7 +331,7 @@ with sync_playwright() as pw:
     page.wait_for_selector(".task-row:has-text('Extraire les images') :text('Terminée')", timeout=60000)
     page.screenshot(path=f"{out}/06-tache-terminee.png", full_page=True)
 
-    # --- TV en direct
+    # --- live TV
     page.goto(base + "/#/admin/live")
     page.wait_for_selector(".user-row:has-text('Box TV')")
     page.screenshot(path=f"{out}/07-admin-tv.png", full_page=True)
@@ -364,7 +364,7 @@ with sync_playwright() as pw:
     check(True, "chaîne suivante")
     page.goto(base + "/#/")
 
-    # --- regarder ensemble : Alex crée un groupe, Léa le rejoint
+    # --- watch together: Alex creates a group, Léa joins it
     page.goto(base + f"/#/item/{voyage}")
     page.click(".detail-actions button[aria-label='Regarder ensemble']")
     page.wait_for_selector(".modal:has-text('Regarder ensemble')")
@@ -386,25 +386,25 @@ with sync_playwright() as pw:
     g = next(iter(ctx.together.groups.values()))
     check(abs(t1 - t2) < 2.5, f"positions synchronisées ({t1:.1f} / {t2:.1f}, serveur {g.position_now() / 1000:.1f}, "
           f"{'lecture' if g.playing else 'pause'}, attente {g.waiting})")
-    # Alex met en pause : Léa est mise en pause aussi
+    # Alex pauses: Léa is paused too
     page.mouse.move(700, 420)
     page.keyboard.press(" ")
     page2.wait_for_function("document.querySelector('video').paused", timeout=10000)
     page2.wait_for_selector(".toast:has-text('Alex a mis en pause')")
     page2.mouse.move(700, 420)
     page2.screenshot(path=f"{out}/15-ensemble-pause.png")
-    # Léa saute plus loin : Alex suit
+    # Léa jumps further: Alex follows
     page2.keyboard.press(" ")
     page.wait_for_function("!document.querySelector('video').paused", timeout=10000)
     page2.keyboard.press("ArrowRight")
     page2.keyboard.press("ArrowRight")
-    for _ in range(12):  # le groupe se recale en quelques secondes au plus
+    for _ in range(12):  # the group realigns within a few seconds at most
         page2.wait_for_timeout(500)
         t1, t2 = page.evaluate("document.querySelector('video').currentTime"), page2.evaluate("document.querySelector('video').currentTime")
         if abs(t1 - t2) < 1 and t2 > 18:
             break
     check(abs(t1 - t2) < 1 and t2 > 18, f"saut partagé ({t1:.1f} / {t2:.1f})")
-    # recalage : une fois calés, les deux lecteurs restent ensemble, sans saut ni oscillation
+    # realignment: once aligned, both players stay together, without jumps or oscillation
     gaps, jumps = [], 0
     for _ in range(10):
         page2.wait_for_timeout(500)
@@ -419,7 +419,7 @@ with sync_playwright() as pw:
     page.keyboard.press("Escape")
     bctx2.close()
 
-    # --- groupe créé à l'avance depuis la barre du haut : salon, liste en direct, lancement pour tous
+    # --- group created in advance from the top bar: room, live list, start for everyone
     page.goto(base + "/#/")
     page.click("button.group-new")
     page.wait_for_selector(".modal:has-text('Créer un groupe')")
@@ -431,20 +431,20 @@ with sync_playwright() as pw:
     page4.wait_for_selector(".group-card:has-text('Vendredi soir')")
     page4.click(".group-card:has-text('Vendredi soir') a:has-text('Rejoindre le salon')")
     page4.wait_for_selector(".lobby-title:has-text('Vendredi soir')")
-    page.wait_for_selector(".lobby-member:has-text('Léa')", timeout=10000)  # arrivée visible chez Alex sans recharger
+    page.wait_for_selector(".lobby-member:has-text('Léa')", timeout=10000)  # arrival visible on Alex's side without reloading
     check(page.locator(".topbar .group-pill.mine").count() == 1, "raccourci « ton groupe » dans la barre du haut")
     page.screenshot(path=f"{out}/16b-ensemble-salon.png")
     page.goto(base + f"/#/item/{voyage}")
     page.click(".detail-actions button[aria-label='Regarder ensemble']")
     page.click(".modal button:has-text('Lancer dans « Vendredi soir »')")
     page.wait_for_function("location.hash.includes('group=')")
-    page4.wait_for_function("location.hash.includes('group=')", timeout=10000)  # Léa part du salon toute seule
+    page4.wait_for_function("location.hash.includes('group=')", timeout=10000)  # Léa leaves the room on her own
     page4.wait_for_function("document.querySelector('video') && document.querySelector('video').currentTime > 1", timeout=60000)
     check(True, "lecture lancée pour le salon")
     page.goto(base + "/#/")
     bctx4.close()
 
-    # --- télécommande / clavier / manette : flèches, OK, retour ; dans le lecteur, bas = commandes, B = retour
+    # --- remote / keyboard / gamepad: arrows, OK, back; in the player, down = controls, B = back
     bctx6, page6 = browser_ctx(browser, admin)
     page6.goto(base + "/#/library/" + str(ctx.db.scalar("SELECT id FROM libraries WHERE name='Films'")))
     page6.wait_for_selector(".card")
@@ -476,7 +476,7 @@ with sync_playwright() as pw:
     check("/play/" not in page6.evaluate("location.hash"), "manette : B cache les commandes puis quitte le lecteur")
     bctx6.close()
 
-    # --- téléchargement pour regarder hors ligne : fiche -> téléchargements -> réseau coupé -> lecture -> position renvoyée
+    # --- download to watch offline: title page -> downloads -> network cut -> playback -> position sent back
     polar = ctx.db.one("SELECT id FROM items WHERE type='movie' AND title='Nuit polaire'")["id"]
     bctx5, page5 = browser_ctx(browser, admin)
     page5.goto(base + f"/#/item/{polar}")
@@ -506,11 +506,11 @@ with sync_playwright() as pw:
     check(row and row["position_ms"] > 39000, f"lecture hors ligne puis position renvoyée au serveur ({row and row['position_ms']})")
     bctx5.close()
 
-    # --- personnalisation : sous-titres, anti-spoiler, épingles, avis, avatars, page d'ouverture, appareil,
+    # --- personalisation: subtitles, anti-spoiler, pins, opinions, avatars, start page, device,
     #     interface enfant, notifications, bilan
     pctx, pp = browser_ctx(browser, lea)
     kaze_show = ctx.db.one("SELECT show_id FROM items WHERE id=?", (kaze,))["show_id"]
-    lea.call("POST", f"/api/items/{kaze}/watched", {"watched": True})  # série suivie, épisodes suivants « nouveaux »
+    lea.call("POST", f"/api/items/{kaze}/watched", {"watched": True})  # followed show, next episodes "new"
     pp.goto(base + "/#/settings/playback")
     pp.wait_for_selector(".sub-preview .sub-line")
     pp.select_option(".panel:has(h2:text-is('Apparence des sous-titres')) select >> nth=0", "serif")
@@ -531,7 +531,7 @@ with sync_playwright() as pw:
     pp.click(".detail-actions button[aria-label='J’aime']")
     pp.wait_for_selector(".detail-actions button[aria-label='J’aime'].on")
     check(lea.call("GET", f"/api/items/{kaze_show}")[1]["opinion"] == 1, "j'aime enregistré")
-    # épingler un genre sur l'accueil
+    # pin a genre on the home page
     films = next(l for l in lea.call("GET", "/api/me")[1]["libraries"] if l["title"] == "Films")
     genre = lea.call("GET", f"/api/libraries/{films['id']}/genres")[1][0]["title"]
     import urllib.parse as _up
@@ -541,7 +541,7 @@ with sync_playwright() as pw:
     pp.goto(base + "/#/")
     pp.wait_for_selector(f".row-title:has-text('{genre} · Films')")
     check(True, "rangée épinglée sur l'accueil")
-    # notifications : la série suivie a de nouveaux épisodes
+    # notifications: the followed show has new episodes
     pp.wait_for_selector(".notif-badge:not([hidden])")
     pp.click(".notif-btn")
     pp.wait_for_selector(".notif-item")
@@ -555,7 +555,7 @@ with sync_playwright() as pw:
     pp.wait_for_selector(".recap .stat")
     pp.wait_for_timeout(400)
     pp.screenshot(path=f"{out}/53-bilan.png", full_page=True)
-    # avatars prédéfinis
+    # predefined avatars
     pp.goto(base + "/#/settings/profile")
     pp.click("button:has-text('Avatars')")
     pp.wait_for_selector(".preset-grid .preset")
@@ -567,7 +567,7 @@ with sync_playwright() as pw:
     pp.click(".modal button:has-text('Utiliser cet avatar')")
     pp.wait_for_selector(".user-btn .avatar img")
     check(pp.locator(".modal-overlay").count() == 0, "fenêtre des avatars fermée")
-    # page d'ouverture et appareil
+    # start page and device
     pp.goto(base + "/#/settings/layout")
     pp.select_option(".panel:has(h2:text-is('Page d’ouverture')) select", "watchlist")
     pp.wait_for_timeout(300)
@@ -598,7 +598,7 @@ with sync_playwright() as pw:
     kp.screenshot(path=f"{out}/56-interface-enfant.png")
     kctx.close()
 
-    # --- double authentification : activation guidée, connexion en deux étapes, réinitialisation par l'admin
+    # --- two-factor authentication: guided activation, two-step sign-in, reset by the admin
     from noxa import twofa
     admin.call("POST", "/api/admin/users", {"username": "deux", "password": "motdepasse7", "display_name": "Deux"})
     dc = Client(base)
@@ -621,7 +621,7 @@ with sync_playwright() as pw:
     tp.click(".modal button:has-text('J’ai enregistré mes codes')")
     tp.wait_for_selector(".status-box.ok:has-text('Activée')")
     tctx.close()
-    # connexion : mot de passe, puis code de secours
+    # sign-in: password, then recovery code
     lctx2 = browser.new_context(viewport={"width": 1440, "height": 900}, bypass_csp=True)
     lp2 = lctx2.new_page()
     lp2.goto(base + "/#/login")
@@ -635,10 +635,10 @@ with sync_playwright() as pw:
     lp2.wait_for_selector(".form-error:has-text('Code incorrect')")
     lp2.fill("input[name=code]", codes[0])
     lp2.click("button[type=submit]")
-    lp2.wait_for_selector(".profile-tile, .topbar")  # « Qui regarde ? » puis l'accueil
+    lp2.wait_for_selector(".profile-tile, .topbar")  # "Who's watching?" then the home page
     check(True, "connexion avec un code de secours")
     lctx2.close()
-    # réinitialisation par l'administrateur
+    # reset by the administrator
     actx, ap = browser_ctx(browser, admin)
     ap.goto(base + "/#/admin/users")
     ap.click(".user-row:has-text('Deux') button:has-text('Modifier')")
@@ -648,7 +648,7 @@ with sync_playwright() as pw:
     check(not ctx.db.one("SELECT totp_enabled FROM users WHERE username='deux'")["totp_enabled"], "double authentification réinitialisée par l'admin")
     actx.close()
 
-    # --- mise à jour : indicateur pour les administrateurs, progression, attente du redémarrage, rechargement
+    # --- update: indicator for administrators, progress, waiting for the restart, reload
     import json as _json
     from noxa import __version__ as cur_version
     ctx.note_latest("999.0")
@@ -703,11 +703,11 @@ with sync_playwright() as pw:
     page6.screenshot(path=f"{out}/30-mise-a-jour.png")
     page6.wait_for_function("document.querySelector('.update-step').textContent.includes('Redémarrage')", timeout=10000)
     with page6.expect_navigation(timeout=20000):
-        pass  # Noxa « 999.0 » répond : la page se recharge seule
+        pass  # Noxa "999.0" answers: the page reloads by itself
     page6.wait_for_selector(".topbar")
     check(page6.locator(".update-overlay").count() == 0, "rechargement automatique après la mise à jour")
     ctx.note_latest(None)
-    # page rechargée pendant que le proxy répond 502 : écran d'attente qui se reconnecte seul
+    # page reloaded while the proxy answers 502: waiting screen that reconnects by itself
     page6.unroute("**/api/admin/update*")
     page6.unroute("**/api/status")
     down = {"n": 2}

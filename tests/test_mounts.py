@@ -1,4 +1,4 @@
-"""Tests du service de montage SMB avec de faux mount / smbclient."""
+"""Tests of the SMB mount service with fake mount / smbclient."""
 import json
 import os
 import shutil
@@ -109,22 +109,22 @@ class MountdTest(unittest.TestCase):
         fstab = open(self.fstab).read()
         self.assertIn("# seance-smb:films\n//192.168.1.5/Films " + path + " cifs credentials=", fstab)
         self.assertIn(",ro,", fstab)
-        self.assertTrue(fstab.startswith("UUID=abc / ext4"))  # lignes existantes conservées
+        self.assertTrue(fstab.startswith("UUID=abc / ext4"))  # existing lines kept
         cred = os.path.join(self.creds, "films.cred")
         self.assertEqual(oct(os.stat(cred).st_mode & 0o777), "0o600")
         self.assertNotIn("secret", fstab)
         st = self.call("status")
         self.assertEqual([(s["name"], s["mounted"], s["username"]) for s in st["shares"]], [("films", True, "jellyfin")])
         self.assertNotIn("password", json.dumps(st))
-        # mauvais partage : refusé avant d'écrire quoi que ce soit
+        # wrong share: refused before writing anything
         before = open(self.fstab).read()
         with self.assertRaisesRegex(self.m.MountError, "n'existe pas"):
             self.call("add", name="x", host="192.168.1.5", share="Nope", username="jellyfin", password="secret")
         self.assertEqual(open(self.fstab).read(), before)
-        # partage avec espace
+        # share with a space
         self.call("add", name="mes-films", host="nas.local", share="Mes Films", username="jellyfin", password="secret")
         self.assertIn("//nas.local/Mes\\040Films", open(self.fstab).read())
-        # modification sans retaper le mot de passe
+        # edit without typing the password again
         self.call("add", name="films", host="192.168.1.5", share="Films", username="jellyfin", password="", version="3.0")
         self.assertIn("vers=3.0", open(self.fstab).read())
         self.assertEqual(open(self.fstab).read().count("# seance-smb:films\n"), 1)
@@ -155,7 +155,7 @@ class MountdTest(unittest.TestCase):
             with self.assertRaises(self.m.MountError, msg=str(bad)):
                 self.mounts.validate(args)
         self.call("add", name="anim", host="192.168.1.5", share="Animes", username="jellyfin", password="secret")
-        open(self.mountinfo, "w").close()  # le NAS a redémarré : plus monté
+        open(self.mountinfo, "w").close()  # the NAS restarted: no longer mounted
         self.assertFalse(self.call("status")["shares"][0]["mounted"])
         self.mounts.ensure_all()
         self.assertTrue(self.call("status")["shares"][0]["mounted"])

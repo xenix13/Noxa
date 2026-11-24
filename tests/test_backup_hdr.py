@@ -1,4 +1,4 @@
-"""Sauvegarde / restauration du serveur, et conversion HDR -> SDR au transcodage.
+"""Server backup / restore, and HDR -> SDR conversion when transcoding.
 
 python3 -m unittest tests.test_backup_hdr
 """
@@ -60,7 +60,7 @@ class BackupTest(unittest.TestCase):
         self.assertEqual(names[0], "manifest.json")
         self.assertIn("seance.db", names)
         self.assertIn("avatars/1.jpg", names)
-        # téléchargement, puis envoi (comme depuis un autre serveur)
+        # download, then upload (as from another server)
         st, data, h = self.admin.call("GET", f"/api/admin/backups/{name}", raw=True)
         self.assertEqual((st, h["Content-Type"], data[:2]), (200, "application/gzip", b"\x1f\x8b"))
         self.assertEqual(Client(self.base).call("GET", f"/api/admin/backups/{name}", raw=True)[0], 401)
@@ -68,7 +68,7 @@ class BackupTest(unittest.TestCase):
         self.assertEqual(st, 200, r)
         uploaded = r["backup"]["name"]
         self.assertIn("-envoi", uploaded)
-        # une archive qui n'est pas de Noxa, ou qui sort de ses dossiers : refusée
+        # an archive that is not from Noxa, or that escapes its folders: refused
         bad = io.BytesIO()
         with tarfile.open(fileobj=bad, mode="w:gz") as tar:
             for n, content in (("manifest.json", json.dumps({"format": 1, "schema": 1}).encode()), ("seance.db", b"x"),
@@ -80,14 +80,14 @@ class BackupTest(unittest.TestCase):
         self.assertEqual(st, 400)
         self.assertEqual(len(self.admin.call("GET", "/api/admin/backups")[1]["backups"]), 2)
         self.assertEqual(self.admin.call("GET", "/api/admin/backups/nexis-..%2Fseance.db")[0], 404)
-        # après la sauvegarde : un compte en plus, qui disparaîtra à la restauration
+        # after the backup: one more account, which will disappear with the restore
         self.admin.call("POST", "/api/admin/users", {"username": "tom", "display_name": "Tom", "password": "motdepasse3"})
         st, r = self.admin.call("POST", f"/api/admin/backups/{uploaded}/restore")
-        self.assertEqual((st, r["restarting"]), (200, False))  # pas de superviseur dans les tests
+        self.assertEqual((st, r["restarting"]), (200, False))  # no supervisor in the tests
         self.assertTrue(os.path.isfile(os.path.join(self.data, backup.PENDING, "seance.db")))
         self.srv.shutdown()
         self.srv.server_close()
-        # redémarrage : la sauvegarde est mise en place avant l'ouverture de la base
+        # restart: the backup is put in place before the database is opened
         self.ctx, self.srv, self.base = start(self.data)
         self.assertIsNotNone(self.ctx.restored)
         names = {u["username"] for u in self.ctx.db.all("SELECT username FROM users")}
@@ -115,7 +115,7 @@ class BackupTest(unittest.TestCase):
         manual = backup.create(self.ctx)
         backup.prune(self.ctx, 2)
         left = [b["name"] for b in backup.listing(self.ctx)]
-        self.assertIn(manual["name"], left)  # une sauvegarde faite à la main n'est jamais supprimée
+        self.assertIn(manual["name"], left)  # a backup made by hand is never deleted
         self.assertEqual(sum(1 for n in left if "-auto" in n), 2)
         self.ctx.tasks.run_now("backup", "test")
         tasks = {t["id"]: t for t in self.admin.call("GET", "/api/admin/tasks")[1]["tasks"]}
@@ -173,13 +173,13 @@ class HdrTest(unittest.TestCase):
                                 "stream=color_transfer,pix_fmt", "-of", "json", out], capture_output=True, check=True)
             s = json.loads(r.stdout)["streams"][0]
             self.assertEqual((s["pix_fmt"], s.get("color_transfer")), ("yuv420p", "bt709"))
-            # désactivée : pas de conversion ; source SDR : rien à faire
+            # off: no conversion; SDR source: nothing to do
             off = transcoder.plan(probe, caps=caps, tonemap="off")
             self.assertNotIn("zscale", " ".join(transcoder.media_args(off)))
             self.assertNotIn("HDR converti en SDR", off["reasons"])
             sdr = dict(probe, video=dict(probe["video"], transfer="bt709"))
             self.assertNotIn("zscale", " ".join(transcoder.media_args(transcoder.plan(sdr, caps=caps))))
-            # sous-titres image incrustés : vidéo convertie avant d'y poser les sous-titres
+            # burnt-in picture subtitles: video converted before the subtitles are laid on it
             burn = dict(p, burn_index=5)
             fc = transcoder.media_args(burn)[1]
             self.assertLess(fc.index("tonemap"), fc.index("overlay"))

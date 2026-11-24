@@ -1,9 +1,9 @@
-"""Lecture réelle avec hls.js dans Chromium (VP9 + Opus, que Chromium décode sans codecs propriétaires).
+"""Real playback with hls.js in Chromium (VP9 + Opus, which Chromium decodes without proprietary codecs).
 
-Vérifie le flux HLS de bout en bout : playlist VOD complète, segments fMP4 à la demande,
-reprise au milieu, saut loin devant (relance de ffmpeg), retour en arrière.
+Checks the HLS stream end to end: complete VOD playlist, fMP4 segments on demand,
+resume in the middle, jump far ahead (ffmpeg restarted), going back.
 
-python3 tests/hls_real.py <chemin vers hls.min.js> [dossier_captures]
+python3 tests/hls_real.py <path to hls.min.js> [screenshot_folder]
 """
 import os
 import shutil
@@ -74,7 +74,7 @@ try:
         page.fill("input[type=password]", "motdepasse1")
         page.click("button[type=submit]")
         page.wait_for_selector(".profile-tile, .hero-title, .empty", timeout=20000)
-        # reprise au milieu : la position est absolue, le flux démarre au bon segment
+        # resume in the middle: the position is absolute, the stream starts at the right segment
         admin.call("POST", "/api/progress", {"id": movie, "position": 50000, "duration": 120000, "state": "stopped"})
         st, det = admin.call("GET", f"/api/items/{movie}")
         sub = det["subtitles"][0]["id"]
@@ -92,12 +92,12 @@ try:
         check(red > 5000, f"sous-titre PGS dessiné par le navigateur ({red} pixels rouges)")
         st, streams = admin.call("GET", "/api/admin/streams")
         check(streams and streams[0]["mode"] == "copy", f"VP9 + Opus recopiés tels quels ({streams and streams[0]['mode']})")
-        # saut loin devant : ffmpeg relancé, la lecture repart au bon endroit
+        # jump far ahead: ffmpeg restarted, playback resumes at the right place
         page.evaluate("document.querySelector('video').currentTime = 100")
         page.wait_for_function("document.querySelector('video').currentTime > 101 && !document.querySelector('video').paused",
                                timeout=60000)
         check(True, "saut à 100 s puis lecture")
-        # retour en arrière hors tampon
+        # going back outside the buffer
         page.evaluate("document.querySelector('video').currentTime = 10")
         page.wait_for_function("(() => { const v = document.querySelector('video'); return v.currentTime > 11 && v.currentTime < 30 && !v.paused; })()",
                                timeout=60000)

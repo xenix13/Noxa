@@ -1,9 +1,9 @@
-"""Serveurs liés : jumelage chiffré, tunnel, comptes répliqués, catalogue partagé, fusion, lecture relayée.
+"""Linked servers: encrypted pairing, tunnel, replicated accounts, shared catalogue, merge, relayed playback.
 
-Deux serveurs complets dans le même processus. B rejoint A sans donner d'adresse : A ne peut donc lui parler
-que par le tunnel que B lui ouvre.
-- A : Films (Brume en français 180p, Le Grand Voyage, Nuit Polaire), Séries (Les Veilleurs S01E01 seulement)
-- B : Films (Brume en anglais 360p, Ciel Bas), Séries (Les Veilleurs complète), Animes
+Two complete servers in the same process. B joins A without giving an address: so A can only talk to it
+through the tunnel B opens to it.
+- A: Films (Brume in French 180p, Le Grand Voyage, Nuit Polaire), Séries (Les Veilleurs S01E01 only)
+- B: Films (Brume in English 360p, Ciel Bas), Séries (Les Veilleurs complete), Animes
 
 python3 -m unittest tests.test_federation
 """
@@ -29,14 +29,14 @@ def start_server(work, name):
     ctx = Ctx(os.path.join(work, name), STATIC)
     ctx.fed.port = 0
     server = Server(("127.0.0.1", 0), make_handler(build_app(ctx)))
-    ctx.http_port = server.server_address[1]  # comme __main__ : adresse locale des copies froides
+    ctx.http_port = server.server_address[1]  # like __main__: local address of the cold copies
     threading.Thread(target=server.serve_forever, daemon=True).start()
     ctx.fed.start(loop=False)
     return ctx, server, f"http://127.0.0.1:{server.server_address[1]}"
 
 
 def fed_raw(port, method, path, headers=None, body=None):
-    """Requête directe sur le port des serveurs liés (TLS, sans vérifier le certificat)."""
+    """Direct request on the linked-servers port (TLS, without checking the certificate)."""
     c = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     c.check_hostname = False
     c.verify_mode = ssl.CERT_NONE
@@ -72,7 +72,7 @@ class FederationTest(unittest.TestCase):
         os.makedirs(os.path.dirname(os.path.join(m, "series_a", ep1)))
         shutil.copy(os.path.join(root, "series", ep1), os.path.join(m, "series_a", ep1))
         shutil.copytree(os.path.join(root, "animes"), os.path.join(m, "animes_b"))
-        old = time.time() - 3600  # sinon le scan les croit en cours de copie et les remet à plus tard
+        old = time.time() - 3600  # otherwise the scan thinks they are being copied and postpones them
         for d, _, files in os.walk(m):
             for f in files:
                 os.utime(os.path.join(d, f), (old, old))
@@ -91,18 +91,18 @@ class FederationTest(unittest.TestCase):
             wait_scan(client)
         st, r = cls.admin_b.call("POST", "/api/admin/users", {"username": "lea", "password": "motdepasseL"})
         assert st == 200, r
-        # « papa » existe des deux côtés mais ce n'est pas la même personne
+        # "papa" exists on both sides but it is not the same person
         for client, pw in ((cls.admin_a, "motdepassePA"), (cls.admin_b, "motdepassePB")):
             st, r = client.call("POST", "/api/admin/users", {"username": "papa", "password": pw})
             assert st == 200, r
-        # invitation créée sur A (joignable), collée sur B (sans adresse : derrière une box, par exemple)
+        # invitation created on A (reachable), pasted on B (without an address: behind a home router, for example)
         cls.a.fed.listen()
         st, inv = cls.admin_a.call("POST", "/api/admin/federation/invite", {"address": f"127.0.0.1:{cls.a.fed.port}"})
         assert st == 200, inv
         cls.invite = inv["invite"]
         st, cls.preview = cls.admin_b.call("POST", "/api/admin/federation/join/preview", {"invite": inv["invite"]})
         assert st == 200, cls.preview
-        # alex : la même personne ; papa : par défaut, deux personnes
+        # alex: the same person; papa: by default, two people
         st, cls.joined = cls.admin_b.call("POST", "/api/admin/federation/join",
                                           {"invite": inv["invite"], "accounts": {"alex": {"merge": True}}})
         assert st == 200, cls.joined
@@ -119,16 +119,16 @@ class FederationTest(unittest.TestCase):
 
     @classmethod
     def sync(cls):
-        for _ in range(2):  # dans les deux sens, deux fois : ce qui revient de l'autre est appliqué aussi
+        for _ in range(2):  # both ways, twice: what comes back from the other is applied too
             cls.a.fed.sync(cls.peer_on_a)
             cls.b.fed.sync(cls.peer_on_b)
 
 
     def test_40_peer_as_cold_storage(self):
-        """Un serveur lié garde les archives de l'autre (place réservée par son administrateur)."""
+        """A linked server keeps the other's archives (space reserved by its administrator)."""
         st, r = self.admin_b.call("GET", "/api/admin/cold")
         self.assertIsNone(r["available"]["peer"])
-        # A n'accueille rien tant que son administrateur ne réserve pas de place
+        # A hosts nothing until its administrator reserves space
         st, r = self.admin_b.call("POST", "/api/admin/cold/stores", {"kind": "peer", "name": "Chez A", "conf": {"peer": self.peer_on_b}})
         self.assertEqual(st, 400, r)
         self.assertIn("accueille pas", r["error"])
@@ -150,14 +150,14 @@ class FederationTest(unittest.TestCase):
         self.assertEqual([os.path.getsize(f) for f in files], [movie["file_size"]], files)
         st, x = self.admin_a.call("GET", "/api/admin/cold/extra")
         self.assertEqual([h["bytes"] for h in x["hosted"]], [movie["file_size"]])
-        # lecture depuis la copie gardée par A
+        # playback from the copy kept by A
         st, p = self.admin_b.call("POST", "/api/play", {"id": str(movie["id"]), "cold": True})
         self.assertEqual(st, 200, p)
         self.assertTrue(self.b.transcoder.get(p["stream"]).path.startswith("cold:"))
         n, data, _ = hls_segment(self.admin_b, p["url"], at=5.0)
         self.assertGreater(len(data), 1000)
         self.admin_b.call("POST", "/api/stop", {"stream": p["stream"]})
-        # copie retirée : effacée chez A aussi
+        # copy removed: erased on A too
         st, r = self.admin_b.call("DELETE", f"/api/admin/cold/items/{movie['id']}/{store}")
         self.assertEqual(st, 200, r)
         self.assertEqual([f for d, _, fs in os.walk(hosted) for f in fs], [])
@@ -176,12 +176,12 @@ class FederationTest(unittest.TestCase):
         self.assertEqual(len(va["peers"]), 1)
         pb = va["peers"][0]
         self.assertTrue(pb["online"], pb)
-        self.assertIsNone(pb["address"])          # B n'est pas joignable : A passe par le tunnel
+        self.assertIsNone(pb["address"])          # B is not reachable: A goes through the tunnel
         self.assertEqual(pb["via"], "tunnel")
         st, vb = self.admin_b.call("GET", "/api/admin/federation")
         self.assertEqual(vb["peers"][0]["via"], "direct")
         self.assertEqual(vb["peers"][0]["fingerprint"], va["fingerprint"])
-        # l'invitation ne sert qu'une fois
+        # the invitation only works once
         st, r = self.admin_b.call("POST", "/api/admin/federation/join", {"invite": self.invite})
         self.assertEqual(st, 409, r)
 
@@ -189,7 +189,7 @@ class FederationTest(unittest.TestCase):
         self.assertEqual([c["username"] for c in self.preview["conflicts"]], ["alex", "papa"])
         suggested = self.preview["conflicts"][1]["suggested"]
         self.assertEqual(suggested, "papa-" + re.sub(r"[^\w.-]+", "", self.b.fed.name().lower())[:12])
-        # le papa de A garde son identifiant, celui de B est renommé, chacun avec son mot de passe, sur les deux serveurs
+        # A's papa keeps his username, B's is renamed, each with his password, on both servers
         for base in (self.base_a, self.base_b):
             self.login(base, "papa", "motdepassePA")
             self.login(base, suggested, "motdepassePB")
@@ -197,13 +197,13 @@ class FederationTest(unittest.TestCase):
             self.assertEqual(st, 401)
 
     def test_02_accounts_replicated(self):
-        # même identifiant des deux côtés : le compte de A l'emporte (mot de passe de A partout)
+        # same username on both sides: A's account wins (A's password everywhere)
         self.login(self.base_b, "alex", "motdepasseA")
         st, _ = Client(self.base_b).call("POST", "/api/login", {"username": "alex", "password": "motdepasseB"})
         self.assertEqual(st, 401)
-        # compte qui n'existait que sur B : présent sur A
+        # account that only existed on B: present on A
         self.login(self.base_a, "lea", "motdepasseL")
-        # créé sur B après le jumelage -> sur A ; renommé sur A -> sur B ; supprimé sur A -> plus sur B
+        # created on B after pairing -> on A; renamed on A -> on B; deleted on A -> no longer on B
         st, tom = self.admin_b.call("POST", "/api/admin/users", {"username": "tom", "password": "motdepasseT"})
         self.assertEqual(st, 200, tom)
         self.sync()
@@ -230,7 +230,7 @@ class FederationTest(unittest.TestCase):
         return sorted(i["title"] for i in items["items"])
 
     def test_03_catalog_shared(self):
-        # sans réglage : les bibliothèques de B s'ajoutent, sous leur nom, avec le nom du serveur pour le badge
+        # no setting: B's libraries are added, under their name, with the server name for the badge
         st, libs = self.admin_a.call("GET", "/api/libraries")
         name_b = self.b.fed.name()
         self.assertEqual(sorted((l["title"], l["server"] or "") for l in libs),
@@ -242,22 +242,22 @@ class FederationTest(unittest.TestCase):
         st, d = self.admin_a.call("GET", f"/api/items/{show['id']}")
         self.assertEqual(st, 200, d)
         self.assertEqual(len(d["seasons"]), 2)
-        # la page d'administration des bibliothèques ne montre que celles de ce serveur
+        # the library administration page only shows this server's
         st, admin_libs = self.admin_a.call("GET", "/api/admin/libraries")
         self.assertEqual(sorted(l["name"] for l in admin_libs["libraries"]), ["Films", "Séries"])
         st, r = self.admin_a.call("DELETE", f"/api/admin/libraries/{remote['id']}")
         self.assertEqual(st, 404)
-        # affiche relayée (image tirée de la vidéo par B)
+        # poster relayed (picture taken from the video by B)
         st, img, h = self.admin_a.call("GET", f"/api/img?p=/library/metadata/{show['id']}/thumb/1&w=200&h=300", raw=True)
         self.assertEqual(st, 200, img[:200])
         self.assertEqual(h.get("Content-Type"), "image/jpeg")
-        self.assertTrue(img.startswith(b"\xff\xd8"), img[:40])  # une vraie image JPEG, pas une page
+        self.assertTrue(img.startswith(b"\xff\xd8"), img[:40])  # a real JPEG picture, not a page
 
     def test_04_merge(self):
         st, v = self.admin_a.call("GET", "/api/admin/federation")
         received = {l["name"]: l for l in v["peers"][0]["libraries"]}
         local = {l["name"]: l for l in v["local_libraries"]}
-        # films et séries ne se fusionnent pas entre eux
+        # movies and shows do not merge with each other
         st, r = self.admin_a.call("PUT", f"/api/admin/federation/libraries/{received['Films']['id']}",
                                   {"merge_into": local["Séries"]["id"]})
         self.assertEqual(st, 400, r)
@@ -267,7 +267,7 @@ class FederationTest(unittest.TestCase):
             self.assertEqual(st, 200, v)
         merged = {l["name"]: l for l in v["peers"][0]["libraries"]}
         self.assertEqual((merged["Films"]["merge_into"], merged["Films"]["merged"]), (local["Films"]["id"], 1))
-        # plus qu'une bibliothèque Films et une Séries ; Animes reste à part
+        # only one Films library and one Séries left; Animes stays apart
         st, libs = self.admin_a.call("GET", "/api/libraries")
         self.assertEqual(sorted(l["title"] for l in libs), ["Animes", "Films", "Séries"])
         films = self.lib(self.admin_a, "Films")
@@ -279,7 +279,7 @@ class FederationTest(unittest.TestCase):
         self.assertEqual([s["title"] for s in d["seasons"]], ["Saison 1", "Saison 2"])
         st, eps = self.admin_a.call("GET", f"/api/items/{d['seasons'][0]['id']}/children")
         self.assertEqual([e["episode"] for e in eps], [1, 2, 3])
-        # recherche : une seule fois
+        # search: only once
         st, res = self.admin_a.call("GET", "/api/search?q=brume")
         self.assertEqual(sum(1 for v in res.values() if isinstance(v, list) for i in v if i["title"] == "Brume"), 1)
 
@@ -304,7 +304,7 @@ class FederationTest(unittest.TestCase):
             self.assertEqual(data, f.read(100))
         st, streams = self.admin_a.call("GET", "/api/admin/streams")
         self.assertIn(p["stream"], [s["id"] for s in streams])
-        # progression : enregistrée ici et renvoyée au serveur qui a le fichier
+        # progress: saved here and sent back to the server that has the file
         st, r = self.admin_a.call("POST", "/api/progress", {"id": rk, "position": 42000, "duration": 600000,
                                                             "stream": p["stream"]})
         self.assertEqual(st, 200, r)
@@ -316,7 +316,7 @@ class FederationTest(unittest.TestCase):
             time.sleep(0.1)
         self.assertEqual(d.get("position"), 42000, d)
         self.admin_a.call("POST", "/api/stop", {"stream": p["stream"]})
-        # flux préparé par B (remux), relayé par A
+        # stream prepared by B (remux), relayed by A
         st, p = self.admin_a.call("POST", "/api/play", {"id": rk, "no_direct": True})
         self.assertEqual(st, 200, p)
         self.assertTrue(p["url"].endswith("main.m3u8"))
@@ -326,7 +326,7 @@ class FederationTest(unittest.TestCase):
         st, init, _ = self.admin_a.call("GET", p["url"].replace("main.m3u8", "init.mp4"), raw=True)
         self.assertEqual(st, 200)
         self.admin_a.call("POST", "/api/stop", {"stream": p["stream"]})
-        # téléchargement hors ligne : préparé par B, relayé par A
+        # offline download: prepared by B, relayed by A
         caps = {"video": ["h264", "hevc"], "audio": ["aac"], "containers": ["mp4"], "native": True}
         st, r = self.admin_a.call("POST", "/api/downloads/options", {"id": rk, "caps": caps})
         self.assertEqual(st, 200, r)
@@ -345,7 +345,7 @@ class FederationTest(unittest.TestCase):
         st, data, h = self.admin_a.call("GET", f"/api/downloads/{job['id']}/file", headers={"Range": "bytes=0-99"}, raw=True)
         self.assertEqual((st, len(data)), (206, 100))
         self.assertIn(b"ftyp", data[:16])
-        # un autre compte ne voit pas ce téléchargement
+        # another account does not see this download
         lea = self.login(self.base_a, "lea", "motdepasseL")
         self.assertEqual(lea.call("GET", f"/api/downloads/{job['id']}")[0], 404)
         st, _ = self.admin_a.call("DELETE", f"/api/downloads/{job['id']}")
@@ -355,32 +355,32 @@ class FederationTest(unittest.TestCase):
             if not self.b.downloads.jobs:
                 break
             time.sleep(0.1)
-        self.assertEqual(self.b.downloads.jobs, {})  # B a effacé sa préparation
+        self.assertEqual(self.b.downloads.jobs, {})  # B erased its preparation
 
     def test_06_best_copy(self):
         brume = self.a.db.scalar("SELECT id FROM items WHERE title='Brume' AND peer_id IS NULL")
-        # la langue voulue n'existe que sur la copie de A (français) : A, malgré la définition plus faible
+        # the wanted language only exists on A's copy (French): A, despite the lower resolution
         st, p = self.admin_a.call("POST", "/api/play", {"id": str(brume), "no_direct": True})
         self.assertEqual(st, 200, p)
         self.assertNotIn(p["stream"], self.a.fed.proxied)
         self.admin_a.call("POST", "/api/stop", {"stream": p["stream"]})
-        # langue présente nulle part : la meilleure qualité, la copie 360p de B
+        # language present nowhere: the best quality, B's 360p copy
         self.admin_a.call("PUT", "/api/me/prefs", {"audio_lang": "deu"})
         st, p = self.admin_a.call("POST", "/api/play", {"id": str(brume), "no_direct": True})
         self.assertEqual(st, 200, p)
         self.assertIn(p["stream"], self.a.fed.proxied)
         self.assertEqual(p["item"]["id"], str(brume))
-        # même titre relancé (saut) : même copie
+        # same title started again (seek): same copy
         st, p2 = self.admin_a.call("POST", "/api/play", {"id": str(brume), "no_direct": True, "offset": 2000,
                                                          "replace": p["stream"]})
         self.assertEqual(st, 200, p2)
         self.assertIn(p2["stream"], self.a.fed.proxied)
         self.assertNotIn(p["stream"], self.a.fed.proxied)
-        # pendant la lecture, les sous-pages du titre viennent de la copie lue
+        # during playback, the title's sub-pages come from the copy being played
         st, tp = self.admin_a.call("GET", f"/api/items/{brume}/trickplay")
         self.assertEqual(st, 200, tp)
         self.admin_a.call("POST", "/api/stop", {"stream": p2["stream"]})
-        # piste choisie sur la fiche (anglais, présent seulement chez B) : B
+        # track chosen on the title page (English, only present on B): B
         self.admin_a.call("PUT", "/api/me/prefs", {"audio_lang": "fra"})
         st, p = self.admin_a.call("POST", "/api/play", {"id": str(brume), "no_direct": True})
         self.assertNotIn(p["stream"], self.a.fed.proxied)
@@ -397,7 +397,7 @@ class FederationTest(unittest.TestCase):
         alex_b = self.login(self.base_b, "alex", "motdepasseA")
         st, r = alex_b.call("POST", f"/api/items/{remote}/watched", {"watched": True})
         self.assertEqual(st, 200, r)
-        # titre présent sur les deux : vu chez B -> vu sur notre copie
+        # title present on both: watched on B -> watched on our copy
         brume_b = self.b.db.scalar("SELECT id FROM items WHERE title='Brume' AND peer_id IS NULL")
         st, r = alex_b.call("POST", f"/api/items/{brume_b}/watched", {"watched": True})
         self.sync()
@@ -412,13 +412,13 @@ class FederationTest(unittest.TestCase):
         fed.set_online(self.peer_on_a, False)
         try:
             st, libs = self.admin_a.call("GET", "/api/libraries")
-            self.assertEqual(sorted(l["title"] for l in libs), ["Films", "Séries"])  # Animes de B masquée
+            self.assertEqual(sorted(l["title"] for l in libs), ["Films", "Séries"])  # B's Animes hidden
             films = self.lib(self.admin_a, "Films")
             self.assertEqual(self.titles(self.admin_a, films), ["Brume", "Le Grand Voyage", "Nuit Polaire"])
             show = self.a.db.scalar("SELECT id FROM items WHERE type='show' AND peer_id IS NULL")
             st, d = self.admin_a.call("GET", f"/api/items/{show}")
             self.assertEqual([s["title"] for s in d["seasons"]], ["Saison 1"])
-            # le titre présent des deux côtés se lit depuis notre copie, même si B aurait été choisi
+            # the title present on both sides plays from our copy, even if B would have been chosen
             self.admin_a.call("PUT", "/api/me/prefs", {"audio_lang": "deu"})
             brume = self.a.db.scalar("SELECT id FROM items WHERE title='Brume' AND peer_id IS NULL")
             st, p = self.admin_a.call("POST", "/api/play", {"id": str(brume), "no_direct": True})
@@ -432,7 +432,7 @@ class FederationTest(unittest.TestCase):
         self.assertEqual(len(self.titles(self.admin_a, films)), 4)
 
     def test_09_local_item_removed(self):
-        """Notre épisode supprimé : celui de B reprend sa place au lieu de disparaître avec lui."""
+        """Our episode deleted: B's takes its place back instead of disappearing with it."""
         ep = self.a.db.scalar("SELECT id FROM items WHERE type='episode' AND peer_id IS NULL")
         self.a.db.run("DELETE FROM items WHERE id=?", (ep,))
         self.a.fed.relink(self.peer_on_a)
@@ -453,7 +453,7 @@ class FederationTest(unittest.TestCase):
         ok = {"X-Fed-Peer": uid_b, "X-Fed-Key": secret}
         st, body = fed_raw(port, "GET", "/fed/hello", ok)
         self.assertEqual(st, 200, body)
-        # administration au nom d'un compte : seulement s'il est administrateur ici, et si ce serveur l'accepte
+        # administration on behalf of an account: only if it is an administrator here, and if this server accepts it
         alex = self.a.db.scalar("SELECT uid FROM users WHERE username='alex'")
         lea = self.a.db.scalar("SELECT uid FROM users WHERE username='lea'")
         st, _ = fed_raw(port, "GET", "/api/admin/users", dict(ok, **{"X-Fed-User": alex}))
@@ -467,11 +467,11 @@ class FederationTest(unittest.TestCase):
         finally:
             self.a.db.set_setting("fed_remote_admin", None)
         st, _ = fed_raw(port, "GET", "/api/me", dict(ok, **{"X-Fed-User": alex}))
-        self.assertEqual(st, 403)  # le reste de l'API reste fermé
-        # avatar d'un compte : route avec paramètre, servie (et pas la page de l'interface)
+        self.assertEqual(st, 403)  # the rest of the API stays closed
+        # an account's avatar: route with a parameter, served (and not the interface page)
         st, body = fed_raw(port, "GET", f"/fed/avatar/{alex}", ok)
         self.assertEqual(st, 404, body[:80])
-        # l'interface n'est pas servie sur ce port, et les routes entre serveurs pas sur l'autre
+        # the interface is not served on this port, and the server-to-server routes not on the other
         st, _ = fed_raw(port, "GET", "/", ok)
         self.assertEqual(st, 404)
         st, _ = self.admin_a.call("GET", "/fed/hello")
@@ -480,7 +480,7 @@ class FederationTest(unittest.TestCase):
         st, _ = fed_raw(port, "POST", "/fed/join", {"Content-Type": "application/json"},
                         json.dumps({"token": "z" * 32, "uid": "0" * 32, "fingerprint": "0" * 64}))
         self.assertEqual(st, 403)
-        # invitation dont l'empreinte ne correspond pas au serveur contacté
+        # invitation whose fingerprint does not match the server contacted
         from noxa.federation import decode_invite, encode_invite
         st, inv = self.admin_a.call("POST", "/api/admin/federation/invite", {"address": f"127.0.0.1:{port}"})
         data = decode_invite(inv["invite"])
@@ -491,7 +491,7 @@ class FederationTest(unittest.TestCase):
         self.assertIn("Certificat inattendu", r["error"])
 
     def test_11_same_username_created_on_both(self):
-        """Le même identifiant créé des deux côtés avant la synchronisation : deux comptes, l'un renommé partout."""
+        """The same username created on both sides before the synchronisation: two accounts, one renamed everywhere."""
         st, r = self.admin_a.call("POST", "/api/admin/users", {"username": "nina", "password": "motdepasseNA"})
         self.assertEqual(st, 200, r)
         st, r = self.admin_b.call("POST", "/api/admin/users", {"username": "Nina", "password": "motdepasseNB"})
@@ -503,7 +503,7 @@ class FederationTest(unittest.TestCase):
         self.assertEqual(rows_a, rows_b)
         self.assertEqual(sorted(r["username"].lower() for r in rows_a), ["nina", "nina-2"])
         renamed = next(r["username"] for r in rows_a if r["username"].lower() == "nina-2")
-        for base in (self.base_a, self.base_b):  # chacun garde son mot de passe
+        for base in (self.base_a, self.base_b):  # each keeps their password
             logins = {(name, pw): Client(base).call("POST", "/api/login", {"username": name, "password": pw})[0]
                       for name, pw in (("nina", "motdepasseNA"), (renamed, "motdepasseNB"),
                                        ("nina", "motdepasseNB"), (renamed, "motdepasseNA"))}
@@ -512,15 +512,15 @@ class FederationTest(unittest.TestCase):
         self.assertIn(renamed.lower(), [n["renamed"].lower() for n in v["notices"]])
 
     def test_12_load_balancing(self):
-        """Serveur déjà chargé : la copie d'un serveur libre est lue, même en moins bonne qualité."""
+        """Server already loaded: the copy of a free server is played, even in lower quality."""
         st, v = self.admin_a.call("PUT", "/api/admin/federation", {"busy": 2})
         self.assertEqual((st, v["busy"]), (200, 2), v)
         self.assertEqual(self.admin_a.call("PUT", "/api/admin/federation", {"busy": 99})[0], 400)
         brume = str(self.a.db.scalar("SELECT id FROM items WHERE title='Brume' AND peer_id IS NULL"))
         st_b = self.a.fed.status.setdefault(self.peer_on_a, {})
-        self.admin_a.call("PUT", "/api/me/prefs", {"audio_lang": "deu"})  # aucune copie n'a la langue : la qualité décide
+        self.admin_a.call("PUT", "/api/me/prefs", {"audio_lang": "deu"})  # no copy has the language: quality decides
         try:
-            st_b["load"] = 5  # B est occupé : notre copie (180p) plutôt que la sienne (360p)
+            st_b["load"] = 5  # B is busy: our copy (180p) rather than its own (360p)
             st, p = self.admin_a.call("POST", "/api/play", {"id": brume, "no_direct": True})
             self.assertEqual(st, 200, p)
             self.assertNotIn(p["stream"], self.a.fed.proxied)
@@ -528,7 +528,7 @@ class FederationTest(unittest.TestCase):
             st_b["load"] = 0  # B libre : sa copie, meilleure
             st, p = self.admin_a.call("POST", "/api/play", {"id": brume, "no_direct": True})
             self.assertIn(p["stream"], self.a.fed.proxied)
-            self.assertEqual(st_b["load"], 1)  # compté chez lui d'ici sa prochaine annonce
+            self.assertEqual(st_b["load"], 1)  # counted on its side until its next announcement
             self.admin_a.call("POST", "/api/stop", {"stream": p["stream"]})
         finally:
             st_b["load"] = 0
@@ -536,7 +536,7 @@ class FederationTest(unittest.TestCase):
             self.admin_a.call("PUT", "/api/admin/federation", {"busy": 3})
 
     def test_13_watch_together_across_servers(self):
-        """Groupe créé sur A, rejoint depuis B : titres, comptes et commandes traduits d'un serveur à l'autre."""
+        """Group created on A, joined from B: titles, accounts and commands translated from one server to the other."""
         brume_a = self.a.db.scalar("SELECT id FROM items WHERE title='Brume' AND peer_id IS NULL")
         brume_on_b = str(self.b.db.scalar("SELECT id FROM items WHERE peer_id IS NOT NULL AND remote_id=?", (brume_a,)))
         st, g = self.admin_a.call("POST", "/api/together", {"item_id": str(brume_a), "position": 5000, "name": "Soirée"})
@@ -553,7 +553,7 @@ class FederationTest(unittest.TestCase):
         lea_b = self.b.db.scalar("SELECT id FROM users WHERE username='lea'")
         self.assertEqual((j["item_id"], j["item"]["id"], j["position"], j["member"]), (brume_on_b, brume_on_b, 5000, True))
         self.assertIn(lea_b, [m["id"] for m in j["members"]])
-        # événements relayés par B
+        # events relayed by B
         cookie = "; ".join(f"{c.name}={c.value}" for c in lea.jar)
         conn = http.client.HTTPConnection("127.0.0.1", self.sb.server_address[1], timeout=15)
         conn.request("GET", f"/api/together/{gid}/events", headers={"Cookie": cookie})
@@ -573,13 +573,13 @@ class FederationTest(unittest.TestCase):
         self.assertIn(lea_b, [m["id"] for m in members["members"]])
         state = next_event("state")
         self.assertEqual(state["item_id"], brume_on_b)
-        # hôte (A) prêt : on part ; pause depuis B, vue par A
+        # host (A) ready: start; pause from B, seen by A
         self.admin_a.call("POST", f"/api/together/{gid}/cmd", {"action": "ready"})
         st, r = lea.call("POST", f"/api/together/{gid}/cmd", {"action": "pause", "position": 7000})
         self.assertEqual((st, r["playing"], r["position"]), (200, False, 7000), r)
         st, ga = self.admin_a.call("GET", f"/api/together/{gid}")
         self.assertEqual((ga["playing"], ga["position"]), (False, 7000))
-        # changement de titre depuis B (un titre de B) : A reçoit le sien
+        # title change from B (a title of B): A gets its own
         ciel_b = self.b.db.scalar("SELECT id FROM items WHERE title='Ciel Bas' AND peer_id IS NULL")
         ciel_on_a = self.a.db.scalar("SELECT COALESCE(alias_of, id) FROM items WHERE peer_id IS NOT NULL AND remote_id=?",
                                      (ciel_b,))
@@ -599,7 +599,7 @@ class FederationTest(unittest.TestCase):
         self.admin_a.call("POST", f"/api/together/{gid}/leave")
 
     def test_14_shared_tmdb_and_seerr(self):
-        """Clé TMDB et Seerr configurés sur A seulement : B s'en sert (métadonnées, Découvrir, demandes)."""
+        """TMDB key and Seerr set up on A only: B uses them (metadata, Discover, requests)."""
         from tests.fixtures import FakeSeerr
         from tests.test_api import TMDB
         seerr = FakeSeerr()
@@ -611,7 +611,7 @@ class FederationTest(unittest.TestCase):
             self.assertEqual(st, 200, r)
             self.sync()
             self.assertTrue(self.b.metadata.tmdb().enabled)
-            # titres de B restés sans métadonnées faute de clé : cherchés avec celle de A
+            # B's titles left without metadata for lack of a key: looked up with A's
             for _ in range(100):
                 left = self.b.db.scalar("SELECT COUNT(*) FROM items WHERE peer_id IS NULL AND type IN ('movie','show') "
                                         "AND meta_state IN ('local','pending')")
@@ -630,7 +630,7 @@ class FederationTest(unittest.TestCase):
             self.assertEqual((st, r["as_user"]), (200, True), r)
             lea_seerr = next(u for u in seerr.users if u.get("username") == "lea")
             self.assertEqual(seerr.requests[-1]["user"], lea_seerr["id"])
-            # seules les routes utiles de Seerr sont prêtées
+            # only the useful Seerr routes are lent
             peer = self.b.fed.peer(self.peer_on_b)
             st, r = self.b.fed.call(peer, "POST", "/fed/seerr", {"method": "GET", "path": "/settings/main"})
             self.assertEqual(st, 403, r)
@@ -643,44 +643,44 @@ class FederationTest(unittest.TestCase):
             self.sync()
 
     def test_15_remote_admin(self):
-        """Un administrateur connecté à A règle B : requêtes d'administration relayées au nom du même compte."""
+        """An administrator signed in to A sets up B: administration requests relayed on behalf of the same account."""
         st, sv = self.admin_a.call("GET", "/api/admin/servers")
         self.assertEqual(st, 200, sv)
         self.assertEqual([p["id"] for p in sv["peers"]], [str(self.peer_on_a)])
         on_b = {"X-Noxa-Server": str(self.peer_on_a)}
         st, libs = self.admin_a.call("GET", "/api/admin/libraries", headers=on_b)
         self.assertEqual(st, 200, libs)
-        self.assertIn("Animes", [l["name"] for l in libs["libraries"]])  # la bibliothèque n'existe que sur B
+        self.assertIn("Animes", [l["name"] for l in libs["libraries"]])  # the library only exists on B
         st, libs_a = self.admin_a.call("GET", "/api/admin/libraries")
         self.assertNotIn("Animes", [l["name"] for l in libs_a["libraries"] if not l.get("peer")])
-        # un réglage modifié depuis A s'applique à B seulement
+        # a setting changed from A only applies to B
         st, r = self.admin_a.call("PUT", "/api/admin/settings", {"watch_interval": 123}, headers=on_b)
         self.assertEqual(st, 200, r)
         self.assertEqual(self.b.db.setting("watch_interval"), "123")
         self.assertNotEqual(self.a.db.setting("watch_interval"), "123")
-        st, r = self.admin_a.call("GET", f"/api/admin/settings?_server={self.peer_on_a}")  # même chose par l'adresse
+        st, r = self.admin_a.call("GET", f"/api/admin/settings?_server={self.peer_on_a}")  # same thing through the address
         self.assertEqual((st, r["watch_interval"]), (200, 123))
-        # la liste des serveurs, elle, reste celle d'ici
+        # the server list stays this one's
         st, sv2 = self.admin_a.call("GET", "/api/admin/servers", headers=on_b)
         self.assertEqual(sv2["local"]["name"], sv["local"]["name"])
-        # un compte ordinaire ne peut pas s'en servir
+        # an ordinary account cannot use it
         lea = self.login(self.base_a, "lea", "motdepasseL")
         self.assertEqual(lea.call("GET", "/api/admin/settings", headers=on_b)[0], 403)
         self.assertEqual(self.admin_a.call("GET", "/api/admin/settings", headers={"X-Nexis-Server": "999"})[0], 404)
-        # B peut refuser d'être administré depuis un serveur lié (réglage fait sur place)
+        # B can refuse to be administered from a linked server (setting made on site)
         st, r = self.admin_b.call("PUT", "/api/admin/servers", {"remote_admin": False})
         self.assertEqual((st, r["remote_admin"]), (200, False))
         st, r = self.admin_a.call("GET", "/api/admin/settings", headers=on_b)
         self.assertEqual(st, 403)
         self.assertIn("n'accepte pas", r["error"])
         self.admin_b.call("PUT", "/api/admin/servers", {"remote_admin": True})
-        # les routes entre serveurs restent fermées au reste de l'API (pas de « /api/me » au nom d'un compte)
+        # the server-to-server routes stay closed to the rest of the API (no "/api/me" on behalf of an account)
         st, r = self.a.fed.call(self.a.fed.peer(self.peer_on_a), "GET", "/api/me",
                                 user=self.a.db.one("SELECT * FROM users WHERE username='alex'"))
         self.assertEqual(st, 403)
 
     def test_16_backups_copied_between_servers(self):
-        """Une sauvegarde de A est recopiée chez B, rangée sous le nom de A ; B garde celles de chaque serveur à part."""
+        """A backup of A is copied to B, stored under A's name; B keeps each server's backups apart."""
         from noxa import backup
         self.a.db.set_setting("server_name", "Serveur Salon")
         self.b.db.set_setting("server_name", "Serveur Bureau")
@@ -694,11 +694,11 @@ class FederationTest(unittest.TestCase):
         self.assertIn(sent, on_b)
         copy = on_b[sent]
         self.assertEqual((copy["mine"], copy["server"]), (False, "Serveur Salon"))
-        # depuis A, l'administration de B montre la copie, avec son serveur d'origine
+        # from A, B's administration shows the copy, with its origin server
         st, v = self.admin_a.call("GET", "/api/admin/backups", headers={"X-Noxa-Server": str(self.peer_on_a)})
         self.assertEqual(st, 200, v)
         self.assertTrue(any(b["name"] == sent and not b["mine"] for b in v["backups"]))
-        # B garde au plus N copies automatiques de A, sans toucher aux siennes
+        # B keeps at most N automatic copies of A, without touching its own
         mine_b = backup.create(self.b, "auto", distribute=False)
         self.b.tasks.update("backup", options={"keep": 1})
         try:
@@ -712,7 +712,7 @@ class FederationTest(unittest.TestCase):
             self.assertIn(mine_b["name"], names)
         finally:
             self.b.tasks.update("backup", options={"keep": 7})
-        # B peut refuser de garder les sauvegardes des autres
+        # B can refuse to keep the others' backups
         self.b.db.set_setting("backup_from_peers", "0")
         try:
             res = backup.distribute(self.a, os.path.join(backup.directory(self.a), b_a2["name"]))
@@ -720,22 +720,22 @@ class FederationTest(unittest.TestCase):
             self.assertIn("ne garde pas", backup.copies_status(self.a)[f"peer:{self.peer_on_a}"]["error"])
         finally:
             self.b.db.set_setting("backup_from_peers", None)
-        # un serveur lié ne peut pas déposer une sauvegarde au nom d'un autre serveur
+        # a linked server cannot drop a backup on behalf of another server
         with open(os.path.join(backup.directory(self.a), b_a2["name"]), "rb") as f:
             raw = f.read()
         st, _ = fed_raw(self.a.fed.port, "POST", "/fed/backup", {"X-Fed-Peer": self.b.fed.uid(),
                         "X-Fed-Key": self.a.db.scalar("SELECT secret FROM peers"), "X-Backup-Name": "nexis-pirate_20260101-000000-auto.tar.gz",
                         "Content-Length": str(len(raw))}, raw)
-        self.assertEqual(st, 400)  # c'est une sauvegarde de A, pas de B
+        self.assertEqual(st, 400)  # it is a backup of A, not of B
         self.a.db.set_setting("server_name", None)
         self.b.db.set_setting("server_name", None)
 
     def test_17_prefs_follow_account(self):
-        """Les préférences d'un compte le suivent d'un serveur lié à l'autre (bibliothèques et fond d'écran traduits)."""
+        """An account's preferences follow it from one linked server to the other (libraries and wallpaper translated)."""
         alex_b = self.login(self.base_b, "alex", "motdepasseA")
-        films_a = self.lib(self.admin_a, "Films")                    # bibliothèque de A, vue depuis A
-        films_a_on_b = self.lib(alex_b, "Films", server=True)        # la même, reçue par B
-        series_b = self.lib(alex_b, "Séries")                        # bibliothèque de B (à part ou fusion d'ici)
+        films_a = self.lib(self.admin_a, "Films")                    # A's library, seen from A
+        films_a_on_b = self.lib(alex_b, "Films", server=True)        # the same, received by B
+        series_b = self.lib(alex_b, "Séries")                        # B's library (apart or merged here)
         self.assertNotEqual(films_a["id"], films_a_on_b["id"])
         movie = self.admin_a.call("GET", f"/api/libraries/{films_a['id']}/items")[1]["items"][0]
         with open(os.path.join(STATIC, "themes", "ville-neon.json"), encoding="utf-8") as f:
@@ -759,28 +759,28 @@ class FederationTest(unittest.TestCase):
         self.assertEqual(p["home_order"], ["pin:3", "continue"])
         self.assertEqual(p["lib_langs"], {films_a_on_b["id"]: {"audio_lang": "jpn"}})
         self.assertEqual((p["hidden_genres"], p["private_mode"], p["quiet_hours"]), (["Horreur"], True, "23:00-07:30"))
-        self.assertEqual([t["id"] for t in p["my_themes"]], ["ville-neon"])  # thème installé : sur l'autre serveur aussi
+        self.assertEqual([t["id"] for t in p["my_themes"]], ["ville-neon"])  # installed theme: on the other server too
         st, d = alex_b.call("GET", f"/api/items/{p['muted_shows'][0]}")
-        self.assertEqual((st, d["title"]), (200, movie["title"]))  # sourdine : même titre, numéro de B
+        self.assertEqual((st, d["title"]), (200, movie["title"]))  # muted: same title, B's number
         wid = int(p["wallpaper"].split("/")[3])
         st, d = alex_b.call("GET", f"/api/items/{wid}")
-        self.assertEqual((st, d["title"]), (200, movie["title"]))  # le même film, avec son numéro sur B
-        # dans l'autre sens : un changement fait sur B revient sur A
+        self.assertEqual((st, d["title"]), (200, movie["title"]))  # the same movie, with its number on B
+        # the other way: a change made on B comes back to A
         st, r = alex_b.call("PUT", "/api/me/prefs", {"theme": "oled", "hidden_libraries": [series_b["id"]]})
         self.assertEqual(st, 200, r)
         self.sync()
         p = self.admin_a.call("GET", "/api/me")[1]["prefs"]
-        # Séries de B vue depuis A : à part, ou fusionnée avec celle de A (test de fusion) : c'est celle affichée
+        # B's Séries seen from A: apart, or merged with A's (merge test): it is the one shown
         series_b_on_a = self.lib(self.admin_a, "Séries", server=True) or self.lib(self.admin_a, "Séries")
         self.assertEqual((p["theme"], p["hidden_libraries"]), ("oled", [series_b_on_a["id"]]))
         self.assertEqual(p["accent"], "#4c9aff")
-        # retour aux réglages par défaut : partout aussi
+        # back to the default settings: everywhere too
         st, r = self.admin_a.call("POST", "/api/me/prefs/reset")
         self.assertEqual((st, r["theme"]), (200, "dark"))
         self.sync()
         p = alex_b.call("GET", "/api/me")[1]["prefs"]
         self.assertEqual((p["theme"], p["hidden_libraries"], p["home_pins"]), ("dark", [], []))
-        # copier les réglages d'un compte vers un autre (administrateur)
+        # copy an account's settings to another one (administrator)
         self.admin_a.call("PUT", "/api/me/prefs", {"theme": "light", "sub_size": 150})
         lea_id = next(u["id"] for u in self.admin_a.call("GET", "/api/admin/users")[1] if u["username"] == "lea")
         me_id = self.admin_a.call("GET", "/api/me")[1]["user"]["id"]
@@ -802,14 +802,14 @@ class FederationTest(unittest.TestCase):
         self.assertEqual(sorted(l["title"] for l in libs), ["Films", "Séries"])
         films = self.lib(self.admin_a, "Films")
         self.assertEqual(self.titles(self.admin_a, films), ["Brume", "Le Grand Voyage", "Nuit Polaire"])
-        # les comptes restent, des deux côtés, et ne bougent plus
+        # the accounts stay, on both sides, and no longer move
         self.login(self.base_a, "lea", "motdepasseL")
         self.login(self.base_b, "alex", "motdepasseA")
         st, libs_b = self.admin_b.call("GET", "/api/libraries")
         self.assertEqual(sorted(l["title"] for l in libs_b), ["Animes", "Films", "Séries"])
         self.assertFalse(self.b.db.scalar("SELECT COUNT(*) FROM items WHERE peer_id IS NOT NULL"))
         self.assertFalse(self.a.db.scalar("SELECT COUNT(*) FROM items WHERE peer_id IS NOT NULL"))
-        # notre épisode et notre série sont intacts (les épisodes de B fusionnés ont disparu)
+        # our episode and our show are intact (B's merged episodes are gone)
         show = self.a.db.scalar("SELECT id FROM items WHERE type='show'")
         st, d = self.admin_a.call("GET", f"/api/items/{show}")
         self.assertEqual([s["title"] for s in d["seasons"]], ["Saison 1"])
@@ -824,9 +824,9 @@ class FederationTest(unittest.TestCase):
         self.sync()
 
     def test_99b_relink_after_one_sided_unlink(self):
-        """Délié d'un seul côté (l'autre était éteint) : un nouveau jumelage remplace l'ancien lien."""
+        """Unlinked on one side only (the other was off): a new pairing replaces the old link."""
         self.pair()
-        self.b.fed.remove(self.peer_on_b, notify=False)  # A ne l'apprend pas
+        self.b.fed.remove(self.peer_on_b, notify=False)  # A does not learn it
         self.b.db.release()
         self.assertEqual(self.a.db.scalar("SELECT COUNT(*) FROM peers"), 1)
         self.pair()

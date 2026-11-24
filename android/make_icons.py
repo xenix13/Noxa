@@ -1,11 +1,11 @@
-"""Icônes des applications Android (téléphone et TV) et de l'application macOS, faites à partir du logo
-(static/icons/icon-512.png, logo sur fond transparent). À relancer si le logo change :
+"""Icons of the Android apps (phone and TV) and of the macOS app, made from the logo
+(static/icons/icon-512.png, logo on a transparent background). To run again when the logo changes:
 
     python3 android/make_icons.py
 
-Android 8+ : icône adaptative (fond uni + logo à part) : le lanceur la découpe à sa forme (rond, carré arrondi…)
-sans l'entourer de blanc. Le logo tient dans la zone toujours visible (66 dp sur 108). Une version d'une seule
-couleur sert aux icônes à thème d'Android 13.
+Android 8+: adaptive icon (plain background + separate logo): the launcher cuts it to its shape (round, rounded square…)
+without surrounding it with white. The logo fits in the always-visible area (66 dp out of 108). A single-colour
+version is used for Android 13 themed icons.
 """
 import os
 
@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGO = os.path.join(ROOT, "static", "icons", "icon-512.png")
-BG = (11, 11, 14, 255)  # fond de Noxa
+BG = (11, 11, 14, 255)  # Noxa background
 DENSITIES = {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}
 
 
@@ -23,7 +23,7 @@ def logo():
 
 
 def fit(im, box):
-    """Le logo réduit pour tenir dans un carré de `box` pixels (proportions gardées)."""
+    """The logo shrunk to fit in a square of `box` pixels (proportions kept)."""
     s = box / max(im.size)
     return im.resize((max(1, round(im.size[0] * s)), max(1, round(im.size[1] * s))), Image.LANCZOS)
 
@@ -41,12 +41,12 @@ def android(module):
         folder = os.path.join(res, f"mipmap-{d}")
         os.makedirs(folder, exist_ok=True)
         size = round(108 * k)
-        fg = centered(size, fit(src, round(size * 0.5)))  # 54 dp sur 108 : marge dans la zone visible de 66 dp
+        fg = centered(size, fit(src, round(size * 0.5)))  # 54 dp out of 108: margin within the 66 dp visible area
         fg.save(os.path.join(folder, "ic_launcher_foreground.png"), optimize=True)
         mono = Image.new("RGBA", fg.size, (255, 255, 255, 0))
         mono.putalpha(fg.split()[3].point(lambda a: 255 if a > 90 else 0))
         mono.save(os.path.join(folder, "ic_launcher_monochrome.png"), optimize=True)
-        # icône d'avant Android 8 (et de secours) : carré plein, sans transparence autour
+        # icon from before Android 8 (and fallback): full square, no transparency around
         legacy = Image.new("RGBA", (round(48 * k),) * 2, BG)
         lg = fit(src, round(48 * k * 0.66))
         legacy.alpha_composite(lg, ((legacy.size[0] - lg.size[0]) // 2, (legacy.size[1] - lg.size[1]) // 2))
@@ -69,7 +69,7 @@ def android(module):
 
 
 def macos():
-    """macOS : carré arrondi de la taille des icônes d'Apple (824 px dans 1024), le logo au centre."""
+    """macOS: rounded square the size of Apple's icons (824 px in 1024), the logo in the centre."""
     size, square = 1024, 824
     out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     mask = Image.new("L", (square, square), 0)

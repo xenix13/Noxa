@@ -1,4 +1,4 @@
-"""Fabrique un petit fichier de sous-titres PGS (.sup) pour les tests : un rectangle rouge affiché un moment."""
+"""Makes a small PGS subtitle file (.sup) for the tests: a red rectangle shown for a moment."""
 import struct
 
 

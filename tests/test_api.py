@@ -1,4 +1,4 @@
-"""Tests de bout en bout : vrais fichiers vidéo (ffmpeg), faux TMDB.
+"""End-to-end tests: real video files (ffmpeg), fake TMDB.
 
 python3 -m unittest discover -s tests -t .
 """
@@ -73,7 +73,7 @@ class Client:
 
 
 def hls_segment(client, url, n=None, at=None):
-    """Playlist VOD + init fMP4 + segment n (ou celui qui contient `at` secondes) -> (n, octets lisibles)."""
+    """VOD playlist + fMP4 init + segment n (or the one holding `at` seconds) -> (n, readable bytes)."""
     st, pl, _ = client.call("GET", url, raw=True)
     assert st == 200, pl
     durs = [float(l[8:].split(",")[0]) for l in pl.decode().splitlines() if l.startswith("#EXTINF:")]
@@ -124,7 +124,7 @@ class SeanceTest(unittest.TestCase):
         cls.media = os.path.join(cls.work, "media")
         shutil.copytree(root, cls.media)
         from noxa import scanner
-        scanner.RECENT_SECONDS = 0  # les fichiers de test viennent d'être créés
+        scanner.RECENT_SECONDS = 0  # the test files were just created
         cls.ctx = Ctx(os.path.join(cls.work, "data"), STATIC)
         cls.server = Server(("127.0.0.1", 0), make_handler(build_app(cls.ctx)))
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
@@ -186,7 +186,7 @@ class SeanceTest(unittest.TestCase):
         import unicodedata
         st, u = self.admin.call("POST", "/api/admin/users", {"username": "Héloïse", "password": "M0t$de@passe!?%"})
         self.assertEqual(st, 200, u)
-        # même compte quelle que soit la casse ou la forme des accents (é en un ou deux caractères)
+        # same account whatever the case or the form of the accents (é as one or two characters)
         self.assertEqual(self.admin.call("POST", "/api/admin/users", {"username": "HÉLOÏSE", "password": "motdepasse9"})[0], 409)
         for name in ("Héloïse", "héloïse", "HÉLOÏSE", unicodedata.normalize("NFD", "Héloïse")):
             c = Client(self.base)
@@ -215,10 +215,10 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(d["cast"][0]["name"], "Actrice Une")
         self.assertEqual(d["content_rating"], "U")
         st, d = self.admin.call("GET", f"/api/items/{m['Nuit polaire']['id']}")
-        self.assertEqual(d["summary"], "English overview.")  # repli en anglais
+        self.assertEqual(d["summary"], "English overview.")  # English fallback
         self.assertEqual(d["year"], 2021)
         st, d = self.admin.call("GET", f"/api/items/{m['Brume']['id']}")
-        self.assertEqual(d["tmdb_id"], 5003)  # depuis le .nfo
+        self.assertEqual(d["tmdb_id"], 5003)  # from the .nfo
         show, d, eps = self.episodes("Les Veilleurs", "Séries")
         self.assertEqual([(e["season"], e["episode"], e["title"]) for e in eps],
                          [(1, 1, "Titre 1x1"), (1, 2, "Titre 1x2"), (1, 3, "Titre 1x3"), (2, 1, "Titre 2x1")])
@@ -245,7 +245,7 @@ class SeanceTest(unittest.TestCase):
         st, r = self.lea.call("GET", "/api/search?q=NUIT")
         self.assertEqual([c["title"] for c in r["movies"]], ["Nuit polaire"])
         st, r = self.lea.call("GET", "/api/search?q=veilleurs")
-        self.assertEqual(r["shows"], [])  # Léa n'a pas accès aux Séries
+        self.assertEqual(r["shows"], [])  # Léa has no access to Séries
         st, r = self.admin.call("GET", "/api/search?q=veilleurs")
         self.assertEqual(len(r["shows"]), 1)
         st, r = self.admin.call("GET", "/api/search?q=100%")
@@ -278,14 +278,14 @@ class SeanceTest(unittest.TestCase):
         cmd = build_command("/x.mkv", r, 12.5, "/tmp/out", 2)
         self.assertIn("[0:2]format=yuva420p[s];[0:0][s]overlay=eof_action=pass:repeatlast=0[o];[o]format=yuv420p[v]", cmd)
         self.assertEqual(cmd[cmd.index("-ss") + 1], "12.500")
-        self.assertEqual(cmd[cmd.index("-canvas_size") + 1], "1920x1080")  # « unspecified size » évité
+        self.assertEqual(cmd[cmd.index("-canvas_size") + 1], "1920x1080")  # "unspecified size" avoided
         self.assertEqual(cmd[cmd.index("-start_number") + 1], "2")
         self.assertIn("-copyts", cmd)
-        # remux : on vise juste après l'image clé
+        # remux: aim just after the keyframe
         cmd = build_command("/x.mkv", plan(dict(p, video=dict(p["video"], profile="High", pix_fmt="yuv420p"))), 12.0,
                             "/tmp/out")
         self.assertEqual(cmd[cmd.index("-ss") + 1], "12.250")
-        # profil du navigateur : HEVC lu tel quel s'il le sait, sinon converti ; 10 bits à part
+        # browser profile: HEVC played as is when it can, otherwise converted; 10-bit apart
         hevc = {"container": "matroska,webm", "bitrate": 0, "video": {"index": 0, "codec": "hevc", "profile": "Main 10",
                 "pix_fmt": "yuv420p10le", "height": 1080}, "audio": [{"index": 1, "codec": "eac3", "channels": 6,
                                                                        "layout": "5.1(side)"}]}
@@ -293,48 +293,48 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(plan(hevc, caps=caps)["mode"], "transcode")
         caps["video"].add("hevc10")
         r = plan(hevc, caps=caps, algo="dave750", boost=1.5)
-        self.assertEqual((r["mode"], r["acopy"]), ("copy", False))  # 5.1 : mixé en stéréo par Noxa
+        self.assertEqual((r["mode"], r["acopy"]), ("copy", False))  # 5.1: mixed to stereo by Noxa
         self.assertTrue(r["audio_filter"].startswith("pan=stereo|c0=0.5*c2+0.707*c0"), r["audio_filter"])
         self.assertIn("volume=1.5", r["audio_filter"])
         self.assertIn("hvc1", build_command("/x.mkv", r, 0, "/tmp/out"))
-        # un MP4 H.264/AAC est lu directement, sauf si on choisit la 2e piste audio
+        # an H.264/AAC MP4 is played directly, unless the 2nd audio track is chosen
         mp4 = {"container": "mov,mp4,m4a,3gp,3g2,mj2", "bitrate": 0,
                "video": {"index": 0, "codec": "h264", "profile": "High", "pix_fmt": "yuv420p", "height": 720},
                "audio": [{"index": 1, "codec": "aac", "channels": 2}, {"index": 2, "codec": "aac", "channels": 2}]}
         self.assertEqual(plan(mp4)["mode"], "direct")
         self.assertEqual(plan(mp4, audio_index=2)["mode"], "copy")
-        # lecteur natif (application TV) : MKV lu tel quel, son 5.1 transmis à l'ampli
+        # native player (TV app): MKV played as is, 5.1 audio passed to the amplifier
         mkv = {"container": "matroska,webm", "bitrate": 0,
                "video": {"index": 0, "codec": "h264", "profile": "High", "pix_fmt": "yuv420p", "height": 1080},
                "audio": [{"index": 1, "codec": "dts", "channels": 6}, {"index": 2, "codec": "ac3", "channels": 6}]}
         native = {"video": {"h264", "hevc"}, "audio": {"aac", "ac3", "dts"}, "containers": {"matroska", "mp4"},
                   "native": True, "multichannel": True}
         self.assertEqual(plan(mkv, caps=native)["mode"], "direct")
-        self.assertEqual(plan(mkv, caps=native, audio_index=2)["mode"], "direct")  # piste choisie par le lecteur
+        self.assertEqual(plan(mkv, caps=native, audio_index=2)["mode"], "direct")  # track chosen by the player
         browser = {"video": {"h264"}, "audio": {"aac", "ac3"}, "containers": {"mp4"}}
         self.assertEqual(plan(mkv, caps=browser)["mode"], "copy")
         r = plan(mkv, caps=dict(native, containers={"mp4"}), audio_index=2)
-        self.assertEqual((r["mode"], r["acopy"]), ("copy", True))  # remux : AC3 5.1 conservé
+        self.assertEqual((r["mode"], r["acopy"]), ("copy", True))  # remux: AC3 5.1 kept
 
     def test_hardware_transcoding(self):
-        """Commandes NVIDIA / VAAPI, refus d'un moteur absent, repli automatique sur le processeur."""
+        """NVIDIA / VAAPI commands, refusal of a missing engine, automatic fallback to the processor."""
         from noxa.transcoder import build_command, plan
         p = {"container": "matroska,webm", "bitrate": 3_000_000, "subs": [{"index": 2, "codec": "hdmv_pgs_subtitle"}],
              "video": {"index": 0, "codec": "hevc", "profile": "Main 10", "pix_fmt": "yuv420p10le", "height": 1080,
                        "width": 1920}, "audio": [{"index": 1, "codec": "aac", "channels": 2}]}
         r = plan(p, quality="720p")
         nv = build_command("/x.mkv", r, 0, "/tmp/out", hw={"engine": "nvenc", "device": ""})
-        self.assertLess(nv.index("-hwaccel"), nv.index("-i"))  # décodage par la carte : option d'entrée
+        self.assertLess(nv.index("-hwaccel"), nv.index("-i"))  # decoding by the card: input option
         self.assertEqual(nv[nv.index("-codec:v:0") + 1], "h264_nvenc")
         self.assertIn("scale=-2:720:flags=bicubic,format=yuv420p", nv)
         va = build_command("/x.mkv", plan(p, burn_index=2), 0, "/tmp/out", hw={"engine": "vaapi", "device": "/dev/dri/renderD128"})
         self.assertIn("vaapi=va:/dev/dri/renderD128", va)
         self.assertEqual(va[va.index("-codec:v:0") + 1], "h264_vaapi")
-        self.assertTrue(va[va.index("-filter_complex") + 1].endswith("[o]format=nv12,hwupload[v]"))  # incrustation puis envoi à la carte
+        self.assertTrue(va[va.index("-filter_complex") + 1].endswith("[o]format=nv12,hwupload[v]"))  # burn-in then upload to the card
         cp = build_command("/x.mkv", plan(dict(p, video=dict(p["video"], codec="h264", profile="High", pix_fmt="yuv420p"))),
                            0, "/tmp/out", hw={"engine": "nvenc", "device": ""})
-        self.assertNotIn("-hwaccel", cp)  # remux : la carte ne sert à rien
-        # réglage : on n'enregistre qu'un moteur qui passe un vrai essai (pas de carte sur la machine de test)
+        self.assertNotIn("-hwaccel", cp)  # remux: the card is useless
+        # setting: only an engine that passes a real test is saved (no card on the test machine)
         st, r = self.admin.call("PUT", "/api/admin/settings", {"hw_engine": "nvenc"})
         self.assertEqual(st, 400)
         self.assertIn("Test du transcodage matériel en échec", r["error"])
@@ -342,19 +342,19 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(self.admin.call("PUT", "/api/admin/settings", {"hw_engine": "vaapi", "hw_device": "/etc/passwd"})[0], 400)
         st, r = self.admin.call("GET", "/api/admin/settings")
         self.assertEqual(r["hw_engine"], "none")
-        # carte qui refuse en pleine lecture : on repart sur le processeur, la lecture continue
+        # card that refuses in the middle of playback: back to the processor, playback goes on
         self.ctx.db.set_setting("hw_engine", "vaapi")
         self.ctx.db.set_setting("hw_device", "/dev/dri/renderD199")
         try:
             row = self.ctx.db.one("SELECT key, probe, duration_ms FROM items WHERE title='Le Grand Voyage'")
-            tp = dict(plan(json.loads(row["probe"])), mode="transcode")  # fichier de test trop petit pour l'imposer
+            tp = dict(plan(json.loads(row["probe"])), mode="transcode")  # test file too small to force it
             t = self.ctx.transcoder
             t.start("hwtest", row["key"], tp, 0, row["duration_ms"])
             self.assertEqual(t.get("hwtest").hw["engine"], "vaapi")
             seg = t.segment("hwtest", "0.m4s")
             with open(seg, "rb") as f:
                 self.assertGreater(len(f.read()), 1000)
-            self.assertIsNone(t.stats("hwtest")["hw"])  # repassé sur le processeur
+            self.assertIsNone(t.stats("hwtest")["hw"])  # back on the processor
             t.stop("hwtest")
         finally:
             self.ctx.db.set_setting("hw_engine", "none")
@@ -370,7 +370,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(len(body), 100)
         self.assertTrue(h["Content-Range"].startswith("bytes 0-99/"))
         self.assertEqual(body[4:8], b"ftyp")
-        self.assertEqual(self.lea.call("GET", p["url"], raw=True)[0], 404)  # flux d'un autre utilisateur
+        self.assertEqual(self.lea.call("GET", p["url"], raw=True)[0], 404)  # another user's stream
         self.admin.call("POST", "/api/stop", {"stream": p["stream"]})
 
     def test_remux_hls_with_seek(self):
@@ -383,28 +383,28 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(st, 200, p)
         self.assertEqual(p["mode"], "copy")
         self.assertIn("audio AC3 converti", p["reasons"])
-        self.assertEqual(p["offset"], 41000)  # chronologie complète : la position est absolue
+        self.assertEqual(p["offset"], 41000)  # complete timeline: the position is absolute
         self.assertTrue(p["url"].endswith("/main.m3u8"))
         n, data, durs = hls_segment(self.admin, p["url"], at=41.0)
         self.assertEqual(ffprobe_codec(data), "h264")
-        # segments calés sur les images clés du MKV (GOP de 2 s -> 6 s), horodatages d'origine
+        # segments aligned on the MKV keyframes (2 s GOP -> 6 s), original timestamps
         self.assertTrue(all(abs(d - 6.0) < 0.01 for d in durs[:-1]), durs)
         start = sum(durs[:n])
         v, a = first_pts(data, "v"), first_pts(data, "a")
         self.assertLess(abs(v - start), 0.1, (v, start))
-        self.assertLess(abs(a - v), 0.35, (a, v))  # le son suit tout de suite
-        # saut loin devant : le serveur relance ffmpeg au bon segment
+        self.assertLess(abs(a - v), 0.35, (a, v))  # the audio follows right away
+        # jump far ahead: the server restarts ffmpeg at the right segment
         last = len(durs) - 2
         n2, data2, _ = hls_segment(self.admin, p["url"], n=last)
         self.assertLess(abs(first_pts(data2, "v") - sum(durs[:last])), 0.1)
         self.assertEqual(self.ctx.transcoder.get(p["stream"]).run_start, last)
-        # saut : l'ancien ffmpeg est arrêté
+        # jump: the old ffmpeg is stopped
         st, p2 = self.admin.call("POST", "/api/play", {"id": m["id"], "offset": 70000, "replace": p["stream"]})
         self.assertEqual(st, 200, p2)
         self.assertIsNone(self.ctx.transcoder.get(p["stream"]))
         self.assertEqual(self.admin.call("GET", p["url"], raw=True)[0], 404)
-        # vitesse de la conversion renvoyée avec la position : le lecteur distingue un serveur trop lent d'une
-        # connexion trop lente (et ne baisse pas la qualité des lectures suivantes pour rien)
+        # conversion speed returned with the position: the player tells a server that is too slow from a
+        # connection that is too slow (and does not lower the quality of the next playbacks for nothing)
         self.ctx.transcoder.get(p2["stream"]).speed = 0.8
         st, r = self.admin.call("POST", "/api/progress", {"id": m["id"], "position": 72000, "duration": 600000,
                                                           "stream": p2["stream"], "state": "playing"})
@@ -414,13 +414,13 @@ class SeanceTest(unittest.TestCase):
         self.assertNotIn("speed", r)
         self.admin.call("POST", "/api/stop", {"stream": p2["stream"]})
         self.assertIsNone(self.ctx.transcoder.get(p2["stream"]))
-        # débit plafonné pour un titre (conversion trop lente) : pas retenu comme mesure de l'appareil
+        # bandwidth capped for one title (conversion too slow): not kept as the device's measurement
         st, a = self.admin.call("POST", "/api/play", {"id": m["id"], "quality": "auto", "bandwidth": 900000})
         st, b2 = self.admin.call("POST", "/api/play", {"id": m["id"], "quality": "auto", "bandwidth": 600, "capped": True,
                                                        "replace": a["stream"]})
         self.assertEqual(b2["auto_quality"], "480p", b2)
         st, c = self.admin.call("POST", "/api/play", {"id": m["id"], "quality": "auto", "replace": b2["stream"]})
-        self.assertEqual(c["auto_quality"], "original", c)  # la dernière vraie mesure (900 Mbit/s) sert toujours
+        self.assertEqual(c["auto_quality"], "original", c)  # the last real measurement (900 Mbit/s) is still used
         self.admin.call("POST", "/api/stop", {"stream": c["stream"]})
 
     def test_transcode_hevc_and_limit(self):
@@ -445,7 +445,7 @@ class SeanceTest(unittest.TestCase):
         pgs = d["subtitles"][0]
         self.assertTrue(pgs["pgs"])
         self.assertFalse(pgs["overlay"])
-        # navigateur capable : pas d'incrustation, le .sup est envoyé tel quel
+        # capable browser: no burn-in, the .sup is sent as is
         caps = {"video": ["h264"], "audio": ["aac"], "containers": ["mp4"], "pgs": True}
         for _ in range(20):
             st, r = self.admin.call("GET", f"/api/items/{m['id']}/prepare?wait=5")
@@ -458,7 +458,7 @@ class SeanceTest(unittest.TestCase):
         st, sup, _ = self.admin.call("GET", p["subtitle_pgs"], raw=True)
         self.assertEqual((st, sup[:2]), (200, b"PG"))
         self.admin.call("POST", "/api/stop", {"stream": p["stream"]})
-        # navigateur sans rendu PGS : incrustation (avec la taille du canevas, sinon « unspecified size »)
+        # browser without PGS rendering: burn-in (with the canvas size, otherwise "unspecified size")
         st, p = self.admin.call("POST", "/api/play", {"id": m["id"], "subtitle": pgs["id"], "offset": 2000})
         self.assertIn("sous-titres incrustés", p["reasons"])
         self.assertIsNone(p["subtitle_pgs"])
@@ -472,13 +472,13 @@ class SeanceTest(unittest.TestCase):
         ass = e1["subtitles"][0]
         self.assertTrue(ass["overlay"])
         st, p = self.admin.call("POST", "/api/play", {"id": e1["id"], "subtitle": ass["id"]})
-        self.assertEqual(p["mode"], "copy")  # l'ASS est affiché par le navigateur : pas de transcodage
+        self.assertEqual(p["mode"], "copy")  # the ASS is shown by the browser: no transcoding
         st, cues = self.admin.call("GET", p["subtitle_overlay"] + "?wait=1")
         self.assertEqual(cues["cues"][0]["t"], "Le vent se lève\nsur la montagne")
-        # version texte de secours : le dessin vectoriel est écarté, le panneau va en haut
+        # fallback text version: the vector drawing is left out, the sign goes to the top
         self.assertEqual([(c["t"], c.get("top", False)) for c in cues["cues"]],
                          [("Le vent se lève\nsur la montagne", True), ("Guilde des aventuriers", True)])
-        # script ASS d'origine + polices jointes au MKV, pour le rendu fidèle (libass)
+        # original ASS script + fonts attached to the MKV, for faithful rendering (libass)
         self.assertEqual(p["subtitle_ass"], f"/api/items/{e1['id']}/subtitles/{ass['id']}/ass")
         st, raw, h = self.admin.call("GET", p["subtitle_ass"], raw=True)
         self.assertEqual(st, 200)
@@ -493,7 +493,7 @@ class SeanceTest(unittest.TestCase):
         self.admin.call("POST", "/api/stop", {"stream": p["stream"]})
         st, e2 = self.admin.call("GET", f"/api/items/{eps[1]['id']}")
         self.assertTrue(e2["subtitles"][0]["overlay"])
-        # sous-titres internes SRT et externes
+        # internal SRT and external subtitles
         m = self.movie("Nuit polaire")
         st, d = self.admin.call("GET", f"/api/items/{m['id']}")
         st, c = self.admin.call("GET", f"/api/items/{m['id']}/subtitles/{d['subtitles'][0]['id']}?wait=1")
@@ -501,7 +501,7 @@ class SeanceTest(unittest.TestCase):
         self.assertAlmostEqual(c["cues"][0]["s"], 1000, delta=50)
         st, c = self.admin.call("GET", f"/api/items/{m['id']}/subtitles/{d['subtitles'][1]['id']}")
         self.assertEqual(c["cues"][0]["t"], "Hello everyone")
-        # version WebVTT pour le lecteur natif
+        # WebVTT version for the native player
         st, body, h = self.admin.call("GET", f"/api/items/{m['id']}/subtitles/{d['subtitles'][0]['id']}.vtt", raw=True)
         self.assertEqual(st, 200)
         self.assertTrue(h["Content-Type"].startswith("text/vtt"))
@@ -639,14 +639,14 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(home["continue"][0]["id"], eps[0]["id"])
         c.call("POST", f"/api/items/{eps[0]['id']}/watched", {"watched": True})
         st, home = c.call("GET", "/api/home")
-        self.assertEqual(home["continue"][0]["id"], eps[1]["id"])  # l'épisode suivant prend la place
+        self.assertEqual(home["continue"][0]["id"], eps[1]["id"])  # the next episode takes its place
         self.assertTrue(home["continue"][0]["next_up"])
         st, h = c.call("GET", "/api/history")
         self.assertEqual(h["items"][0]["id"], eps[0]["id"])
-        # « Annuler » : reprise remise à 40 s, vue retirée de l'historique
+        # "Undo": resume point put back to 40 s, view removed from the history
         c.call("POST", f"/api/items/{eps[0]['id']}/watched", {"watched": False, "undo": True, "position": 40000})
         row = self.ctx.db.one("SELECT watched, position_ms FROM progress WHERE rating_key=?", (str(eps[0]["id"]),))
-        self.assertEqual((row["watched"], row["position_ms"]), (0, 40000))  # (fichiers de test de 12 s : pas sur l'accueil)
+        self.assertEqual((row["watched"], row["position_ms"]), (0, 40000))  # (12 s test files: not on the home page)
         st, h = c.call("GET", "/api/history")
         self.assertNotIn(eps[0]["id"], [i["id"] for i in h["items"]])
         c.call("POST", f"/api/items/{show['id']}/watched", {"watched": False})
@@ -657,31 +657,31 @@ class SeanceTest(unittest.TestCase):
         c = Client(self.base)
         c.call("POST", "/api/login", {"username": "sugg", "password": "motdepasse9"})
         st, home = c.call("GET", "/api/home")
-        self.assertEqual((home["suggestions"], home["because"]), ([], []))  # rien regardé : rien à suggérer
-        show, d, eps = self.episodes("Les Veilleurs", "Séries")  # série « Thriller »
+        self.assertEqual((home["suggestions"], home["because"]), ([], []))  # nothing watched: nothing to suggest
+        show, d, eps = self.episodes("Les Veilleurs", "Séries")  # "Thriller" show
         c.call("POST", f"/api/items/{eps[0]['id']}/watched", {"watched": True})
         old = suggest.MIN_ROW
-        suggest.MIN_ROW = 1  # bibliothèque de test minuscule
+        suggest.MIN_ROW = 1  # tiny test library
         try:
             st, home = c.call("GET", "/api/home")
         finally:
             suggest.MIN_ROW = old
         titles = [i["title"] for i in home["suggestions"]]
-        self.assertEqual(titles[0], "Nuit polaire", titles)  # même genre
-        self.assertNotIn("Les Veilleurs", titles)  # déjà commencée : pas suggérée
+        self.assertEqual(titles[0], "Nuit polaire", titles)  # same genre
+        self.assertNotIn("Les Veilleurs", titles)  # already started: not suggested
         self.assertEqual(home["because"][0]["seed"]["title"], "Les Veilleurs")
-        # fiche : titres similaires, sans historique
+        # title page: similar titles, without history
         voyage = self.movie("Le Grand Voyage")
         st, r = c.call("GET", f"/api/items/{voyage['id']}/similar")
         self.assertEqual([i["title"] for i in r["items"]][:1], ["Brume"])
         self.assertNotIn("Le Grand Voyage", [i["title"] for i in r["items"]])
-        # rangées masquées dans les réglages : pas de calcul
+        # rows hidden in the settings: no computing
         c.call("PUT", "/api/me/prefs", {"home_hidden": ["suggest", "because"]})
         st, home = c.call("GET", "/api/home")
         self.assertEqual(home["suggestions"], [])
 
     def test_personalisation_prefs(self):
-        """Style des sous-titres, anti-spoiler, page d'ouverture, rangées épinglées : validés côté serveur."""
+        """Subtitle style, anti-spoiler, start page, pinned rows: validated on the server side."""
         c = self.lea
         st, p = c.call("PUT", "/api/me/prefs", {"sub_font": "serif", "sub_color": "#ffd23f", "sub_bg": "none",
                                                  "sub_edge": "outline", "sub_position": "high", "hide_spoilers": True,
@@ -703,13 +703,13 @@ class SeanceTest(unittest.TestCase):
                                         "sub_position": "bottom"})
 
     def test_opinions_steer_suggestions(self):
-        """J'aime / je n'aime pas / ne plus suggérer : retenus par titre, exclus ou pris en compte des suggestions."""
+        """Like / dislike / do not suggest: remembered per title, excluded from or taken into account in the suggestions."""
         from noxa import suggest
         self.admin.call("POST", "/api/admin/users", {"username": "avis", "password": "motdepasse9", "display_name": "Avis"})
         c = Client(self.base)
         c.call("POST", "/api/login", {"username": "avis", "password": "motdepasse9"})
         show, d, eps = self.episodes("Les Veilleurs", "Séries")
-        # avis sur un épisode : enregistré pour la série
+        # opinion on an episode: saved for the show
         st, r = c.call("PUT", f"/api/items/{eps[0]['id']}/opinion", {"value": 1})
         self.assertEqual((st, r["value"]), (200, 1))
         self.assertEqual(c.call("GET", f"/api/items/{show['id']}")[1]["opinion"], 1)
@@ -720,9 +720,9 @@ class SeanceTest(unittest.TestCase):
         try:
             sugg = c.call("GET", "/api/home")[1]["suggestions"]
             titles = [i["title"] for i in sugg]
-            self.assertIn("Nuit polaire", titles)  # un « j'aime » suffit à amorcer les suggestions
+            self.assertIn("Nuit polaire", titles)  # one "like" is enough to start the suggestions
             polar = next(i for i in sugg if i["title"] == "Nuit polaire")
-            c.call("PUT", f"/api/items/{polar['id']}/opinion", {"value": 0})  # ne plus suggérer
+            c.call("PUT", f"/api/items/{polar['id']}/opinion", {"value": 0})  # do not suggest anymore
             titles = [i["title"] for i in c.call("GET", "/api/home")[1]["suggestions"]]
             self.assertNotIn("Nuit polaire", titles)
             similar = [i["title"] for i in c.call("GET", f"/api/items/{show['id']}/similar")[1]["items"]]
@@ -733,18 +733,18 @@ class SeanceTest(unittest.TestCase):
             suggest.MIN_ROW = old
 
     def test_new_episode_notifications_and_recap(self):
-        """Série suivie : ses nouveaux épisodes non vus sont signalés ; bilan de visionnage."""
+        """Followed show: its new unwatched episodes are flagged; viewing summary."""
         self.admin.call("POST", "/api/admin/users", {"username": "notif", "password": "motdepasse9", "display_name": "Notif"})
         c = Client(self.base)
         c.call("POST", "/api/login", {"username": "notif", "password": "motdepasse9"})
         self.assertEqual(c.call("GET", "/api/notifications")[1], {"items": [], "unread": 0})
         show, d, eps = self.episodes("Les Veilleurs", "Séries")
-        c.call("POST", f"/api/items/{eps[0]['id']}/watched", {"watched": True})  # la série devient suivie
+        c.call("POST", f"/api/items/{eps[0]['id']}/watched", {"watched": True})  # the show becomes followed
         st, r = c.call("GET", "/api/notifications")
         self.assertEqual(st, 200)
         mine = [n for n in r["items"] if n["show"]["id"] == show["id"]]
         self.assertTrue(mine and mine[0]["unread"] and mine[0]["count"] == len(eps) - 1, r)
-        self.assertNotEqual(mine[0]["episode"]["id"], eps[0]["id"])  # l'épisode vu n'est pas signalé
+        self.assertNotEqual(mine[0]["episode"]["id"], eps[0]["id"])  # the watched episode is not flagged
         self.assertEqual(c.call("GET", "/api/me")[1]["notifications"], r["unread"])
         c.call("POST", "/api/notifications/seen")
         self.assertEqual(c.call("GET", "/api/me")[1]["notifications"], 0)
@@ -811,16 +811,16 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(st, 400)
         self.assertEqual(self.lea.call("GET", "/api/admin/browse?path=/")[0], 403)
 
-    # ------------------------------------------------- sous-titres préparés
+    # ------------------------------------------------- prepared subtitles
     def test_subtitles_prepared_in_background_and_on_demand(self):
         show, d, eps = self.episodes("Kaze no Michi", "Animes")
         row = self.ctx.db.one("SELECT * FROM items WHERE id=?", (int(eps[0]["id"]),))
-        for _ in range(100):  # préparés en tâche de fond après le scan (aucune lecture en cours)
+        for _ in range(100):  # prepared in the background after the scan (no playback running)
             if not self.ctx.subtitles.missing(row):
                 break
             time.sleep(0.2)
         self.assertEqual(self.ctx.subtitles.missing(row), [])
-        # cache vidé : la première demande répond 202 (en préparation) puis 200
+        # cache emptied: the first request answers 202 (being prepared) then 200
         m = self.movie("Nuit polaire")
         mrow = self.ctx.db.one("SELECT * FROM items WHERE id=?", (int(m["id"]),))
         shutil.rmtree(self.ctx.subtitles._dir(mrow), ignore_errors=True)
@@ -838,11 +838,11 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(r["cues"][0]["t"], "Bonjour tout le monde")
 
     def test_progressive_subtitles(self):
-        """Gros fichier : la lecture démarre dès que les premières minutes sont prêtes, la suite arrive en route."""
-        import noxa.routes.media as api_mod  # lecture : fenêtre de préparation des sous-titres
+        """Big file: playback starts as soon as the first minutes are ready, the rest arrives on the way."""
+        import noxa.routes.media as api_mod  # playback: subtitle preparation window
         from noxa import media, subcache
         if not media.readrate_ok():
-            # l'extraction n'est ralentie (pour l'observer en cours) qu'avec -readrate, écarté depuis ffmpeg 7
+            # the extraction is only slowed down (to observe it running) with -readrate, dropped since ffmpeg 7
             self.skipTest(f"lecture limitée non utilisée avec ffmpeg {media.ffmpeg_major()}")
         m = self.movie("Nuit polaire")
         row = self.ctx.db.one("SELECT * FROM items WHERE id=?", (int(m["id"]),))
@@ -853,7 +853,7 @@ class SeanceTest(unittest.TestCase):
         subcache.SOON_READRATE, sc._streaming, api_mod.PREPARE_WINDOW_MS = 6, (lambda: True), 20000
         try:
             shutil.rmtree(sc._dir(row), ignore_errors=True)
-            sc.enqueue(row["id"], urgent=True)  # comme à l'ouverture de la fiche : débit plafonné (lecture en cours)
+            sc.enqueue(row["id"], urgent=True)  # as when the title page opens: capped rate (playback running)
             partial_seen, ready_partial = None, None
             for _ in range(300):
                 st, r = self.admin.call("GET", f"/api/items/{m['id']}/subtitles/{sub}")
@@ -869,13 +869,13 @@ class SeanceTest(unittest.TestCase):
             self.assertIsNotNone(partial_seen, "sous-titres servis pendant l'extraction")
             self.assertLess(partial_seen["until"], 85000)
             self.assertEqual(partial_seen["cues"][0]["t"], "Bonjour tout le monde")
-            self.assertTrue(ready_partial and ready_partial["ready"], ready_partial)  # lecture lancée avant la fin
-            self.assertFalse(r.get("partial"))  # puis version complète, mise en cache
+            self.assertTrue(ready_partial and ready_partial["ready"], ready_partial)  # playback started before the end
+            self.assertFalse(r.get("partial"))  # then complete version, cached
         finally:
             subcache.SOON_READRATE, sc._streaming, api_mod.PREPARE_WINDOW_MS = old
 
     def test_renamed_file_keeps_exported_subtitles(self):
-        """Un fichier renommé ou réindexé retrouve ses sous-titres déjà exportés : rien n'est relu."""
+        """A renamed or re-indexed file finds its already exported subtitles: nothing is read again."""
         m = self.movie("Nuit polaire")
         for _ in range(50):
             st, r = self.admin.call("GET", f"/api/items/{m['id']}/prepare?wait=5")
@@ -883,7 +883,7 @@ class SeanceTest(unittest.TestCase):
                 break
         row = self.ctx.db.one("SELECT * FROM items WHERE id=?", (int(m["id"]),))
         self.assertEqual(self.ctx.subtitles.missing(row), [])
-        self.assertTrue(os.path.isfile(self.ctx.subtitles.path(row, 3)))  # piste SRT interne exportée
+        self.assertTrue(os.path.isfile(self.ctx.subtitles.path(row, 3)))  # internal SRT track exported
         old, new = row["key"], row["key"].replace(".x264.mkv", ".x264.REPACK.mkv")
         os.rename(old, new)
         try:
@@ -892,7 +892,7 @@ class SeanceTest(unittest.TestCase):
             row2 = self.ctx.db.one("SELECT * FROM items WHERE key=?", (new,))
             self.assertEqual(row2["id"], row["id"])        # same item, moved to the new file…
             self.assertEqual(self.ctx.subtitles.missing(row2), [])  # … same subtitles, already exported
-            # un second scan sans changement n'écrit rien
+            # a second scan without changes writes nothing
             before = self.ctx.db.one("SELECT updated_at, probe FROM items WHERE id=?", (row2["id"],))
             time.sleep(1.1)
             self.admin.call("POST", "/api/admin/scan", {"library": self.libs["Films"]})
@@ -1009,7 +1009,7 @@ class SeanceTest(unittest.TestCase):
             if r["ready"]:
                 break
         self.assertTrue(r["ready"])
-        self.assertEqual(self.ctx.subtitles.missing(mrow), [])  # toutes les pistes, pas seulement la choisie
+        self.assertEqual(self.ctx.subtitles.missing(mrow), [])  # all the tracks, not only the chosen one
         st, r = self.admin.call("GET", f"/api/items/{m['id']}/prepare")
         self.assertEqual(r, {"ready": True, "progress": 1})
         show, d, eps = self.episodes("Kaze no Michi", "Animes")
@@ -1034,7 +1034,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(st, 200)
         self.assertEqual(body[:2], b"\xff\xd8")
         self.assertEqual(self.lea.call("GET", f"/api/items/{eps[0]['id']}/trickplay/1.jpg", raw=True)[0], 200)
-        self.assertEqual(self.ctx.subtitles.missing(row), [])  # même lecture : sous-titres prêts aussi
+        self.assertEqual(self.ctx.subtitles.missing(row), [])  # same playback: subtitles ready too
 
     def test_track_prefs_per_show(self):
         show, d, eps = self.episodes("Kaze no Michi", "Animes")
@@ -1042,11 +1042,11 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(st, 200, r)
         st, sh = self.lea.call("GET", f"/api/items/{show['id']}")
         self.assertEqual(sh["track_prefs"], {"audio_lang": "jpn", "sub_lang": "off", "sub_forced": False})
-        self.assertTrue(sh["audio"])  # pistes de l'épisode à lire, pour le choix sur la fiche série
+        self.assertTrue(sh["audio"])  # tracks of the episode to play, for the choice on the show page
         st, e1 = self.lea.call("GET", f"/api/items/{eps[0]['id']}")
         self.assertEqual(e1["track_prefs"]["sub_lang"], "off")
         st, e1a = self.admin.call("GET", f"/api/items/{eps[0]['id']}")
-        self.assertIsNone(e1a["track_prefs"])  # propre à chaque utilisateur
+        self.assertIsNone(e1a["track_prefs"])  # specific to each user
         self.assertEqual(self.lea.call("PUT", f"/api/items/{eps[0]['id']}/tracks", {"audio_lang": "x;y"})[0], 400)
         self.lea.call("PUT", f"/api/items/{eps[0]['id']}/tracks", {"reset": True})
 
@@ -1057,7 +1057,7 @@ class SeanceTest(unittest.TestCase):
             src = os.path.join(work, "in.mkv")
             subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=160x90:r=24:d=6", "-f", "lavfi",
                             "-i", "anoisesrc=d=6:a=0.5:c=pink:seed=20261107", "-f", "lavfi", "-i", "sine=f=180:d=6", "-filter_complex",
-                            # dialogue + ambiance très forts, identiques sur les 6 canaux (cas réel le plus exigeant)
+                            # very loud dialogue + ambience, identical on the 6 channels (the most demanding real case)
                             "[1][2]amix=inputs=2:normalize=0,volume=1.6,asplit=6[a][b][c][d][e][f];"
                             "[a][b][c][d][e][f]join=inputs=6:channel_layout=5.1[o]",
                             "-map", "0:v", "-map", "[o]", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "ac3", src],
@@ -1082,15 +1082,15 @@ class SeanceTest(unittest.TestCase):
                                  "-af", "astats", "-f", "null", "-"], capture_output=True, timeout=60).stderr.decode()
             overall = st.split("Overall")[-1]
             peak = float(overall.split("Peak level dB:")[1].split()[0])
-            # sans protection, ce 5.1 dépasse largement 0 dB (saturation) ; marge pour le codage AAC
+            # without protection, this 5.1 goes well beyond 0 dB (clipping); margin for AAC encoding
             self.assertLess(peak, 0.5)
-            # même une piste AAC 5.1 n'est plus copiée telle quelle
+            # even a 5.1 AAC track is no longer copied as is
             info["audio"][0].update(codec="aac", channels=6)
             self.assertFalse(plan(info)["acopy"])
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
-    # ---------------------------------------------------- détection des nouveautés
+    # ---------------------------------------------------- detection of new files
     def test_watcher_detects_new_episode_and_waits_for_copy(self):
         from noxa import scanner
         lib = self.libs["Séries"]
@@ -1103,21 +1103,21 @@ class SeanceTest(unittest.TestCase):
         w.prints.clear(); w.last_check.clear(); w.pending.clear()
         try:
             t = time.time()
-            w.tick(t)                       # référence
+            w.tick(t)                       # reference
             scanner.RECENT_SECONDS = 45
-            shutil.copy(src, new)           # « copie en cours » : fichier tout récent
-            w.tick(t + 2)                   # changement détecté
+            shutil.copy(src, new)           # "copy in progress": very recent file
+            w.tick(t + 2)                   # change detected
             self.assertIn(int(lib), w.pending)
-            self.assertEqual(w.pending[int(lib)]["dirs"], {season})  # seul le dossier de la saison a bougé
+            self.assertEqual(w.pending[int(lib)]["dirs"], {season})  # only the season folder moved
             w.tick(t + 4)                   # dossiers stables : scan
             st, sc = self.admin.call("GET", "/api/admin/scan")
             self.assertTrue(sc.get("partial"), sc)  # scan partiel : uniquement ce dossier
             wait_scan(self.admin)
             st, r = self.admin.call("GET", "/api/admin/libraries")
             by = {l["name"]: l for l in r["libraries"]}
-            self.assertEqual(by["Séries"]["counts"]["episode"], 4)  # fichier trop récent : ignoré
-            self.assertIn(int(lib), w.pending)                   # … mais un nouveau passage est prévu
-            os.utime(new, (t - 600, t - 600))                     # copie terminée
+            self.assertEqual(by["Séries"]["counts"]["episode"], 4)  # file too recent: skipped
+            self.assertIn(int(lib), w.pending)                   # … but a new pass is planned
+            os.utime(new, (t - 600, t - 600))                     # copy finished
             w.tick(t + 6)
             wait_scan(self.admin)
             st, r = self.admin.call("GET", "/api/admin/libraries")
@@ -1131,7 +1131,7 @@ class SeanceTest(unittest.TestCase):
             wait_scan(self.admin)
 
     def test_watcher_show_moved_between_libraries(self):
-        """Une série déplacée de « Séries » vers « Animes » : scan partiel des deux côtés, sans toucher au reste."""
+        """A show moved from "Séries" to "Animes": partial scan on both sides, without touching the rest."""
         src = os.path.join(self.media, "series", "Les Veilleurs")
         dst = os.path.join(self.media, "animes", "Les Veilleurs")
         w = self.ctx.watcher
@@ -1144,22 +1144,22 @@ class SeanceTest(unittest.TestCase):
         w.prints.clear(); w.last_check.clear(); w.pending.clear()
         try:
             t = time.time()
-            w.tick(t)                       # référence
+            w.tick(t)                       # reference
             shutil.move(src, dst)
-            w.tick(t + 2)                   # changement détecté dans les deux bibliothèques
+            w.tick(t + 2)                   # change detected in both libraries
             self.assertIn(int(self.libs["Séries"]), w.pending)
             self.assertIn(int(self.libs["Animes"]), w.pending)
             w.tick(t + 4)                   # stable : scan partiel
             st, sc = self.admin.call("GET", "/api/admin/scan")
             self.assertTrue(sc.get("partial"), sc)
             wait_scan(self.admin)
-            for k in range(3):              # au cas où une bibliothèque attendait la fin du scan précédent
+            for k in range(3):              # in case a library was waiting for the end of the previous scan
                 w.tick(t + 6 + 2 * k)
                 wait_scan(self.admin)
             c = counts()
-            self.assertEqual(c["Animes"].get("show"), 2, c)       # Kaze no Michi toujours là + Les Veilleurs
+            self.assertEqual(c["Animes"].get("show"), 2, c)       # Kaze no Michi still there + Les Veilleurs
             self.assertEqual(c["Animes"].get("episode"), 6, c)
-            self.assertEqual(c["Séries"].get("episode", 0), 0, c)  # plus rien côté Séries
+            self.assertEqual(c["Séries"].get("episode", 0), 0, c)  # nothing left on the Séries side
             self.assertEqual(c["Séries"].get("show", 0), 0, c)
         finally:
             self.ctx.db.set_setting("watch_interval", 0)
@@ -1170,7 +1170,7 @@ class SeanceTest(unittest.TestCase):
                 wait_scan(self.admin)
 
     def test_watcher_cleans_origin_library_even_if_it_saw_nothing(self):
-        """Origine du déplacement « muette » (cache SMB…) : l'arrivée dans Animes fait vérifier Séries."""
+        """"Silent" source of the move (SMB cache…): the arrival in Animes makes Séries get checked."""
         from noxa import watcher as wmod
         src = os.path.join(self.media, "series", "Les Veilleurs")
         dst = os.path.join(self.media, "animes", "Les Veilleurs")
@@ -1182,11 +1182,11 @@ class SeanceTest(unittest.TestCase):
             t = time.time()
             w.tick(t)
             shutil.move(src, dst)
-            w.prints[series] = wmod.snapshot([os.path.join(self.media, "series")])  # Séries ne « voit » rien
+            w.prints[series] = wmod.snapshot([os.path.join(self.media, "series")])  # Séries "sees" nothing
             w.last_check[series] = t + 2
             w.tick(t + 2)
             self.assertIn(animes, w.pending)
-            self.assertIn(series, w.pending)            # dossier indexé disparu repéré
+            self.assertIn(series, w.pending)            # vanished indexed folder spotted
             self.assertIn(src, w.pending[series]["dirs"])
             for k in range(4):
                 w.tick(t + 4 + 2 * k)
@@ -1217,7 +1217,7 @@ class SeanceTest(unittest.TestCase):
         self.assertIsNotNone(self.ctx.watcher.force_at)
         self.assertIsNone(self.ctx.watcher.force_scope)  # dossier inconnu : scan complet
         self.ctx.watcher.force_at = None
-        # Sonarr cite ses propres chemins (/tv/…) : Noxa retrouve le dossier local et ne revoit que lui
+        # Sonarr names its own paths (/tv/…): Noxa finds the local folder and only checks it
         st, r = c.call("POST", path, {"eventType": "Download", "series": {"title": "Les Veilleurs", "path": "/tv/Les Veilleurs"},
                                       "episodeFile": {"path": "/tv/Les Veilleurs/Season 01/Les.Veilleurs.S01E01.mkv"}},
                        csrf=False)
@@ -1245,7 +1245,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual([c["title"] for c in d["collections"]], ["Saga Démo"])
         self.assertEqual(sorted((e["extra_kind"], e["title"]) for e in d["extras"]),
                          [("featurette", "Le Grand Voyage"), ("trailer", "Bande annonce officielle")])
-        self.assertEqual(len(self.items("Films")), 3)  # les bonus ne sont pas des films
+        self.assertEqual(len(self.items("Films")), 3)  # extras are not movies
         trailer = next(e for e in d["extras"] if e["extra_kind"] == "trailer")
         st, p = self.admin.call("POST", "/api/play", {"id": trailer["id"]})
         self.assertEqual(st, 200, p)
@@ -1287,14 +1287,14 @@ class SeanceTest(unittest.TestCase):
         c = Client(self.base)
         c.call("POST", "/api/login", {"username": "lea", "password": "motdepasse2"})
         c.call("POST", f"/api/items/{m['id']}/watchlist", {"on": True})
-        c.call("POST", f"/api/items/{eps[1]['id']}/watchlist", {"on": True})  # un épisode -> sa série
+        c.call("POST", f"/api/items/{eps[1]['id']}/watchlist", {"on": True})  # an episode -> its show
         st, wl = c.call("GET", "/api/watchlist")
         self.assertEqual({x["title"] for x in wl}, {"Nuit polaire", "Kaze no Michi"})
         st, home = c.call("GET", "/api/home")
         self.assertEqual(len(home["watchlist"]), 2)
         st, di = c.call("GET", f"/api/items/{m['id']}")
         self.assertTrue(di["in_watchlist"])
-        c.call("POST", f"/api/items/{m['id']}/watched", {"watched": True})  # vu : retiré de la liste
+        c.call("POST", f"/api/items/{m['id']}/watched", {"watched": True})  # watched: removed from the list
         st, wl = c.call("GET", "/api/watchlist")
         self.assertEqual([x["title"] for x in wl], ["Kaze no Michi"])
         c.call("POST", f"/api/items/{m['id']}/watched", {"watched": False})
@@ -1305,22 +1305,22 @@ class SeanceTest(unittest.TestCase):
         st, pl = c.call("GET", f"/api/playlists/{pid}")
         self.assertEqual([x["title"] for x in pl["items"]], ["Titre 1x1", "Titre 1x2", "Nuit polaire"])
         st, r = c.call("POST", "/api/play", {"id": eps[1]["id"], "playlist": pid})
-        self.assertEqual(r["next"]["title"], "Nuit polaire")  # suivant = playlist, pas la série
+        self.assertEqual(r["next"]["title"], "Nuit polaire")  # next = playlist, not the show
         c.call("POST", "/api/stop", {"stream": r["stream"]})
         order = [pl["items"][2]["entry_id"], pl["items"][0]["entry_id"], pl["items"][1]["entry_id"]]
         c.call("PUT", f"/api/playlists/{pid}", {"order": order, "title": "Soirée ciné"})
         st, pl = c.call("GET", f"/api/playlists/{pid}")
         self.assertEqual((pl["title"], pl["items"][0]["title"]), ("Soirée ciné", "Nuit polaire"))
-        self.assertEqual(self.admin.call("GET", f"/api/playlists/{pid}")[0], 404)  # propre à l'utilisateur
+        self.assertEqual(self.admin.call("GET", f"/api/playlists/{pid}")[0], 404)  # specific to the user
         c.call("DELETE", f"/api/playlists/{pid}/items/{pl['items'][0]['entry_id']}")
         st, lists = c.call("GET", "/api/playlists")
         self.assertEqual(lists[0]["count"], 2)
         c.call("DELETE", f"/api/playlists/{pid}")
         c.call("POST", f"/api/items/{show['id']}/watchlist", {"on": False})
 
-    # ------------------------------------------------ Découvrir et demandes (Seerr)
+    # ------------------------------------------------ Discover and requests (Seerr)
     def test_person_and_random(self):
-        """Fiche d'une personne (distribution, réalisation) ; un titre au hasard ; épisodes dans le désordre."""
+        """A person's page (cast, directing); a random title; episodes in any order."""
         st, r = self.lea.call("GET", "/api/person?name=" + urllib.parse.quote("Actrice Une"))
         self.assertEqual(st, 200, r)
         self.assertTrue(r["items"], r)
@@ -1330,24 +1330,24 @@ class SeanceTest(unittest.TestCase):
         self.assertTrue(r["items"] and all(c.get("director") for c in r["items"]), r)
         self.assertEqual(self.lea.call("GET", "/api/person?name=Personne%20Inconnue")[1]["items"], [])
         self.assertEqual(self.lea.call("GET", "/api/person?name=")[0], 400)
-        # au hasard : un film de la bibliothèque, une série, un épisode d'une série
+        # random: a movie of the library, a show, an episode of a show
         st, c = self.lea.call("GET", f"/api/random?library={self.libs['Films']}")
         self.assertEqual((st, c["type"], c["section"]), (200, "movie", self.libs["Films"]))
-        self.assertEqual(self.lea.call("GET", f"/api/random?library={self.libs['Séries']}")[0], 404)  # sans accès
+        self.assertEqual(self.lea.call("GET", f"/api/random?library={self.libs['Séries']}")[0], 404)  # without access
         st, c = self.admin.call("GET", f"/api/random?library={self.libs['Séries']}")
         self.assertEqual((st, c["type"]), (200, "show"))
         st, ep = self.admin.call("GET", f"/api/random?show={c['id']}")
         self.assertEqual((st, ep["type"], ep["show_id"]), (200, "episode", c["id"]))
         self.assertEqual(self.lea.call("GET", f"/api/random?library={self.libs['Films']}&genre=Inexistant")[0], 404)
-        # lecture aléatoire : l'épisode suivant est un autre épisode de la série
+        # shuffle: the next episode is another episode of the show
         st, p = self.admin.call("POST", "/api/play", {"id": ep["id"], "shuffle": c["id"]})
         self.assertEqual(st, 200, p)
         self.assertTrue(p["next"] and p["next"]["show_id"] == c["id"] and p["next"]["id"] != ep["id"], p["next"])
         self.admin.call("POST", "/api/stop", {"stream": p["stream"]})
 
     def test_library_filters_and_search(self):
-        """Filtres d'une bibliothèque (vus, décennie, durée, définition, langues), rangée de filtres épinglée,
-        recherche par personne, année et avec une faute de frappe."""
+        """Library filters (watched, decade, duration, resolution, languages), pinned filter row,
+        search by person, by year and with a typo."""
         lib = self.libs["Films"]
 
         def titles(q):
@@ -1358,7 +1358,7 @@ class SeanceTest(unittest.TestCase):
         self.assertIn("Nuit polaire", everything)
         self.assertEqual(titles("decade=2010"), ["Le Grand Voyage"])
         self.assertEqual(titles("decade=2020"), [t for t in everything if t in ("Nuit polaire", "Brume")])
-        self.assertEqual(titles("duration=short"), everything)  # films de test : quelques secondes
+        self.assertEqual(titles("duration=short"), everything)  # test movies: a few seconds
         self.assertEqual(titles("duration=long"), [])
         self.assertEqual(titles("res=sd"), everything)          # 320x180
         self.assertEqual(titles("res=4k"), [])
@@ -1371,52 +1371,52 @@ class SeanceTest(unittest.TestCase):
         try:
             self.assertEqual(titles("watched=watched"), ["Nuit polaire"])
             self.assertNotIn("Nuit polaire", titles("watched=unwatched"))
-        finally:  # « annuler » : la vue ajoutée à l'historique est retirée aussi
+        finally:  # "undo": the view added to the history is removed too
             self.admin.call("POST", f"/api/items/{polar['id']}/watched", {"watched": False, "undo": True, "position": 0})
         st, f = self.admin.call("GET", f"/api/libraries/{lib}/facets")
         self.assertIn(2020, f["decades"])
         self.assertIn("jpn", [l["id"] for l in f["audio"]])
-        # séries : « terminées » = tous les épisodes vus
+        # shows: "finished" = all the episodes watched
         st, r = self.admin.call("GET", f"/api/libraries/{self.libs['Séries']}/items?watched=watched")
         self.assertEqual((st, r["items"]), (200, []))
-        # rangée épinglée d'une combinaison de filtres ; une clé inconnue est refusée
+        # pinned row of a combination of filters; an unknown key is refused
         pin = {"id": 1, "type": "filter", "ref": "decade=2020&audio=jpn", "lib": lib, "title": "Années 2020 · Japonais"}
         st, r = self.admin.call("PUT", "/api/me/prefs", {"home_pins": [pin]})
         self.assertEqual(st, 200, r)
         bad = dict(pin, ref="decade=2020&sql=1")
         self.assertEqual(self.admin.call("PUT", "/api/me/prefs", {"home_pins": [bad]})[0], 400)
         self.admin.call("PUT", "/api/me/prefs", {"home_pins": []})
-        # recherche : une personne, une année, une faute de frappe
+        # search: a person, a year, a typo
         st, r = self.admin.call("GET", "/api/search?q=actrice")
         self.assertIn("Actrice Une", r["people"])
         st, r = self.admin.call("GET", "/api/search?q=2019")
         self.assertIn("Le Grand Voyage", [c["title"] for c in r["movies"]])
-        st, r = self.admin.call("GET", "/api/search?q=nuit%20polair")  # préfixe : correspondance exacte
+        st, r = self.admin.call("GET", "/api/search?q=nuit%20polair")  # prefix: exact match
         self.assertIn("Nuit polaire", [c["title"] for c in r["movies"]])
         st, r = self.admin.call("GET", "/api/search?q=nuitt%20polaira")
         self.assertTrue(r.get("approximate"), r)
         self.assertIn("Nuit polaire", [c["title"] for c in r["movies"]])
-        # accueil : nouvelles rangées
+        # home: new rows
         st, home = self.admin.call("GET", "/api/home")
         self.assertIn("short", home)
         self.assertIn("unfinished", home)
 
     def test_appearance_prefs(self):
-        """Thèmes, taille du texte, densité, cartes, fonds d'écran (couleur, dégradé, du jour, image envoyée)."""
+        """Themes, text size, density, cards, wallpapers (colour, gradient, of the day, uploaded picture)."""
         c = self.lea
         st, r = c.call("PUT", "/api/me/prefs", {"theme": "midnight", "text_size": "l", "density": "compact", "accent": "#123abc",
                                                 "card_rating": True, "card_titles": False, "wallpaper_mode": "gradient",
                                                 "wallpaper_gradient": "ocean", "wallpaper_color": "#203040"})
         self.assertEqual(st, 200, r)
         self.assertEqual((r["theme"], r["text_size"], r["density"], r["card_rating"], r["card_titles"], r["card_quality"]),
-                         ("midnight", "l", "compact", True, False, True))  # l'essentiel reste affiché par défaut
+                         ("midnight", "l", "compact", True, False, True))  # the essentials stay shown by default
         for bad in ({"theme": "rose"}, {"text_size": "xxl"}, {"density": 3}, {"card_new": "oui"}, {"wallpaper_mode": "video"},
                     {"wallpaper_gradient": "plaid"}, {"wallpaper_color": "bleu"}):
             self.assertEqual(c.call("PUT", "/api/me/prefs", bad)[0], 400, bad)
-        # définition des films pour les badges 4K / HDR
+        # movie resolution for the 4K / HDR badges
         st, items = c.call("GET", f"/api/libraries/{self.libs['Films']}/items")
         self.assertTrue(all(i.get("res") in ("4K", "1080p", "720p", "SD") for i in items["items"] if i["type"] == "movie"))
-        # fond du jour : un titre de la liste « À regarder » de la personne, le même toute la journée
+        # background of the day: a title from the person's watchlist, the same all day
         polar = self.movie("Nuit polaire")
         self.ctx.db.run("UPDATE items SET backdrop='fanart.jpg' WHERE id=?", (int(polar["id"]),))
         st, r = c.call("POST", f"/api/items/{polar['id']}/watchlist", {"on": True})
@@ -1424,7 +1424,7 @@ class SeanceTest(unittest.TestCase):
         st, d1 = c.call("GET", "/api/me/wallpaper/daily")
         st, d2 = c.call("GET", "/api/me/wallpaper/daily")
         self.assertEqual(d1, d2)
-        # le titre du jour dépend de la date : il est l'un des titres personnels de la personne (liste, notés, commencés)
+        # the title of the day depends on the date: it is one of the person's own titles (list, rated, started)
         uid = self.ctx.db.scalar("SELECT id FROM users WHERE username='lea'")
         mine = {r["id"] for r in self.ctx.db.all(
             "SELECT i.id FROM items i WHERE i.backdrop IS NOT NULL AND i.backdrop<>'' AND (i.id IN (SELECT item_id FROM watchlist "
@@ -1432,7 +1432,7 @@ class SeanceTest(unittest.TestCase):
             "(SELECT COALESCE(show_key, rating_key) FROM progress WHERE user_id=?))", (uid, uid, uid))}
         self.assertIn(int(polar["id"]), mine)
         self.assertIn(int(re.match(r"^/library/metadata/(\d+)/art/", d1["path"]).group(1)), mine, d1)
-        # image envoyée : réencodée en JPEG, servie à son propriétaire seulement
+        # uploaded picture: re-encoded as JPEG, served to its owner only
         png = os.path.join(tempfile.mkdtemp(), "fond.png")
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=teal:s=2400x1350", "-frames:v", "1", png], check=True)
         with open(png, "rb") as f:
@@ -1441,13 +1441,13 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual((st, r.get("wallpaper_mode")), (200, "upload"), r)
         st, img_data, h = c.call("GET", "/api/me/wallpaper/image", raw=True)
         self.assertEqual((st, img_data[:2], h["Content-Type"]), (200, b"\xff\xd8", "image/jpeg"))
-        self.assertEqual(self.admin.call("GET", "/api/me/wallpaper/image")[0], 404)  # pas celle d'un autre
+        self.assertEqual(self.admin.call("GET", "/api/me/wallpaper/image")[0], 404)  # not someone else's
         self.assertEqual(c.call("POST", "/api/me/wallpaper", raw_body=b"pas une image" * 20)[0], 400)
         c.call("DELETE", "/api/me/wallpaper")
         c.call("POST", "/api/me/prefs/reset")
 
     def test_home_and_player_prefs(self):
-        """Bannière de l'accueil, rangée personnelle (nombre de titres), langues par bibliothèque, lecteur, son nuit."""
+        """Home banner, personal row (number of titles), per-library languages, player, night sound."""
         c, lib = self.lea, self.libs["Films"]
         st, r = c.call("PUT", "/api/me/prefs", {"home_hero": "none", "skip_back": 15, "skip_forward": 60, "default_speed": 1.25,
                                                 "remember_volume": False, "lib_langs": {str(lib): {"audio_lang": "jpn", "sub_mode": "always"}},
@@ -1463,7 +1463,7 @@ class SeanceTest(unittest.TestCase):
                     {"lib_langs": {str(lib): {"audio_lang": "japonais"}}}, {"lib_langs": {str(lib): {"sub_mode": "parfois"}}},
                     {"home_pins": [{"id": 1, "type": "filter", "ref": "watched=unwatched", "lib": str(lib), "title": "x", "count": 500}]}):
             self.assertEqual(c.call("PUT", "/api/me/prefs", bad)[0], 400, bad)
-        # son « nuit » : le mixage nuit est demandé pour ce compte, quel que soit celui du serveur
+        # "night" sound: the night mix is requested for this account, whatever the server's
         c.call("PUT", "/api/me/prefs", {"night_audio": True})
         m = next(x for x in c.call("GET", f"/api/libraries/{lib}/items")[1]["items"] if x["title"] == "Brume")
         st, r = c.call("POST", "/api/play", {"id": m["id"], "caps": {"video": ["h264"], "audio": ["aac"], "containers": ["mp4"]}})
@@ -1475,8 +1475,8 @@ class SeanceTest(unittest.TestCase):
         c.call("POST", "/api/me/prefs/reset")
 
     def test_missing_images_are_not_retried(self):
-        """Image introuvable : pas recherchée de nouveau à chaque affichage, 404 gardé par le navigateur ;
-        TMDB injoignable : plus de tentative pendant un moment (régression : accueil très lent au retour)."""
+        """Picture not found: not looked for again at each display, 404 kept by the browser;
+        TMDB unreachable: no more tries for a while (regression: very slow home page on return)."""
         db, images = self.ctx.db, self.ctx.images
         lib = int(self.libs["Films"])
         now = int(time.time())
@@ -1491,12 +1491,12 @@ class SeanceTest(unittest.TestCase):
                 st, body, hdrs = self.lea.call("GET", url, raw=True)
                 self.assertEqual(st, 404)
                 self.assertIn("max-age=600", hdrs.get("Cache-Control", ""))
-            self.assertEqual(len(calls), 1)  # cherchée une seule fois
-            # une affiche arrive (métadonnées) : la désignation change, l'image est cherchée de nouveau
+            self.assertEqual(len(calls), 1)  # looked for only once
+            # a poster arrives (metadata): the name changes, the picture is looked for again
             db.run("UPDATE items SET poster='local:/nulle/part.jpg', img_version=img_version+1 WHERE id=?", (iid,))
             self.lea.call("GET", url, raw=True)
             self.assertEqual(len(calls), 2)
-            # TMDB injoignable : une seule tentative réseau, les suivantes échouent tout de suite
+            # TMDB unreachable: a single network try, the next ones fail right away
             import urllib.request as ur
             tries = []
 
@@ -1518,8 +1518,8 @@ class SeanceTest(unittest.TestCase):
             db.run("DELETE FROM items WHERE id=?", (iid,))
 
     def test_admin_stats(self):
-        """Journal des lectures (fin de chaque lecture de plus de 30 s), statistiques, titres jamais regardés ;
-        une lecture en mode privé compte sans être nommée."""
+        """Playback log (end of each playback longer than 30 s), statistics, never-watched titles;
+        a playback in private mode counts without being named."""
         db = self.ctx.db
         polar, voyage = self.movie("Nuit polaire"), self.movie("Le Grand Voyage")
         db.run("DELETE FROM play_log")
@@ -1531,7 +1531,7 @@ class SeanceTest(unittest.TestCase):
             db.run("UPDATE streams SET created_at=created_at-? WHERE id=?", (seconds, r["stream"]))
             client.call("POST", "/api/stop", {"stream": r["stream"]})
         watch(self.lea, polar, 600)
-        watch(self.lea, voyage, 10)  # moins de 30 s : pas comptée
+        watch(self.lea, voyage, 10)  # under 30 s: not counted
         self.lea.call("PUT", "/api/me/prefs", {"private_mode": True})
         watch(self.lea, voyage, 300)
         self.lea.call("PUT", "/api/me/prefs", {"private_mode": False})
@@ -1545,9 +1545,9 @@ class SeanceTest(unittest.TestCase):
         self.assertGreaterEqual(r["totals"]["seconds"], 900)
         self.assertGreater(r["totals"]["bytes"], 0)
         self.assertEqual([u["name"] for u in r["users"]], ["Léa"])
-        self.assertEqual([t["title"] for t in r["top"]], ["Nuit polaire"])  # la lecture privée n'est pas nommée
+        self.assertEqual([t["title"] for t in r["top"]], ["Nuit polaire"])  # the private playback is not named
         self.assertEqual(len(r["per_day"]), 7)
-        # jamais regardé : ajouté il y a longtemps, personne ne l'a commencé
+        # never watched: added long ago, nobody started it
         brume = self.movie("Brume")
         old = db.scalar("SELECT added_at FROM items WHERE id=?", (brume["id"],))
         db.run("UPDATE items SET added_at=? WHERE id=?", (int(time.time()) - 200 * 86400, brume["id"]))
@@ -1562,7 +1562,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(self.lea.call("GET", "/api/admin/stats")[0], 403)
 
     def test_ui_style(self):
-        """Style de l'interface (mise en page) : « classique » par défaut, valeurs connues seulement."""
+        """Interface style (layout): "classic" by default, known values only."""
         c = self.lea
         self.assertEqual(c.call("GET", "/api/me")[1]["prefs"]["ui_style"], "classic")
         for v in ("glass", "sidebar", "minimal", "cinema", "rounded", "classic"):
@@ -1571,11 +1571,11 @@ class SeanceTest(unittest.TestCase):
         for bad in ("ElegantFin", "", 3, None):
             self.assertEqual(c.call("PUT", "/api/me/prefs", {"ui_style": bad})[0], 400, bad)
         st, r = c.call("PUT", "/api/me/prefs", {"ui_style": "sidebar", "theme": "light"})
-        self.assertEqual((r["ui_style"], r["theme"]), ("sidebar", "light"))  # style et thème se combinent
+        self.assertEqual((r["ui_style"], r["theme"]), ("sidebar", "light"))  # style and theme combine
         c.call("POST", "/api/me/prefs/reset")
 
     def test_content_privacy_notifications(self):
-        """Genres masqués, mode privé (pas d'historique, titre caché aux admins), choix des notifications, heures calmes."""
+        """Hidden genres, private mode (no history, title hidden from admins), notification choices, quiet hours."""
         from noxa import push as pushmod
         c, lib, db = self.lea, self.libs["Films"], self.ctx.db
         brume, polar = self.movie("Brume"), self.movie("Nuit polaire")
@@ -1586,7 +1586,7 @@ class SeanceTest(unittest.TestCase):
             p = c.call("GET", "/api/me")[1]["prefs"]
             self.assertEqual((p["hidden_genres"], p["private_mode"], p["notify_episodes"], p["quiet_hours"]), ([], False, True, ""))
             self.assertNotIn("notify_podcasts", p)
-            self.assertNotIn("notify_podcasts", c.call("PUT", "/api/me/prefs", {"notify_podcasts": False})[1])  # podcasts retirés
+            self.assertNotIn("notify_podcasts", c.call("PUT", "/api/me/prefs", {"notify_podcasts": False})[1])  # podcasts removed
             self.assertEqual(c.call("GET", "/api/podcasts")[0], 404)
             self.assertIsNone(db.scalar("SELECT name FROM sqlite_master WHERE name='podcasts'"))
             self.assertIn("Horreur", [g["name"] for g in c.call("GET", "/api/me/genres")[1]])
@@ -1596,13 +1596,13 @@ class SeanceTest(unittest.TestCase):
             self.assertNotIn("Brume", titles)
             self.assertIn("Nuit polaire", titles)
             self.assertNotIn("Horreur", [g["id"] for g in c.call("GET", f"/api/libraries/{lib}/genres")[1]])
-            self.assertIn("Horreur", [g["name"] for g in c.call("GET", "/api/me/genres")[1]])  # pour pouvoir le réafficher
-            self.assertEqual(c.call("GET", f"/api/items/{brume['id']}")[0], 200)  # la fiche reste accessible
+            self.assertIn("Horreur", [g["name"] for g in c.call("GET", "/api/me/genres")[1]])  # to be able to show it again
+            self.assertEqual(c.call("GET", f"/api/items/{brume['id']}")[0], 200)  # the title page stays reachable
             self.assertIn("Brume", [x["title"] for x in self.admin.call("GET", f"/api/libraries/{lib}/items")[1]["items"]])
             for bad in ({"hidden_genres": "Horreur"}, {"hidden_genres": [""]}, {"private_mode": "oui"}, {"quiet_hours": "22:00"},
                         {"quiet_hours": "25:00-07:00"}, {"quiet_hours": "07:00-07:00"}, {"muted_shows": ["abc"]}):
                 self.assertEqual(c.call("PUT", "/api/me/prefs", bad)[0], 400, bad)
-            # mode privé : la progression est gardée, l'historique non ; les admins ne voient pas le titre
+            # private mode: progress is kept, history is not; admins do not see the title
             uid = c.call("GET", "/api/me")[1]["user"]["id"]
             before = db.scalar("SELECT COUNT(*) FROM history WHERE user_id=?", (uid,))
             c.call("PUT", "/api/me/prefs", {"private_mode": True})
@@ -1620,7 +1620,7 @@ class SeanceTest(unittest.TestCase):
             c.call("POST", f"/api/items/{polar['id']}/watched", {"watched": True})
             self.assertEqual(db.scalar("SELECT COUNT(*) FROM history WHERE user_id=?", (uid,)), before + 1)
             c.call("POST", f"/api/items/{polar['id']}/watched", {"watched": False})
-            # notifications : refusées par type, heures calmes (dans la cloche, sans faire sonner), séries en sourdine
+            # notifications: refused per type, quiet hours (in the bell, without ringing), muted shows
             show = self.items("Séries")["Les Veilleurs"]
             st, r = c.call("PUT", "/api/me/prefs", {"notify_episodes": False, "muted_shows": [str(show["id"])]})
             self.assertEqual(st, 200, r)
@@ -1629,7 +1629,7 @@ class SeanceTest(unittest.TestCase):
             push.messages.pop(uid, None)
             push.notify(uid, "Épisode", "x", kind="episodes")
             push.notify(uid, "Alerte", "x")
-            self.assertEqual([m["title"] for m in push.pending(uid, 0)], ["Alerte"])  # épisodes refusés, alertes toujours
+            self.assertEqual([m["title"] for m in push.pending(uid, 0)], ["Alerte"])  # episodes refused, alerts always
             c.call("PUT", "/api/me/prefs", {"notify_episodes": True})
             push.notify(uid, "Épisode", "x", kind="episodes")
             self.assertEqual([m["title"] for m in push.pending(uid, 0)], ["Alerte", "Épisode"])
@@ -1639,7 +1639,7 @@ class SeanceTest(unittest.TestCase):
             self.assertFalse(pushmod.in_quiet_hours("22:00-07:00", time.mktime((2026, 1, 1, 7, 0, 0, 0, 0, -1))))
             self.assertFalse(pushmod.in_quiet_hours("", None))
             ep = self.episodes("Les Veilleurs", "Séries")[2][0]
-            c.call("POST", f"/api/items/{ep['id']}/watched", {"watched": True})  # série suivie
+            c.call("POST", f"/api/items/{ep['id']}/watched", {"watched": True})  # followed show
             c.call("POST", f"/api/items/{ep['id']}/watched", {"watched": False})
             user = db.one("SELECT * FROM users WHERE id=?", (uid,))
             self.assertNotIn(show["id"], [sh["id"] for sh, _ in self.ctx.x.new_episodes(user)])
@@ -1649,7 +1649,7 @@ class SeanceTest(unittest.TestCase):
             c.call("POST", "/api/me/prefs/reset")
 
     def test_wallpaper_and_recap_marker(self):
-        """Fond d'écran du profil (l'arrière-plan d'un titre) et repère de récapitulatif posé à la main."""
+        """Profile wallpaper (a title's backdrop) and recap marker set by hand."""
         polar = self.movie("Nuit polaire")
         art = f"/library/metadata/{polar['id']}/art/1"
         st, r = self.lea.call("PUT", "/api/me/prefs", {"wallpaper": art})
@@ -1667,7 +1667,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(self.admin.call("PUT", f"/api/admin/markers/{polar['id']}", {"kind": "outro", "start": 0, "end": 5})[0], 400)
 
     def test_stars_hidden_and_shared_playlists(self):
-        """Note en étoiles (et avis qui en découle), titre masqué pour soi, playlist partagée avec le foyer."""
+        """Star rating (and the opinion that follows), title hidden for oneself, playlist shared with the household."""
         polar, voyage = self.movie("Nuit polaire"), self.movie("Le Grand Voyage")
         lib = self.libs["Films"]
         st, r = self.lea.call("PUT", f"/api/items/{polar['id']}/stars", {"stars": 5})
@@ -1678,10 +1678,10 @@ class SeanceTest(unittest.TestCase):
         st, d = self.lea.call("GET", f"/api/items/{polar['id']}")
         self.assertEqual((d["stars"], d["hidden"]), (2, False))
         st, r = self.lea.call("GET", f"/api/libraries/{lib}/items?sort=mine")
-        self.assertEqual(r["items"][0]["id"], polar["id"])  # les titres notés d'abord
+        self.assertEqual(r["items"][0]["id"], polar["id"])  # rated titles first
         self.lea.call("PUT", f"/api/items/{polar['id']}/stars", {"stars": None})
         self.lea.call("PUT", f"/api/items/{polar['id']}/opinion", {"value": None})
-        # masqué pour Léa seulement : absent de sa bibliothèque et de sa recherche, fiche toujours ouverte
+        # hidden for Léa only: missing from her library and her search, title page still open
         st, r = self.lea.call("PUT", f"/api/items/{voyage['id']}/hidden", {"hidden": True})
         self.assertEqual((st, r["hidden"]), (200, True))
         try:
@@ -1692,14 +1692,14 @@ class SeanceTest(unittest.TestCase):
             self.assertEqual(self.lea.call("GET", f"/api/items/{voyage['id']}")[1]["hidden"], True)
             self.assertEqual([c["id"] for c in self.lea.call("GET", "/api/me/hidden")[1]], [voyage["id"]])
             st, r = self.admin.call("GET", f"/api/libraries/{lib}/items?size=100")
-            self.assertIn(voyage["id"], [c["id"] for c in r["items"]])  # pas pour les autres
+            self.assertIn(voyage["id"], [c["id"] for c in r["items"]])  # not for the others
         finally:
             self.lea.call("PUT", f"/api/items/{voyage['id']}/hidden", {"hidden": False})
-        # playlist partagée : visible et complétée par Léa, renommée seulement par sa créatrice
+        # shared playlist: visible to and filled by Léa, renamed only by its creator
         st, pl = self.admin.call("POST", "/api/playlists", {"title": "Soirées en famille", "item_id": voyage["id"]})
         pid = pl["id"]
         try:
-            self.assertEqual(self.lea.call("GET", f"/api/playlists/{pid}")[0], 404)  # pas encore partagée
+            self.assertEqual(self.lea.call("GET", f"/api/playlists/{pid}")[0], 404)  # not shared yet
             self.assertEqual(self.admin.call("PUT", f"/api/playlists/{pid}", {"shared": True})[0], 200)
             st, lists = self.lea.call("GET", "/api/playlists")
             mine = next(p for p in lists if p["id"] == pid)
@@ -1717,7 +1717,7 @@ class SeanceTest(unittest.TestCase):
     def test_discover_and_requests_through_seerr(self):
         seerr = FakeSeerr()
         try:
-            # sans Seerr : catalogue visible, pas de demande possible
+            # without Seerr: catalogue visible, no request possible
             st, home = self.lea.call("GET", "/api/discover/home")
             self.assertEqual(st, 200, home)
             self.assertFalse(home["seerr"])
@@ -1727,8 +1727,8 @@ class SeanceTest(unittest.TestCase):
                              [("Série Netflix", None), ("Film Netflix", None),
                               ("Kaze no Michi", "available"), ("Le Grand Voyage", "available")])
             self.assertEqual(nf[3]["item_id"], self.movie("Le Grand Voyage")["id"])
-            self.assertEqual(len(home["trending"]), 4)  # les personnes sont écartées
-            # rangées « à venir » et « populaires » (films, séries), et liste complète triée par sortie à venir
+            self.assertEqual(len(home["trending"]), 4)  # people are left out
+            # "upcoming" and "popular" rows (movies, shows), and full list sorted by upcoming release
             self.assertEqual([x["key"] for x in home["sections"]],
                              ["upcoming_movie", "upcoming_tv", "popular_movie", "popular_tv"])
             st, up = self.lea.call("GET", "/api/discover/browse?type=tv&sort=upcoming")
@@ -1749,7 +1749,7 @@ class SeanceTest(unittest.TestCase):
             self.assertNotIn("seerr_key", cfg)
             st, t = self.admin.call("POST", "/api/admin/requests/test")
             self.assertEqual((st, t["media_server"]), (200, "Jellyfin"), t)
-            # fiche d'un titre du catalogue, puis demande au nom de Léa (même nom dans Seerr)
+            # page of a catalogue title, then request on behalf of Léa (same name in Seerr)
             st, title = self.lea.call("GET", "/api/discover/title/tv/9201")
             self.assertEqual([x["number"] for x in title["seasons"]], [1, 2])
             self.assertEqual((title["trailer"], title["streams"][0]["name"], title["can_request"]),
@@ -1762,13 +1762,13 @@ class SeanceTest(unittest.TestCase):
             st, title = self.lea.call("GET", "/api/discover/title/tv/9201")
             self.assertEqual((title["status"], title["can_request"]), ("pending", False))
             self.assertEqual(self.lea.call("POST", "/api/discover/request", {"type": "tv", "tmdb_id": 9201})[0], 502)
-            # « À regarder » d'un titre absent : demandé automatiquement
+            # watchlist of a missing title: requested automatically
             st, r = self.lea.call("POST", "/api/wishlist", {"type": "movie", "tmdb_id": 9101, "on": True})
             self.assertEqual((st, r["requested"]), (200, True), r)
             self.assertEqual(seerr.requests[-1]["mediaId"], 9101)
             st, wl = self.lea.call("GET", "/api/wishlist")
             self.assertEqual([(c["title"], c["status"], c["wished"]) for c in wl], [("Film Netflix", "pending", True)])
-            # un titre déjà présent rejoint directement la liste « À regarder » habituelle
+            # a title already present joins the usual watchlist directly
             st, r = self.lea.call("POST", "/api/wishlist", {"type": "movie", "tmdb_id": 5001, "on": True})
             self.assertEqual(r["item_id"], self.movie("Le Grand Voyage")["id"])
             st, wl2 = self.lea.call("GET", "/api/watchlist")
@@ -1776,7 +1776,7 @@ class SeanceTest(unittest.TestCase):
             # recherche
             st, sr = self.lea.call("GET", "/api/discover/search?q=netflix")
             self.assertEqual({c["title"] for c in sr["results"]}, {"Film Netflix", "Série Netflix"})
-            # arrivée du film dans la bibliothèque : il passe de l'envie à la vraie liste
+            # the movie arrives in the library: it moves from wish to the real list
             row = self.ctx.db.one("SELECT * FROM items WHERE title='Nuit polaire'")
             self.ctx.db.run("INSERT INTO wishlist(user_id,media_type,tmdb_id,title,added_at) "
                             "SELECT id,'movie',5002,'Nuit polaire',1 FROM users WHERE username='lea'")
@@ -1791,7 +1791,7 @@ class SeanceTest(unittest.TestCase):
             self.admin.call("PUT", "/api/admin/requests", {"seerr_url": "", "seerr_key": ""})
             seerr.httpd.shutdown()
 
-    # ------------------------------------------------- profils et contrôle parental
+    # ------------------------------------------------- profiles and parental control
     def test_profiles_pin_and_parental_control(self):
         st, kid = self.admin.call("POST", "/api/admin/users", {
             "username": "tom", "display_name": "Tom", "managed": True, "pin": "1234", "max_age": 10,
@@ -1800,10 +1800,10 @@ class SeanceTest(unittest.TestCase):
         self.assertTrue(kid["managed"] and kid["has_pin"])
         self.assertEqual(self.admin.call("POST", "/api/admin/users", {"username": "x1", "managed": True, "is_admin": True})[0], 400)
         try:
-            # un profil géré ne se connecte pas par mot de passe
+            # a managed profile does not sign in with a password
             c = Client(self.base)
             self.assertEqual(c.call("POST", "/api/login", {"username": "tom", "password": ""})[0], 401)
-            # depuis la session de l'admin : « Qui regarde ? »
+            # from the admin's session: "Who's watching?"
             dev = Client(self.base)
             dev.call("POST", "/api/login", {"username": "alex", "password": "motdepasse1"})
             st, profiles = dev.call("GET", "/api/profiles")
@@ -1816,7 +1816,7 @@ class SeanceTest(unittest.TestCase):
             self.assertEqual(st, 200, r)
             st, me = dev.call("GET", "/api/me")
             self.assertEqual(me["user"]["display_name"], "Tom")
-            # contrôle parental : films « U » visibles, séries classées 12 masquées partout
+            # parental control: "U" movies visible, shows rated 12 hidden everywhere
             st, r = dev.call("GET", f"/api/libraries/{self.libs['Films']}/items")
             self.assertEqual(r["total"], 3)
             st, r = dev.call("GET", f"/api/libraries/{self.libs['Animes']}/items")
@@ -1829,7 +1829,7 @@ class SeanceTest(unittest.TestCase):
             self.assertEqual(r["shows"] + r["episodes"], [])
             st, home = dev.call("GET", "/api/home")
             self.assertNotIn("Animes", [row["library"]["title"] for row in home["rows"]])
-            # retour sur le compte admin : mot de passe exigé (pas de PIN)
+            # back to the admin account: password required (no PIN)
             self.assertEqual(dev.call("POST", f"/api/profiles/{by['alex']['id']}/switch", {"password": "faux"})[0], 400)
             st, r = dev.call("POST", f"/api/profiles/{by['alex']['id']}/switch", {"password": "motdepasse1"})
             self.assertEqual(st, 200)
@@ -1866,7 +1866,7 @@ class SeanceTest(unittest.TestCase):
         st, p = self.lea.call("PUT", "/api/me/prefs", {"accent": "#ff0055"})
         self.assertEqual(p["accent"], "#ff0055")
         self.assertEqual(self.lea.call("PUT", "/api/me/prefs", {"accent": "red;}"})[0], 400)
-        # ordre de l'accueil et de la barre du haut
+        # order of the home page and of the top bar
         st, p = self.lea.call("PUT", "/api/me/prefs", {"home_order": ["lib:3", "continue", "together"],
                                                         "nav_order": ["live", "home"], "nav_hidden": ["watchlist"]})
         self.assertEqual((st, p["home_order"], p["nav_hidden"]), (200, ["lib:3", "continue", "together"], ["watchlist"]))
@@ -1885,20 +1885,20 @@ class SeanceTest(unittest.TestCase):
         with mock.patch.object(update, "check_latest", lambda: {"latest": "99.0.0", "changes": [{"title": "Nouveau"}], "source": "x/y (main)"}):
             st, u = self.admin.call("GET", "/api/admin/update")
         self.assertEqual((st, u["current"], u["available"]), (200, __version__, True))
-        self.assertFalse(u["can_update"])  # pas de service root dans les tests
+        self.assertFalse(u["can_update"])  # no root service in the tests
         self.assertEqual(self.lea.call("GET", "/api/admin/update")[0], 403)
         self.assertEqual(self.lea.call("POST", "/api/admin/update")[0], 403)
 
     def test_offline_downloads(self):
-        """Téléchargements hors ligne : MP4 lisible tel quel envoyé direct, MKV préparé en MP4, reprise par plages,
-        positions hors ligne renvoyées au retour du réseau."""
+        """Offline downloads: MP4 playable as is sent directly, MKV prepared as MP4, resume by ranges,
+        offline positions sent back when the network returns."""
         voyage, polar = self.movie("Le Grand Voyage"), self.movie("Nuit polaire")
         st, j = self.admin.call("POST", "/api/downloads", {"id": voyage["id"], "quality": "original"})
         self.assertEqual((st, j["state"], j["mode"]), (200, "ready", "original"), j)
         st, part, h = self.admin.call("GET", f"/api/downloads/{j['id']}/file", raw=True, headers={"Range": "bytes=0-99"})
         self.assertEqual((st, len(part), h["Content-Type"]), (206, 100, "video/mp4"))
-        self.assertEqual(self.lea.call("GET", f"/api/downloads/{j['id']}")[0], 404)  # le téléchargement d'un autre
-        # MKV : préparé en MP4 (son AC3 converti), une étape à la fois
+        self.assertEqual(self.lea.call("GET", f"/api/downloads/{j['id']}")[0], 404)  # someone else's download
+        # MKV: prepared as MP4 (AC3 audio converted), one step at a time
         st, j = self.admin.call("POST", "/api/downloads", {"id": polar["id"], "quality": "original"})
         self.assertIn(j["state"], ("queued", "preparing", "ready"))
         for _ in range(120):
@@ -1912,8 +1912,8 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(ffprobe_codec(data), "h264")
         self.admin.call("DELETE", f"/api/downloads/{j['id']}")
         self.assertEqual(self.admin.call("GET", f"/api/downloads/{j['id']}")[0], 404)
-        # transfert pendant la préparation (MP4 fragmenté) : les octets déjà écrits se lisent tout de suite, ceux
-        # qui ne le sont pas encore sont refusés, et le fichier final commence par ce qui a été lu
+        # transfer during the preparation (fragmented MP4): bytes already written are readable right away, those
+        # not written yet are refused, and the final file starts with what was read
         st, j = self.admin.call("POST", "/api/downloads", {"id": polar["id"], "quality": "original", "progressive": True})
         self.assertTrue(j["progressive"], j)
         early = b""
@@ -1923,7 +1923,7 @@ class SeanceTest(unittest.TestCase):
                 st, early, h = self.admin.call("GET", f"/api/downloads/{j['id']}/file", raw=True, headers={"Range": f"bytes=0-{j['ready'] - 1}"})
                 self.assertEqual((st, len(early)), (206, j["ready"]))
                 st, _, _ = self.admin.call("GET", f"/api/downloads/{j['id']}/file", raw=True, headers={"Range": f"bytes={j['ready'] + 10 ** 9}-{j['ready'] + 10 ** 9 + 99}"})
-                if st != 409:  # préparation finie entre-temps : plage hors du fichier final
+                if st != 409:  # preparation finished meanwhile: range outside the final file
                     self.assertEqual((st, self.admin.call("GET", f"/api/downloads/{j['id']}")[1]["state"]), (416, "ready"))
             if j["state"] in ("ready", "error"):
                 break
@@ -1933,16 +1933,16 @@ class SeanceTest(unittest.TestCase):
         st, data, h = self.admin.call("GET", f"/api/downloads/{j['id']}/file", raw=True)
         self.assertEqual(len(data), j["size"])
         if early:
-            self.assertEqual(data[:len(early)], early)  # rien de réécrit après coup
+            self.assertEqual(data[:len(early)], early)  # nothing rewritten afterwards
         self.assertEqual(ffprobe_codec(data), "h264")
         self.admin.call("DELETE", f"/api/downloads/{j['id']}")
-        # le dialogue annonce ce que coûte chaque qualité : ici, « auto » se contente d'une copie
+        # the dialog says what each quality costs: here, "auto" makes do with a copy
         st, o = self.admin.call("POST", "/api/downloads/options", {"id": polar["id"]})
         auto = next(x for x in o["options"] if x["quality"] == "auto")
         self.assertEqual((st, auto["convert"]), (200, False), o)
         self.assertGreater(auto["size"], 0)
         self.assertEqual(self.admin.call("POST", "/api/downloads", {"id": polar["id"], "burn": 999})[0], 400)
-        # positions enregistrées hors ligne : appliquées, sauf si on a regardé ailleurs depuis
+        # positions saved offline: applied, unless it was watched elsewhere since
         now = int(time.time())
         st, r = self.admin.call("POST", "/api/progress/offline", {"items": [
             {"id": polar["id"], "position": 40000, "duration": 90000, "at": now},
@@ -1950,7 +1950,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(st, 200)
         row = self.ctx.db.one("SELECT position_ms FROM progress WHERE user_id=1 AND rating_key=?", (str(polar["id"]),))
         self.assertEqual(row["position_ms"], 40000)
-        # désactivé par l'administrateur
+        # turned off by the administrator
         self.ctx.db.set_setting("downloads", "0")
         try:
             self.assertEqual(self.admin.call("POST", "/api/downloads", {"id": voyage["id"]})[0], 403)
@@ -1958,7 +1958,7 @@ class SeanceTest(unittest.TestCase):
             self.ctx.db.set_setting("downloads", "1")
 
     def test_web_app_install(self):
-        """Web app installable : manifeste, icônes aux bonnes tailles, service worker généré et versionné."""
+        """Installable web app: manifest, icons at the right sizes, generated and versioned service worker."""
         import io
         from PIL import Image
         st, body, h = self.admin.call("GET", "/manifest.webmanifest", raw=True)
@@ -1980,16 +1980,16 @@ class SeanceTest(unittest.TestCase):
         self.assertTrue(any(re.fullmatch(r"/v/[0-9a-f]{12}/js/app\.js", u) for u in shell), shell)
         self.assertTrue(any(u.endswith("/js/views/home.js") for u in shell))
         self.assertFalse([u for u in shell if u.startswith(("/api/", "/vendor/"))])
-        for u in shell:  # tout ce qui est mis en cache existe (sinon l'installation du service worker échoue)
+        for u in shell:  # everything that is cached exists (otherwise the service worker installation fails)
             self.assertEqual(self.admin.call("GET", u, raw=True)[0], 200, u)
         self.assertEqual(self.admin.call("GET", "/sw.js", raw=True, headers={"If-None-Match": h["ETag"]})[0], 304)
-        # interface toujours revérifiée : après une mise à jour, jamais l'ancienne version gardée par le navigateur
+        # interface always revalidated: after an update, never the old version kept by the browser
         for u in ("/js/app.js", "/js/views/settings.js", "/css/app.css"):
             self.assertEqual(self.admin.call("GET", u, raw=True)[2]["Cache-Control"], "no-cache", u)
 
     def test_ui_code_versioned_urls(self):
-        """Le code de l'interface est chargé depuis /v/<empreinte>/ : une nouvelle version change les adresses,
-        aucun cache (navigateur, proxy « Cache Assets ») ne peut resservir l'ancien code."""
+        """The interface code is loaded from /v/<hash>/: a new version changes the addresses,
+        no cache (browser, "Cache Assets" proxy) can serve the old code again."""
         from noxa import web
         st, page, h = self.admin.call("GET", "/", raw=True)
         html = page.decode()
@@ -1997,7 +1997,7 @@ class SeanceTest(unittest.TestCase):
         m = re.search(r'src="/v/([0-9a-f]{12})/js/app\.js"', html)
         self.assertTrue(m, html)
         self.assertIn(f'href="/v/{m.group(1)}/css/app.css"', html)
-        # démarrage : script en ligne autorisé par son empreinte (CSP), liste du code à précharger
+        # start-up: inline script allowed by its hash (CSP), list of code to preload
         import base64, hashlib
         boot = re.search(r"<script>(.*?)</script\s*>", html, re.I | re.S).group(1)
         digest = base64.b64encode(hashlib.sha256(boot.encode()).digest()).decode()
@@ -2010,13 +2010,13 @@ class SeanceTest(unittest.TestCase):
         st, body, h2 = self.admin.call("GET", f"/v/{m.group(1)}/js/views/home.js", raw=True)
         self.assertEqual((st, h2["Cache-Control"]), (200, "public, max-age=31536000, immutable"))
         self.assertIn(b"renderHome", body)
-        # page de l'appli (adresse SPA) : même chose
+        # app page (SPA address): same thing
         self.assertIn(f"/v/{m.group(1)}/js/app.js", self.admin.call("GET", "/settings/x", raw=True)[1].decode())
-        # une autre empreinte (ancienne page) : le fichier actuel, mais sans le garder
+        # another hash (old page): the current file, but without keeping it
         st, _, h3 = self.admin.call("GET", "/v/000000000000/js/app.js", raw=True)
         self.assertEqual((st, h3["Cache-Control"]), (200, "no-cache"))
         self.assertEqual(self.admin.call("GET", f"/v/{m.group(1)}/../../seance/api.py", raw=True)[0], 404)
-        # nouvelle version de l'interface (fichier modifié) : nouvelle empreinte, donc nouvelles adresses
+        # new interface version (file changed): new hash, so new addresses
         target = os.path.join(STATIC, "js", "caps.js")
         st0 = os.stat(target)
         try:
@@ -2029,7 +2029,7 @@ class SeanceTest(unittest.TestCase):
             web._ui["at"] = 0
 
     def test_update_indicator_admin_only(self):
-        # indicateur de la barre du haut : administrateurs seulement
+        # top bar indicator: administrators only
         self.ctx.note_latest("999.0")
         try:
             self.assertEqual(self.admin.call("GET", "/api/me")[1]["update"], "999.0")
@@ -2039,7 +2039,7 @@ class SeanceTest(unittest.TestCase):
         self.assertIsNone(self.ctx.update_latest)
 
     def test_avatar_image(self):
-        """Photo de profil : réencodée en JPEG 256 × 256 sans métadonnées, visible par les autres, supprimable."""
+        """Profile picture: re-encoded as 256 × 256 JPEG without metadata, visible to others, deletable."""
         import base64
         work = tempfile.mkdtemp()
         try:
@@ -2058,7 +2058,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(st, 200, r)
         me = self.lea.call("GET", "/api/me")[1]["user"]
         self.assertEqual(me["avatar"], r["avatar"])
-        # visible depuis un autre compte (profils, groupes), en JPEG carré, sans le commentaire d'origine
+        # visible from another account (profiles, groups), as a square JPEG, without the original comment
         st, img, h = self.admin.call("GET", r["avatar"], raw=True)
         self.assertEqual((st, h["Content-Type"], img[:3]), (200, "image/jpeg", b"\xff\xd8\xff"))
         self.assertNotIn(b"secret-gps", img)
@@ -2072,8 +2072,8 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(self.admin.call("GET", r["avatar"], raw=True)[0], 404)
 
     def test_two_factor(self):
-        """Double authentification : activation, connexion en deux étapes, codes de secours, changement de profil,
-        profils gérés exclus, réinitialisation par l'administrateur et en console."""
+        """Two-factor authentication: activation, two-step sign-in, recovery codes, profile switch,
+        managed profiles excluded, reset by the administrator and from the console."""
         import time as _t
         from noxa import twofa
         from noxa.__main__ import admin_command
@@ -2090,50 +2090,50 @@ class SeanceTest(unittest.TestCase):
         st, en = c.call("POST", "/api/me/2fa/enable", {"code": twofa.code_at(setup["secret"], now_step)})
         self.assertEqual((st, len(en["recovery_codes"])), (200, 10))
         self.assertTrue(c.call("GET", "/api/me")[1]["user"]["two_factor"])
-        # le secret n'apparaît nulle part dans les réponses
+        # the secret appears nowhere in the answers
         self.assertNotIn(setup["secret"], json.dumps(self.admin.call("GET", "/api/admin/users")[1]))
-        # connexion : mot de passe, puis code
+        # sign-in: password, then code
         d = Client(self.base)
         st, r = d.call("POST", "/api/login", {"username": "secu", "password": "motdepasse9"})
         self.assertTrue(r["two_factor"] and r["ticket"])
-        self.assertEqual(d.call("GET", "/api/me")[0], 401)  # pas encore de session
+        self.assertEqual(d.call("GET", "/api/me")[0], 401)  # no session yet
         self.assertEqual(d.call("POST", "/api/login/2fa", {"ticket": r["ticket"], "code": "123456"})[0], 401)
         self.assertEqual(d.call("POST", "/api/login/2fa", {"ticket": "inventé", "code": "123456"})[0], 401)
-        # le code déjà utilisé à l'activation est refusé (rejeu) ; le suivant passe
+        # the code already used at activation is refused (replay); the next one passes
         self.assertEqual(d.call("POST", "/api/login/2fa", {"ticket": r["ticket"], "code": twofa.code_at(setup["secret"], now_step)})[0], 401)
         st, ok = d.call("POST", "/api/login/2fa", {"ticket": r["ticket"], "code": twofa.code_at(setup["secret"], now_step + 1)})
         self.assertEqual((st, ok["recovery_used"]), (200, False))
         self.assertEqual(d.call("GET", "/api/me")[1]["user"]["username"], "secu")
-        # code de secours : une seule fois
+        # recovery code: only once
         e = Client(self.base)
         t = e.call("POST", "/api/login", {"username": "secu", "password": "motdepasse9"})[1]["ticket"]
         st, ok = e.call("POST", "/api/login/2fa", {"ticket": t, "code": en["recovery_codes"][0].upper()})
         self.assertEqual((st, ok["recovery_used"], ok["recovery_left"]), (200, True, 9))
         t = e.call("POST", "/api/login", {"username": "secu", "password": "motdepasse9"})[1]["ticket"]
         self.assertEqual(e.call("POST", "/api/login/2fa", {"ticket": t, "code": en["recovery_codes"][0]})[0], 401)
-        # changement de profil vers ce compte : le code est demandé en plus du mot de passe
+        # switching profile to this account: the code is asked on top of the password
         prof = [p for p in self.lea.call("GET", "/api/profiles")[1] if p["username"] == "secu"]
         if prof:
             self.assertTrue(prof[0]["needs_code"])
             lea2 = Client(self.base)
             lea2.call("POST", "/api/login", {"username": "lea", "password": "motdepasse2"})
             self.assertEqual(lea2.call("POST", f"/api/profiles/{prof[0]['id']}/switch", {"password": "motdepasse9"})[0], 400)
-        # profil géré : pas de double authentification
+        # managed profile: no two-factor authentication
         st, kid = self.admin.call("POST", "/api/admin/users", {"username": "geré", "display_name": "Géré", "managed": True})
         self.assertFalse(kid["two_factor"])
-        # réinitialisation par un administrateur
+        # reset by an administrator
         uid = c.call("GET", "/api/me")[1]["user"]["id"]
         self.assertEqual(self.lea.call("POST", f"/api/admin/users/{uid}/2fa/reset")[0], 403)
         st, u = self.admin.call("POST", f"/api/admin/users/{uid}/2fa/reset")
         self.assertEqual((st, u["two_factor"]), (200, False))
         self.assertTrue(Client(self.base).call("POST", "/api/login", {"username": "secu", "password": "motdepasse9"})[1]["ok"])
-        # réactivation puis désactivation par l'utilisateur (mot de passe + code)
+        # re-activation then deactivation by the user (password + code)
         sec2 = c.call("POST", "/api/me/2fa/setup", {"password": "motdepasse9"})[1]["secret"]
         c.call("POST", "/api/me/2fa/enable", {"code": twofa.code_at(sec2, int(_t.time() // 30))})
         self.assertEqual(c.call("POST", "/api/me/2fa/disable", {"password": "motdepasse9", "code": "000000"})[0], 400)
         st, r = c.call("POST", "/api/me/2fa/disable", {"password": "motdepasse9", "code": twofa.code_at(sec2, int(_t.time() // 30) + 1)})
         self.assertEqual((st, r["enabled"]), (200, False))
-        # porte de sortie en console : noxa reset-2fa <identifiant>
+        # console escape hatch: noxa reset-2fa <username>
         sec3 = c.call("POST", "/api/me/2fa/setup", {"password": "motdepasse9"})[1]["secret"]
         c.call("POST", "/api/me/2fa/enable", {"code": twofa.code_at(sec3, int(_t.time() // 30))})
         self.assertTrue(c.call("GET", "/api/me")[1]["user"]["two_factor"])
@@ -2142,7 +2142,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(admin_command(["--data", os.path.dirname(self.ctx.db.path), "reset-2fa", "personne"]), 1)
 
     def test_tv_app_short_link(self):
-        """Adresse courte pour l'appli Downloader de la TV : renvoie vers le dernier APK, sans connexion."""
+        """Short address for the TV's Downloader app: redirects to the latest APK, without sign-in."""
         import urllib.request
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *a, **k):
@@ -2160,7 +2160,7 @@ class SeanceTest(unittest.TestCase):
         st, body, h = self.admin.call("GET", "/", raw=True)
         self.assertIn(b"<!doctype html>", body.lower())
         self.assertEqual(self.admin.call("GET", "/../seance/api.py", raw=True)[0], 404)
-        # compression et revalidation : la revisite ne retélécharge rien
+        # compression and revalidation: the revisit downloads nothing again
         st, body, h = self.admin.call("GET", "/js/player.js", raw=True, headers={"Accept-Encoding": "gzip"})
         self.assertEqual((st, h.get("Content-Encoding")), (200, "gzip"))
         import gzip as gz
@@ -2168,7 +2168,7 @@ class SeanceTest(unittest.TestCase):
         self.assertEqual(self.admin.call("GET", "/js/player.js", raw=True,
                                          headers={"If-None-Match": h["ETag"]})[0], 304)
         st, body, h2 = self.admin.call("GET", "/js/player.js", raw=True)
-        self.assertNotIn("Content-Encoding", h2)  # client sans gzip : fichier tel quel
+        self.assertNotIn("Content-Encoding", h2)  # client without gzip: file as is
         self.assertEqual(self.admin.call("GET", "/img/noxa-logo.webp", raw=True)[2].get("Content-Encoding"), None)
 
 
@@ -2179,7 +2179,7 @@ class UnitTests(unittest.TestCase):
         for t, expected in ((59, "287082"), (1111111109, "081804"), (1234567890, "005924"), (2000000000, "279037")):
             self.assertEqual(twofa.code_at(secret, t // 30), expected, t)
         self.assertEqual(twofa.check_code(secret, "287 082", 0, now=59), 1)
-        self.assertEqual(twofa.check_code(secret, "287082", 1, now=59), None)  # déjà utilisé
+        self.assertEqual(twofa.check_code(secret, "287082", 1, now=59), None)  # already used
         self.assertIsNone(twofa.check_code(secret, "287082", 0, now=59 + 120))  # trop vieux
         codes, stored = twofa.new_recovery_codes()
         left = twofa.use_recovery_code(stored, codes[3].upper())
@@ -2187,8 +2187,8 @@ class UnitTests(unittest.TestCase):
         self.assertIsNone(twofa.use_recovery_code(left, codes[3]))
 
     def test_download_prep_yields_to_viewers(self):
-        """Priorité discrète : la préparation se met en pause tant que quelqu'un regarde. Normale : une copie continue,
-        une conversion ne s'arrête que si un spectateur fait lui-même convertir."""
+        """Discreet priority: the preparation pauses while someone watches. Normal: a copy goes on,
+        a conversion only stops when a viewer has something converted themselves."""
         from noxa import downloads as dl
         viewing = {"v": True}
         transcodes = {"n": 0}
@@ -2204,8 +2204,8 @@ class UnitTests(unittest.TestCase):
             try:
                 threading.Thread(target=mgr._yield_to_viewers, args=(job, proc, "normal", 10), daemon=True).start()
                 time.sleep(0.6)
-                self.assertNotEqual(state(proc.pid), "T", mode)  # normale : pas de pause sans conversion d'un spectateur
-                self.assertEqual(os.getpriority(os.PRIO_PROCESS, proc.pid), 19)  # mais priorité basse pendant la lecture
+                self.assertNotEqual(state(proc.pid), "T", mode)  # normal: no pause without a viewer's conversion
+                self.assertEqual(os.getpriority(os.PRIO_PROCESS, proc.pid), 19)  # but low priority during playback
             finally:
                 proc.kill()
                 proc.wait()
@@ -2218,7 +2218,7 @@ class UnitTests(unittest.TestCase):
                 if state(proc.pid) == "T":
                     break
                 time.sleep(0.1)
-            self.assertEqual((state(proc.pid), job.waiting), ("T", True))  # cède le processeur au spectateur
+            self.assertEqual((state(proc.pid), job.waiting), ("T", True))  # gives the processor to the viewer
         finally:
             proc.kill()
             proc.wait()
@@ -2232,7 +2232,7 @@ class UnitTests(unittest.TestCase):
                 if state(proc.pid) == "T":
                     break
                 time.sleep(0.1)
-            self.assertEqual((state(proc.pid), job.waiting), ("T", True))  # arrêtée pendant la lecture
+            self.assertEqual((state(proc.pid), job.waiting), ("T", True))  # stopped during playback
             viewing["v"] = False
             for _ in range(60):
                 if state(proc.pid) != "T":
@@ -2245,13 +2245,13 @@ class UnitTests(unittest.TestCase):
             proc.wait()
 
     def test_update_source_and_command(self):
-        """Mise à jour depuis l'interface : source validée, commande lancée sans rien venant de Noxa."""
+        """Update from the interface: source validated, command started with nothing coming from Noxa."""
         from unittest import mock
         from noxa import update
         work = tempfile.mkdtemp()
         src = os.path.join(work, "source")
         with mock.patch.object(update, "SOURCE", src):
-            self.assertEqual(update.read_source(), ("xenix13", "Noxa", "main"))  # installation ancienne : défaut
+            self.assertEqual(update.read_source(), ("xenix13", "Noxa", "main"))  # old installation: default
             with open(src, "w") as f:
                 f.write("SEANCE_REPO=https://github.com/xenix13/Noxa.git\nSEANCE_BRANCH=test\n")
             self.assertEqual(update.read_source(), ("xenix13", "Noxa", "test"))
@@ -2274,8 +2274,8 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(run[:2], ["systemd-run", "--unit=seance-update"])
             self.assertIn("https://raw.githubusercontent.com/xenix13/Noxa/main/deploy/install.sh", run[-1])
             self.assertIn("SEANCE_BRANCH=main", run[-1])
-            self.assertIn("--no-block", run)  # sinon la requête attend la fin de l'installation et expire
-        # canal de mise à jour : seules les branches connues, même dépôt
+            self.assertIn("--no-block", run)  # otherwise the request waits for the end of the installation and times out
+        # update channel: only known branches, same repository
         with mock.patch.object(update, "SOURCE", src):
             self.assertEqual(update.set_channel("test"), {"branch": "test"})
             self.assertEqual(update.read_source(), ("xenix13", "Noxa", "test"))
@@ -2283,7 +2283,7 @@ class UnitTests(unittest.TestCase):
                 update.set_channel("main; rm -rf /")
             update.set_channel("main")
             self.assertEqual(update.read_source()[2], "main")
-        # progression lue dans le journal de l'installation
+        # progress read from the installation log
         self.assertEqual(update.progress(["lun.", "==> Paquets système"])[:3], (10, "Mise à jour des paquets système", False))
         log = ["==> Paquets système", "==> Récupération du code (x)", "==> Copie de l'application dans /opt/seance",
                "==> Utilisateur système 'seance'", "==> Service systemd"]
@@ -2319,10 +2319,10 @@ class UnitTests(unittest.TestCase):
                 time.sleep(0.2)
             self.assertTrue(s.paused)
             self.assertEqual(state(), "T")  # processus suspendu
-            t.segment(s.sid, "10.m4s")   # le lecteur rattrape : reprise
+            t.segment(s.sid, "10.m4s")   # the player catches up: resume
             self.assertFalse(s.paused)
             time.sleep(2.5)
-            self.assertFalse(os.path.exists(os.path.join(s.dir, "2.m4s")))  # vieux segments purgés
+            self.assertFalse(os.path.exists(os.path.join(s.dir, "2.m4s")))  # old segments purged
             t.stop(s.sid)
             self.assertIsNotNone(s.proc.poll())
             self.assertFalse(os.path.exists(s.dir))

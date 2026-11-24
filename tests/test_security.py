@@ -1,4 +1,4 @@
-"""Tests de non-régression des correctifs de l'audit de sécurité (docs/AUDIT-SECURITE.md).
+"""Regression tests for the fixes from the security audit (docs/AUDIT-SECURITE.md).
 
 python3 -m unittest tests.test_security
 """
@@ -47,7 +47,7 @@ class SecurityTest(unittest.TestCase):
         os.makedirs(os.path.join(cls.lib_dir, "Une Série"))
         st, cls.lib = cls.admin.call("POST", "/api/admin/libraries", {"name": "Séries", "kind": "show", "paths": [cls.lib_dir]})
         assert st == 200, cls.lib
-        # petit serveur web local : liste IPTV « du fournisseur »
+        # small local web server: IPTV list "from the provider"
         cls.www = os.path.join(cls.work, "www")
         os.makedirs(cls.www)
         handler = lambda *a, **k: Static(*a, directory=cls.www, **k)  # noqa: E731
@@ -82,19 +82,19 @@ class SecurityTest(unittest.TestCase):
                   "Cross-Origin-Opener-Policy", "Permissions-Policy"):
             self.assertIn(k, h)
         self.assertIn("object-src 'none'", h["Content-Security-Policy"])
-        # Content-Length négatif : refusé au lieu de lire la connexion jusqu'au bout
+        # negative Content-Length: refused instead of reading the connection to the end
         cookie = "; ".join(f"{c.name}={c.value}" for c in self.admin.jar)
         resp = self.raw(b"PUT /api/me/prefs HTTP/1.1\r\nHost: x\r\nX-Seance: 1\r\nContent-Length: -5\r\nCookie: "
                         + cookie.encode() + b"\r\n\r\n")
         self.assertIn(b" 400 ", resp.split(b"\r\n")[0])
-        # JSON trop imbriqué : 400 et non erreur interne
+        # JSON nested too deep: 400 and not an internal error
         req = b"[" * 100000 + b"]" * 100000
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         conn.request("PUT", "/api/me/prefs", body=req, headers={"X-Seance": "1", "Cookie": cookie,
                                                                "Content-Type": "application/json"})
         self.assertEqual(conn.getresponse().status, 400)
         conn.close()
-        # requête non GET sans l'en-tête anti-CSRF
+        # non-GET request without the anti-CSRF header
         self.assertEqual(self.admin.call("PUT", "/api/me/prefs", {"theme": "oled"}, csrf=False)[0], 403)
         # apps older than 4.5 send the same header under the former internal name
         self.assertEqual(self.admin.call("PUT", "/api/me/prefs", {"theme": "oled"}, csrf=False,
@@ -107,7 +107,7 @@ class SecurityTest(unittest.TestCase):
         self.assertEqual(handler.timeout, web.IDLE_TIMEOUT)
 
     def test_forwarded_for_uses_last_hop(self):
-        # derrière le proxy, l'adresse inventée par le client (première) est ignorée : le blocage s'applique
+        # behind the proxy, the address made up by the client (first) is ignored: the block applies
         c = Client(self.base)
         for _ in range(8):
             c.call("POST", "/api/login", {"username": "inconnu", "password": "faux"},
@@ -125,7 +125,7 @@ class SecurityTest(unittest.TestCase):
         self.assertEqual(codes[-1], 429)
         self.ctx.throttle.fails.clear()
 
-    # ------------------------------------------------------------ contrôle parental
+    # ------------------------------------------------------------ parental control
     def test_restricted_profile_cannot_open_unrestricted_profile(self):
         st, kid = self.admin.call("POST", "/api/admin/users", {"username": "petit", "managed": True, "max_age": 10})
         self.assertEqual(st, 200, kid)
@@ -135,7 +135,7 @@ class SecurityTest(unittest.TestCase):
         c.call("POST", "/api/login", {"username": "alex", "password": "motdepasse1"})
         self.assertEqual(c.call("POST", f"/api/profiles/{kid['id']}/switch", {})[0], 200)
         st, r = c.call("POST", f"/api/profiles/{open_['id']}/switch", {})
-        self.assertEqual(st, 403, r)  # profil sans PIN et sans limite d'âge
+        self.assertEqual(st, 403, r)  # profile without PIN and without age limit
         self.assertEqual(c.call("POST", f"/api/profiles/{teen['id']}/switch", {})[0], 200)  # plus restreint : permis
         for u in (kid, open_, teen):
             self.admin.call("DELETE", f"/api/admin/users/{u['id']}")
@@ -156,14 +156,14 @@ class SecurityTest(unittest.TestCase):
         self.assertTrue(r["partial"])
         self.ctx.watcher.force_at, self.ctx.watcher.force_scope = None, None
 
-    # ------------------------------------------------------------ « Regarder ensemble »
+    # ------------------------------------------------------------ "Watch together"
     def test_events_require_membership_and_are_capped(self):
         lea = Client(self.base)
         self.admin.call("POST", "/api/admin/users", {"username": "lea", "password": "motdepasse2"})
         lea.call("POST", "/api/login", {"username": "lea", "password": "motdepasse2"})
         st, g = self.admin.call("POST", "/api/together", {"name": "Test"})
         self.assertEqual(st, 200, g)
-        # un simple GET (qu'un autre site peut provoquer) ne fait entrer personne dans le groupe
+        # a plain GET (which another site can trigger) does not put anyone in the group
         self.assertEqual(lea.call("GET", f"/api/together/{g['id']}/events")[0], 403)
         self.assertFalse(lea.call("GET", f"/api/together/{g['id']}")[1]["member"])
         lea.call("POST", f"/api/together/{g['id']}/join")
@@ -182,7 +182,7 @@ class SecurityTest(unittest.TestCase):
                 conn.close()
         self.ctx.together.groups.clear()
 
-    # ------------------------------------------------------------ TV en direct
+    # ------------------------------------------------------------ live TV
     def test_iptv_list_cannot_read_server_files(self):
         self.assertTrue(stream_url_ok("http://exemple.fr/live.ts"))
         self.assertTrue(stream_url_ok("udp://@239.0.0.1:1234"))
@@ -199,14 +199,14 @@ class SecurityTest(unittest.TestCase):
         st, r = self.admin.call("POST", "/api/admin/live/sources", {"name": "Fournisseur", "m3u_url": self.www_url + "/liste.m3u"})
         self.assertEqual(st, 200, r)
         src = r["sources"][0]
-        self.assertEqual(src["channels"], 1)  # seule l'adresse réseau est gardée
-        self.assertEqual(src["programmes"], 0)  # guide « /etc/hostname » refusé
+        self.assertEqual(src["channels"], 1)  # only the network address is kept
+        self.assertEqual(src["programmes"], 0)  # guide "/etc/hostname" refused
         self.assertIn("refusée", src["error"] or "")
         ch = self.ctx.db.one("SELECT * FROM live_channels WHERE source_id=?", (int(src["id"]),))
         with self.assertRaises(LiveError):
             self.ctx.live.logo(ch["logo"])
         self.assertEqual(self.admin.call("GET", f"/api/live/logo/{ch['id']}")[0], 404)
-        # une adresse locale glissée en base (ancienne version) est refusée à la lecture
+        # a local address slipped into the database (older version) is refused when read
         self.ctx.db.run("UPDATE live_channels SET url='/etc/passwd' WHERE id=?", (ch["id"],))
         st, r = self.admin.call("POST", f"/api/live/{ch['id']}/play")
         self.assertEqual(st, 503, r)
@@ -224,7 +224,7 @@ class SecurityTest(unittest.TestCase):
         with self.assertRaises(LiveError):
             livetv._open(bomb, limit=1024 * 1024 // 4)
 
-    # ------------------------------------------------------------ fichiers des bibliothèques
+    # ------------------------------------------------------------ library files
     def test_disguised_playlist_is_not_indexed(self):
         fake = os.path.join(self.work, "piege.mkv")
         with open(fake, "w") as f:
@@ -235,7 +235,7 @@ class SecurityTest(unittest.TestCase):
         ff("-f", "lavfi", "-i", "testsrc2=s=64x36:r=5", "-t", "1", "-c:v", "libx264", "-preset", "ultrafast", ok)
         self.assertIsNotNone(media.probe(ok)["video"])
 
-    # ------------------------------------------------------------ installation et partages
+    # ------------------------------------------------------------ installation and shares
     def test_vendored_hls_checksum(self):
         vendor = os.path.join(ROOT, "static", "vendor")
         with open(os.path.join(vendor, "hls.min.js.sha256")) as f:
@@ -248,7 +248,7 @@ class SecurityTest(unittest.TestCase):
         self.assertIn("sha256sum -c", script)
 
     def test_vendored_libraries_checksums(self):
-        """Audit 2026-10 : toutes les bibliothèques JavaScript fournies sont vérifiées à l'installation."""
+        """Audit 2026-10: all the shipped JavaScript libraries are checked at install time."""
         vendor = os.path.join(ROOT, "static", "vendor")
         for sums in ("jassub/jassub.sha256", "libpgs/libpgs.sha256", "qrcode/qrcode.mjs.sha256"):
             folder = os.path.dirname(os.path.join(vendor, sums))
@@ -264,15 +264,15 @@ class SecurityTest(unittest.TestCase):
             self.assertIn("libpgs.sha256", text)
 
     def test_writable_library_is_flagged(self):
-        """Audit 2026-10 : un dossier de bibliothèque modifiable par le service est signalé à l'administrateur."""
+        """Audit 2026-10: a library folder the service can write to is flagged to the administrator."""
         st, data = self.admin.call("GET", "/api/admin/libraries")
         lib = next(l for l in data["libraries"] if l["id"] == self.lib["id"])
-        self.assertEqual(lib["paths_writable"], [True])  # dossier temporaire du test : modifiable
+        self.assertEqual(lib["paths_writable"], [True])  # temporary folder of the test: writable
         os.chmod(self.lib_dir, 0o555)
         try:
             st, data = self.admin.call("GET", "/api/admin/libraries")
             lib = next(l for l in data["libraries"] if l["id"] == self.lib["id"])
-            self.assertEqual(lib["paths_writable"], [os.geteuid() == 0])  # root écrit partout
+            self.assertEqual(lib["paths_writable"], [os.geteuid() == 0])  # root writes everywhere
         finally:
             os.chmod(self.lib_dir, 0o755)
 
@@ -286,7 +286,7 @@ class SecurityTest(unittest.TestCase):
         try:
             self.assertEqual(mountd.harden_fstab(), 1)
             lines = open(fstab).read().splitlines()
-            self.assertEqual(lines[0], "UUID=abc / ext4 defaults 0 1")  # lignes du système intactes
+            self.assertEqual(lines[0], "UUID=abc / ext4 defaults 0 1")  # system lines untouched
             opts = lines[2].split()[3].split(",")
             self.assertEqual(opts[:4], ["credentials=/etc/seance/smb/films.cred", "nosuid", "nodev", "noexec"])
             self.assertEqual(mountd.harden_fstab(), 0)

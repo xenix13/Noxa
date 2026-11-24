@@ -1,4 +1,4 @@
-"""Faux hls.js pour les parcours navigateur (le Chromium de test ne décode pas le H.264)."""
+"""Fake hls.js for the browser runs (the test Chromium does not decode H.264)."""
 STUB = """
 window.__hls = [];
 window.Hls = class {
@@ -14,8 +14,8 @@ window.Hls = class {
 
 
 def serve_webm(path):
-    """Gestionnaire Playwright qui sert la vidéo de test avec les requêtes partielles (Range) : sans elles,
-    Chromium ne peut pas se déplacer dans la vidéo (tout saut revient au début)."""
+    """Playwright handler that serves the test video with partial requests (Range): without them,
+    Chromium cannot seek in the video (every seek goes back to the start)."""
     with open(path, "rb") as f:
         data = f.read()
 
