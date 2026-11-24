@@ -1,5 +1,5 @@
-// Traduction anglaise de l'interface : texte français du code → anglais.
-// Vérifiée par tests/test_i18n.py (toutes les clés utilisées, mêmes variables {…}).
+// English translation of the interface: French text from the code → English.
+// Checked by tests/test_i18n.py (all the keys used, same {…} variables).
 export default {
   "Serveur injoignable": "Server unreachable",
   "Erreur {status}": "Error {status}",

@@ -1,12 +1,12 @@
-// Navigation à la télécommande, au clavier et à la manette (Android TV, PC avec manette).
-// Les flèches mènent à l'élément le plus proche dans leur direction (comme la navigation spatiale d'Android TV),
-// OK / Entrée ouvre, Retour / Échap ferme ce qui est ouvert ou revient en arrière. Une manette est traduite en
-// ces mêmes touches : croix ou stick gauche = flèches, A = OK, B = retour, Start = lecture / pause.
+// Navigation with a remote control, a keyboard and a gamepad (Android TV, PC with a gamepad).
+// The arrows lead to the closest element in their direction (like Android TV's spatial navigation),
+// OK / Enter opens, Back / Escape closes what is open or goes back. A gamepad is translated into
+// these same keys: d-pad or left stick = arrows, A = OK, B = back, Start = play / pause.
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea, [tabindex="0"]';
 const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
 
-// Télécommande de TV ou manette : on adapte quelques comportements (lecteur : haut / bas montrent les commandes)
+// TV remote or gamepad: a few behaviours are adapted (player: up / down show the controls)
 export const remoteMode = () => document.documentElement.classList.contains('remote');
 import { device } from './device.js';
 
@@ -20,7 +20,7 @@ const visible = (el) => {
   return st.visibility !== 'hidden' && st.display !== 'none' && !el.closest('[hidden], [inert]');
 };
 
-// Zone où chercher : fenêtre ouverte, menu ouvert, sinon toute la page
+// Area to search: open dialog, open menu, otherwise the whole page
 function scope() {
   const modals = document.querySelectorAll('.modal-overlay');
   if (modals.length) return modals[modals.length - 1];
@@ -29,7 +29,7 @@ function scope() {
   return document.querySelector('.player:not(.mini)') || document.body;
 }
 
-// L'élément le plus proche dans la direction : distance dans l'axe, l'écart sur le côté compte trois fois plus
+// The closest element in the direction: distance along the axis, the sideways gap counts three times more
 function nearest(from, dir, candidates) {
   const a = from.getBoundingClientRect();
   const ax = a.left + a.width / 2;
@@ -46,7 +46,7 @@ function nearest(from, dir, candidates) {
     if (dir === 'left' || dir === 'right') {
       main = dir === 'right' ? b.left - a.right : a.left - b.right;
       if ((dir === 'right' ? bx <= ax : bx >= ax)) continue;
-      // gauche / droite restent sur la même ligne (au bout d'une rangée, on ne saute pas ailleurs)
+      // left / right stay on the same line (at the end of a row, no jump elsewhere)
       if (b.bottom <= a.top + 2 || b.top >= a.bottom - 2) continue;
       side = Math.abs(by - ay) * 0.2;
     } else {
@@ -61,7 +61,7 @@ function nearest(from, dir, candidates) {
 }
 
 function firstTarget(root) {
-  // premier élément sensé : contenu de la page plutôt que la barre du haut
+  // first sensible element: page content rather than the top bar
   const main = root.querySelector('.content') || root;
   return [...main.querySelectorAll(FOCUSABLE)].find(visible) || [...root.querySelectorAll(FOCUSABLE)].find(visible);
 }
@@ -80,7 +80,7 @@ function move(dir) {
 function back() {
   const open = [...document.querySelectorAll('.more-list, .user-menu')].find((m) => !m.hidden);
   if (open) { open.hidden = true; return; }
-  if (document.querySelector('.modal-overlay, .player')) return; // fenêtres et lecteur gèrent leur propre « retour »
+  if (document.querySelector('.modal-overlay, .player')) return; // dialogs and player handle their own "back"
   if (location.hash && location.hash !== '#/' && history.length > 1) history.back();
 }
 
@@ -90,10 +90,10 @@ function onKey(e) {
   const t = e.target;
   const typing = t.closest && t.closest('input:not([type="checkbox"]):not([type="range"]), textarea');
   if (dir) {
-    // dans un champ de texte, gauche / droite déplacent le curseur ; haut / bas en sortent.
-    // Une liste déroulante se traite comme un bouton : OK l'ouvre, les flèches passent à côté.
+    // in a text field, left / right move the cursor; up / down leave it.
+    // A drop-down list is handled like a button: OK opens it, the arrows move past it.
     if (typing && (dir === 'left' || dir === 'right')) return;
-    if (document.querySelector('.player:not(.mini)')) return; // le lecteur a ses propres flèches (voir player.js)
+    if (document.querySelector('.player:not(.mini)')) return; // the player has its own arrows (see player.js)
     if (t.closest && t.closest('.timeline, .row-track input')) return;
     if (move(dir)) e.preventDefault();
     return;
@@ -105,8 +105,8 @@ function onKey(e) {
 }
 document.addEventListener('keydown', onKey);
 
-// Appli Android TV : la touche Retour de la télécommande arrive ici. -> true si Noxa l'a prise en charge,
-// false si l'on est déjà à l'accueil (l'appli propose alors de quitter).
+// Android TV app: the remote's Back key arrives here. -> true when Noxa handled it,
+// false when already on the home page (the app then offers to quit).
 window.nexisBack = () => {
   const menuOpen = [...document.querySelectorAll('.more-list, .user-menu')].some((m) => !m.hidden);
   if (menuOpen) { back(); return true; }
@@ -117,11 +117,11 @@ window.nexisBack = () => {
   if (location.hash && location.hash !== '#/' && location.hash !== '#') { history.back(); return true; }
   return false;
 };
-// le lecteur demande la navigation spatiale dans ses commandes
+// the player asks for spatial navigation in its controls
 export { move as moveFocus };
 
 // ------------------------------------------------------------------ manette (Gamepad API)
-// Les événements fabriqués ne déclenchent pas les actions par défaut du navigateur : A appelle donc click().
+// Synthetic events do not trigger the browser's default actions: A therefore calls click().
 const PAD = { 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight', 0: 'Enter', 1: 'Escape', 9: ' ' };
 const held = {};
 let polling = false;
@@ -148,7 +148,7 @@ function poll() {
       const id = `${pad.index}:${btn}`;
       if (!down) { delete held[id]; continue; }
       const repeat = key.startsWith('Arrow');
-      if (!held[id]) { held[id] = now + 380; press(key); } // premier appui, puis répétition si on maintient
+      if (!held[id]) { held[id] = now + 380; press(key); } // first press, then repeat while held
       else if (repeat && now >= held[id]) { held[id] = now + 110; press(key); }
     }
   }

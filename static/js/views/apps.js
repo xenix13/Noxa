@@ -1,12 +1,12 @@
-// Page « Applications » : Noxa à installer sur chaque appareil, avec le logo de la plateforme et les étapes
-// d'installation. Les fichiers viennent de ce serveur (/apps/<plateforme>). Lisible sans être connecté.
+// "Apps" page: Noxa to install on each device, with the platform logo and the install
+// steps. The files come from this server (/apps/<platform>). Readable without being signed in.
 import { get } from '../api.js';
 import { platformLogo } from '../platforms.js';
 import { clear, h, icon, spinner } from '../ui.js';
 import { locale, tr } from '../i18n.js';
 import { installWebApp, nativeApp, webAppPossible } from '../install.js';
 
-// plateforme de cet appareil
+// platform of this device
 export function detectPlatform() {
   const ua = navigator.userAgent;
   const plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
@@ -21,7 +21,7 @@ export function detectPlatform() {
 const GB = 1e9;
 const size = (b) => (b ? (b >= GB ? `${(b / GB).toLocaleString(locale(), { maximumFractionDigits: 1 })} ${tr('Go')}` : `${Math.round(b / 1e6)} ${tr('Mo')}`) : '');
 
-// une entrée par plateforme : logo, nom, appareils concernés, fichiers, étapes
+// one entry per platform: logo, name, devices concerned, files, steps
 export const PLATFORMS = [
   { id: 'windows', logo: 'windows', name: 'Windows', devices: () => tr('Windows 10 et 11, 64 bits'), files: [['windows', tr('Installateur (.exe)')]],
     steps: () => [tr('Ouvrir le fichier téléchargé.'),
@@ -75,7 +75,7 @@ export async function renderApps(main) {
     n ? h('div.status-box.ok', tr('Vous utilisez l’application Noxa {v}.', { v: n.version || '' })) : null,
     box);
   let data = null;
-  try { data = await get('/api/apps'); } catch { /* serveur ancien ou GitHub injoignable : étapes seulement */ }
+  try { data = await get('/api/apps'); } catch { /* old server or GitHub unreachable: steps only */ }
   const order = [...PLATFORMS].sort((a, b) => (b.id === here) - (a.id === here));
   clear(box, ...order.map((p) => card(p, data, p.id === here)));
   if (data && !data.apps.some((a) => a.available)) {

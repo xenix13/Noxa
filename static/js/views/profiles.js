@@ -1,4 +1,4 @@
-// « Qui regarde ? » : changement de profil du foyer, avec code PIN.
+// "Who's watching?": switching between the household's profiles, with a PIN code.
 import { get, post } from '../api.js';
 import { avatar, clear, field, h, modal, toast } from '../ui.js';
 import { tr } from '../i18n.js';
@@ -31,7 +31,7 @@ function pinPad(onSubmit, length = 4) {
       d ? h('button.pin-key', { type: 'button', onclick: () => press(d) }, d) : h('span'))));
 }
 
-// Compte protégé par la double authentification : le code est demandé en plus du PIN ou du mot de passe
+// Account protected by two-factor authentication: the code is asked for on top of the PIN or the password
 async function askCode(p) {
   const code = h('input', { autocomplete: 'one-time-code', autocapitalize: 'none', maxlength: 9, placeholder: '123456' });
   return modal(tr('Double authentification de {display_name}', { display_name: p.display_name }), h('div',
@@ -61,7 +61,7 @@ export async function switchTo(p, onDone) {
     const err = h('p.form-error.center');
     await modal(tr('Code PIN de {display_name}', { display_name: p.display_name }), h('div.center', avatar(p, 64), pinPad(async (pin, reset) => {
       try {
-        if (p.needs_code) err.closest('.modal').querySelector('.modal-head .icon-btn').click(); // place au code
+        if (p.needs_code) err.closest('.modal').querySelector('.modal-head .icon-btn').click(); // make room for the code
         await go({ pin });
         document.querySelector('.modal-overlay')?.remove();
       } catch (e) {

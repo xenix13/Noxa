@@ -7,7 +7,7 @@ import { tr } from '../i18n.js';
 export async function renderSearch(main, q, ctx) {
   if (q.length < 2) { clear(main, h('div.empty', tr('Tape au moins deux caractères.'))); return; }
   const discover = state.me.features && state.me.features.discover;
-  // ce qui est sur le serveur d'abord, puis le reste du catalogue (Netflix, Prime Video…)
+  // what is on the server first, then the rest of the catalogue (Netflix, Prime Video…)
   const elsewhere = discover ? get(`/api/discover/search?q=${encodeURIComponent(q)}`).catch(() => ({ results: [] })) : null;
   const r = await get(`/api/search?q=${encodeURIComponent(q)}`);
   if (!ctx.isCurrent()) return;

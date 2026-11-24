@@ -1,6 +1,6 @@
-// Suivi d'une mise à jour lancée depuis l'administration : progression par étapes, attente du redémarrage
-// (le serveur, ou le proxy devant lui, ne répond plus quelques secondes), puis rechargement automatique.
-// L'état est gardé dans sessionStorage : si la page est rechargée pendant l'installation, le suivi reprend.
+// Following an update started from the administration: progress by steps, waiting for the restart
+// (the server, or the proxy in front of it, stops answering for a few seconds), then automatic reload.
+// The state is kept in sessionStorage: if the page is reloaded during the installation, following resumes.
 import { get } from './api.js';
 import { h, toast } from './ui.js';
 import { tr } from './i18n.js';
@@ -20,8 +20,8 @@ export const updatePending = () => !!saved();
 
 let overlay = null;
 
-// Avant de recharger : on retélécharge chaque fichier de l'interface (le cache du navigateur pourrait sinon
-// resservir l'ancienne version), et on prévient le service worker qu'il y en a un nouveau.
+// Before reloading: each interface file is downloaded again (the browser cache could otherwise
+// serve the old version again), and the service worker is told there is a new one.
 async function refreshShell() {
   try {
     const code = await (await fetch('/sw.js', { cache: 'reload' })).text();
@@ -30,10 +30,10 @@ async function refreshShell() {
     await Promise.all(files.map((u) => fetch(u, { cache: 'reload' }).catch(() => null)));
     const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
     if (reg) await reg.update();
-  } catch { /* au pire, rechargement simple */ }
+  } catch { /* at worst, plain reload */ }
 }
 
-// from : version installée au lancement
+// from: version installed at start
 export function followUpdate(from) {
   const st = saved() || { from, at: Date.now() };
   save(st);
@@ -75,23 +75,23 @@ export function followUpdate(from) {
 
   const tick = async () => {
     let up = null;
-    try { up = await get('/api/status'); } catch { /* redémarrage en cours */ }
+    try { up = await get('/api/status'); } catch { /* restart in progress */ }
     if (up && up.version !== st.from) { finish(tr('Noxa {version} est installé. Rechargement…', { version: up.version })); return; }
     if (up) {
       try {
         const u = await get('/api/admin/update');
         if (u.log) log.textContent = u.log.join('\n');
         if (u.running) seenRunning = true;
-        // (un journal « terminé » vu avant que l'installation n'ait démarré est celui de la fois précédente)
+        // (a "finished" log seen before the installation started is the one from the previous time)
         if (u.done && !u.running && seenRunning) {
           if (u.ok) { finish(tr('Mise à jour terminée. Rechargement…')); return; }
           fail(tr('La mise à jour a échoué : le détail est dans le journal ci-dessous.'));
           return;
         }
         if (u.running) show(u.percent || 3, `${u.step || tr('Installation')}…`);
-      } catch { /* l'assistant système redémarre lui aussi */ }
+      } catch { /* the system helper restarts too */ }
     } else {
-      seenRunning = true; // serveur coupé : c'est bien l'installation en cours qui le redémarre
+      seenRunning = true; // server down: it is indeed the running installation that restarts it
       show(85, tr('Redémarrage de Noxa…'));
     }
     if (Date.now() - st.at > LIMIT) {
@@ -103,7 +103,7 @@ export function followUpdate(from) {
   setTimeout(tick, 1500);
 }
 
-// Au chargement de la page : reprend le suivi d'une mise à jour en cours, ou annonce celle qui vient de finir
+// When the page loads: resumes following an update in progress, or announces the one that just finished
 export async function resumeUpdate(status) {
   const st = saved();
   if (!st) return false;

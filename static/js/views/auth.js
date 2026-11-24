@@ -2,7 +2,7 @@ import { post } from '../api.js';
 import { clear, field, h, select, toast } from '../ui.js';
 import { LANGUAGES, lang, tr, useLanguage } from '../i18n.js';
 
-// Décor de la page de connexion : un mur d'affiches stylisées (sans contenu de la médiathèque, la page est publique)
+// Sign-in page decor: a wall of stylised posters (no media library content, the page is public)
 const WALL = ['#3a2618', '#18293a', '#2b2b36', '#3a1e1e', '#1e3328', '#36301c', '#241c36', '#14303a', '#3a2a12', '#202a3a'];
 
 function stage(title, text) {
@@ -15,7 +15,7 @@ function stage(title, text) {
       h('div.auth-pitch', h('h2', title), h('p', text))));
 }
 
-// Choix de la langue avant la connexion (gardé sur cet appareil ; ensuite, c'est celle du compte)
+// Language choice before sign-in (kept on this device; afterwards, it is the account's)
 function languagePicker() {
   return h('div.auth-lang', select(LANGUAGES.map((l) => [l.id, l.name]), lang,
     { 'aria-label': 'Langue / Language', onchange: (e) => useLanguage(e.target.value) }));
@@ -56,7 +56,7 @@ export function renderLogin(root, onDone) {
   h('p.auth-foot', h('a', { href: '#/apps' }, tr('Applications pour Windows, macOS, Linux, Android et TV'))));
   layout(root, form);
 
-  // double authentification : le mot de passe est bon, le code de l'application est demandé
+  // two-factor authentication: the password is right, the app code is asked for
   function secondStep(ticket) {
     const code = h('input', { name: 'code', autocomplete: 'one-time-code', autocapitalize: 'none', maxlength: 9,
       placeholder: '123456', required: true, autofocus: true, style: { letterSpacing: '0.2em', fontSize: '20px' } });

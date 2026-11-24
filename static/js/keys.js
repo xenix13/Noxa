@@ -1,5 +1,5 @@
-// Raccourcis clavier du lecteur : touches par défaut, modifiables sur chaque appareil (Paramètres → Cet appareil),
-// et l'aide affichée par la touche « ? ».
+// Player keyboard shortcuts: default keys, changeable on each device (Settings → This device),
+// and the help shown by the "?" key.
 import { clear, h, modal } from './ui.js';
 import { tr } from './i18n.js';
 
@@ -39,7 +39,7 @@ export function resetBindings() {
   try { localStorage.removeItem(KEY); } catch { /* stockage indisponible */ }
 }
 
-// action liée à une touche (« k » reste aussi lecture / pause, comme sur YouTube)
+// action bound to a key ("k" also stays play / pause, as on YouTube)
 export function actionFor(key) {
   const b = bindings();
   const hit = Object.entries(b).find(([, k]) => k === key || (k.length === 1 && key.length === 1 && k.toLowerCase() === key.toLowerCase() && !/[<>?]/.test(k)));
@@ -61,7 +61,7 @@ export function shortcutsHelp() {
   [{ label: tr('Fermer'), primary: true, value: true }]);
 }
 
-// panneau de réglage : une ligne par action, « Changer » attend la prochaine touche
+// settings panel: one row per action, "Change" waits for the next key
 export function shortcutsPanel() {
   const list = h('div.keys-edit');
   const paint = () => {

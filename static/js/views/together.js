@@ -1,4 +1,4 @@
-// « Regarder ensemble » : groupes en cours, rejoindre un groupe par son lien d'invitation.
+// "Watch together": running groups, joining a group through its invitation link.
 import { post } from '../api.js';
 import { state } from '../app.js';
 import { createGroupDialog, onGroups } from '../groups.js';
@@ -12,7 +12,7 @@ export function groupCard(g) {
     : it.type === 'episode' ? `${it.show} · ${episodeCode(it)} — ${it.title}` : it.title;
   return h('div.group-card',
     thumb ? h('img', { src: img(thumb, 256, 144), alt: '', loading: 'lazy', onerror: (e) => {
-      // pas d'image de fond : l'affiche fera l'affaire
+      // no backdrop: the poster will do
       const alt = it.type === 'episode' ? it.show_thumb : it.thumb;
       if (alt && !e.target.dataset.retry) { e.target.dataset.retry = '1'; e.target.src = img(alt, 256, 144); }
     } }) : h('div.noimg'),
@@ -32,13 +32,13 @@ export async function renderTogether(main, gid, ctx) {
       h('button.btn.primary', { onclick: () => createGroupDialog(state.me) }, icon('group'), tr('Créer un groupe'))),
     h('p.muted', tr('Chaque membre regarde sur son propre appareil ; lecture, pauses, sauts et épisode suivant sont synchronisés. Un groupe peut être créé à l’avance, ou depuis la fiche d’un film ou d’un épisode avec le bouton '), icon('group'), '.'),
     listBox);
-  // liste tenue à jour en direct : un groupe créé ou fermé apparaît / disparaît sans recharger
+  // list kept up to date live: a group created or closed appears / disappears without reloading
   ctx.setCleanup(onGroups((list) => {
     listBox.replaceChildren(list.length ? h('div.group-list', list.map(groupCard)) : h('div.empty', tr('Aucun groupe en cours.')));
   }));
 }
 
-// Salon d'un groupe : on attend que quelqu'un lance un film ou un épisode, puis tout le monde part ensemble.
+// Room of a group: wait until someone starts a movie or an episode, then everyone starts together.
 async function renderLobby(main, gid, ctx) {
   clear(main, h('div.center-page', spinner()));
   let g;
@@ -77,7 +77,7 @@ async function renderLobby(main, gid, ctx) {
         await post(`/api/together/${gid}/leave`).catch(() => {});
         location.hash = '#/together';
       } }, tr('Quitter le groupe')))));
-  // événements du groupe : arrivées et départs, puis lancement de la lecture
+  // group events: arrivals and departures, then playback start
   const es = new EventSource(`/api/together/${gid}/events`);
   es.onmessage = (e) => {
     let msg;
@@ -91,5 +91,5 @@ async function renderLobby(main, gid, ctx) {
     toast(tr('Le groupe est terminé'));
     location.hash = '#/together';
   };
-  ctx.setCleanup(() => es.close()); // on reste membre en naviguant : on peut aller chercher un film
+  ctx.setCleanup(() => es.close()); // stay a member while browsing: one can go and look for a movie
 }

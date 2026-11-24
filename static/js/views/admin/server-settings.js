@@ -4,8 +4,8 @@ import { refreshMe } from '../../app.js';
 import { locale, tr } from '../../i18n.js';
 import { clear, confirmDialog, field, h, select, toast, toggle } from '../../ui.js';
 
-// --------------------------------------------------------------- réglages du serveur
-// Chaque page lit les réglages, puis se redessine après un enregistrement.
+// --------------------------------------------------------------- server settings
+// Each page reads the settings, then redraws itself after saving.
 async function withSettings(body, ctx, build) {
   const s = await get('/api/admin/settings');
   if (!ctx.isCurrent()) return;
@@ -90,7 +90,7 @@ export const subtitlesPage = (body, ctx) => withSettings(body, ctx, (s, save) =>
   ];
 });
 
-// Sous-titres téléchargés depuis OpenSubtitles.com : compte, langues, quota du jour
+// Subtitles downloaded from OpenSubtitles.com: account, languages, today's quota
 async function openSubtitlesPanel(panel) {
   let v;
   try { v = await get('/api/admin/opensubtitles'); } catch (e) { clear(panel, h('h2', 'OpenSubtitles'), h('p.muted', e.message)); return; }
@@ -133,7 +133,7 @@ async function openSubtitlesPanel(panel) {
     h('div.actions-row', saveBtn, h('a.btn', { href: '#/admin/tasks' }, tr('Tâches planifiées'))));
 }
 
-// Whisper : transcription de la voix (service compatible OpenAI, ou whisper.cpp sur ce serveur)
+// Whisper: voice transcription (OpenAI-compatible service, or whisper.cpp on this server)
 async function whisperPanel(panel) {
   let v;
   try { v = await get('/api/admin/whisper'); } catch (e) { clear(panel, h('h2', 'Whisper'), h('p.muted', e.message)); return; }
@@ -185,7 +185,7 @@ async function whisperPanel(panel) {
 export const transcodingPage = (body, ctx) => withSettings(body, ctx, (s, save) => {
   const maxStreams = h('input', { type: 'number', min: 1, max: 50, value: s.max_streams });
   const maxTranscodes = h('input', { type: 'number', min: 0, max: 16, value: s.max_transcodes });
-  // transcodage matériel : moteurs proposés selon ce que le conteneur voit
+  // hardware transcoding: engines offered depending on what the container sees
   const dev = s.hw_devices || { nvidia: false, dri: [] };
   const engines = [['none', tr('Aucune (processeur)')],
     ['nvenc', tr('NVIDIA NVENC{p1}', { p1: dev.nvidia ? '' : tr(' (carte non détectée)') })],

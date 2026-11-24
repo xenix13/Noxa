@@ -75,7 +75,7 @@ async function coldForm(existing, available, peers = []) {
     for (const [k, el] of Object.entries(inputs)) out[k] = k === 'port' || k === 'peer' ? Number(el.value) : el.value.trim();
     return out;
   };
-  // SFTP : la clé du serveur est montrée une fois, à confirmer (elle sera vérifiée ensuite à chaque connexion)
+  // SFTP: the server key is shown once, to confirm (it will then be checked at each connection)
   const confirmKey = async (fp) => {
     const pretty = fp.match(/../g).join(':');
     return confirmDialog(tr('Clé du serveur SFTP'), tr('Empreinte MD5 de la clé du serveur : {fp}. Vérifiez-la si vous le pouvez (chez votre hébergeur, ou avec ssh-keygen -l -E md5), puis confirmez : Noxa refusera ensuite tout serveur qui présente une autre clé.', { fp: pretty }), tr('Confirmer la clé'), false);
@@ -142,7 +142,7 @@ export async function coldPage(body, ctx) {
     h('button.icon-btn', { title: tr('Annuler'), onclick: async () => { await del(`/api/admin/cold/jobs/${j.id}`); reload(); } }, icon('close')));
   const rate = h('input', { type: 'number', min: 0, step: 1, value: data.settings.cold_rate || 0 });
   const ratePlay = h('input', { type: 'number', min: 0, step: 1, value: data.settings.cold_rate_play });
-  // la page est longue : en sous-onglets (retenu sur cet appareil)
+  // the page is long: in sub-tabs (remembered on this device)
   const COLD_TABS = [['stores', tr('Stockages')], ['free', tr('Libérer de la place')], ['compress', tr('Compression')], ['cache', tr('Cache et serveurs liés')]];
   let tab = store('cold-tab') || 'stores';
   if (!COLD_TABS.some(([k]) => k === tab)) tab = 'stores';
@@ -171,13 +171,13 @@ export async function coldPage(body, ctx) {
     class: k === tab ? 'tab active' : 'tab', 'aria-selected': String(k === tab), onclick: () => { store('cold-tab', k); reload(); } },
   label, k === 'free' && freeData.groups.some((g) => g.state === 'proposed') ? h('span.count-badge', freeData.groups.filter((g) => g.state === 'proposed').length) : null)));
   clear(body, tabs, ...sections[tab]());
-  // suivi de la copie en cours (pas sur les onglets à formulaires : la saisie serait perdue)
+  // following the running copy (not on the form tabs: what is being typed would be lost)
   if ((running.length || data.queued) && (tab === 'stores' || tab === 'compress')) {
     setTimeout(() => { if (ctx.isCurrent() && body.isConnected && (store('cold-tab') || 'stores') === tab) reload(); }, 2500);
   }
 }
 
-// libérer de la place : règle, Radarr / Sonarr, suppression par bibliothèque
+// freeing space: rule, Radarr / Sonarr, deletion per library
 function freePanel(free, stores, reload) {
   const c = free.conf;
   const on = toggle(tr('Libérer de la place automatiquement'), c.enabled);
@@ -248,7 +248,7 @@ function freePanel(free, stores, reload) {
     preview);
 }
 
-// ce qui est prévu : à valider, en cours d'archivage, suppression prévue, à effacer à la main ; titres gardés
+// what is planned: to approve, being archived, deletion planned, to erase by hand; titles kept
 function freeLists(free, reload) {
   const by = (st) => free.groups.filter((g) => g.state === st);
   const act = (label, fn, extra = '') => h(`button.btn.small${extra}`, { onclick: async () => { try { await fn(); reload(); } catch (e) { toast(e.message, 'bad'); } } }, label);
@@ -285,7 +285,7 @@ function freeLists(free, reload) {
   return h('div', ...panels);
 }
 
-// compression des archives (HEVC) : carte graphique recommandée
+// archive compression (HEVC): graphics card recommended
 function compressPanel(c, reload) {
   const on = toggle(tr('Compresser les fichiers archivés (HEVC)'), c.enabled);
   const quality = select([['high', tr('Très bonne qualité (moins de gain)')], ['balanced', tr('Équilibrée')], ['small', tr('Petite taille')]], c.quality);
@@ -308,7 +308,7 @@ function compressPanel(c, reload) {
       } }, tr('Compresser les archives déjà faites ({n})', { n: c.todo.count })) : null));
 }
 
-// titres ramenés en local, et place réservée aux archives des serveurs liés
+// titles brought back locally, and space reserved for the linked servers' archives
 function cachePanel(extra, reload) {
   const c = extra.cache;
   const gb = h('input', { type: 'number', min: 0, step: 1, value: c.gb });
@@ -331,7 +331,7 @@ function cachePanel(extra, reload) {
       h('div.actions-row', h('button.btn', { onclick: saveBtn(() => ({ host_gb: Number(host.value) })) }, tr('Enregistrer')))) : null);
 }
 
-// archiver des titres (fiche, sélection multiple) : choix du stockage
+// archive titles (title page, multiple selection): choice of the storage
 export async function archiveDialog(ids, label) {
   let data;
   try { data = await get('/api/admin/cold'); } catch (e) { toast(e.message, 'bad'); return; }
@@ -352,7 +352,7 @@ export async function archiveDialog(ids, label) {
   } catch (e) { toast(e.message, 'bad'); }
 }
 
-// copies froides d'un titre (fiche, menu ⋯)
+// cold copies of a title (title page, ⋯ menu)
 export async function coldCopiesDialog(item) {
   let r;
   try { r = await get(`/api/admin/cold/items/${item.id}`); } catch (e) { toast(e.message, 'bad'); return; }

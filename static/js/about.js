@@ -1,11 +1,11 @@
-// « À propos » : version, sources des données (attribution exigée par TMDB et JustWatch) et licences des
-// composants tiers fournis avec Noxa.
+// "About": version, data sources (attribution required by TMDB and JustWatch) and licences of the
+// third-party components shipped with Noxa.
 import { h, modal } from './ui.js';
 import { tr } from './i18n.js';
 
 const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
 
-// Mention imposée par les conditions de l'API TMDB, reprise sous les catalogues (Découvrir)
+// Notice required by the TMDB API terms, repeated under the catalogues (Discover)
 export const dataCredit = () => h('p.muted.small.data-credit',
   tr('Données et images : '), link('https://www.themoviedb.org/', 'TMDB'),
   tr('. Ce produit utilise l’API TMDB mais n’est ni approuvé ni certifié par TMDB. Disponibilités sur les plateformes : '),

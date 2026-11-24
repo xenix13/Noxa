@@ -10,7 +10,7 @@ export async function backupsPage(body, ctx) {
       : tr('{n} Ko', { n: Math.max(1, Math.round(b / 1e3)) }));
   const when = (ts) => new Date(ts * 1000).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' });
   const reload = async () => render(await get('/api/admin/backups'));
-  // après une restauration : Noxa redémarre, la page se recharge une fois revenu
+  // after a restore: Noxa restarts, the page reloads once it is back
   const restarted = (r) => {
     if (!r.restarting) { toast(tr('Restauration prête : redémarrez Noxa pour l’appliquer'), 'ok'); return; }
     clear(body, h('section.panel', h('h2', tr('Restauration en cours')), h('p.muted', tr('Noxa redémarre avec la sauvegarde. La page se rechargera toute seule.'))));
@@ -51,7 +51,7 @@ export async function backupsPage(body, ctx) {
       nowBtn.textContent = tr('Sauvegarde en cours…');
       try { render(await post('/api/admin/backups')); toast(tr('Sauvegarde terminée : copies en cours vers les autres destinations'), 'ok'); } catch (e) { toast(e.message, 'bad'); nowBtn.disabled = false; }
     } }, tr('Sauvegarder maintenant'));
-    // envoyer une archive (pour la garder), ou restaurer directement depuis un fichier de l'appareil
+    // upload an archive (to keep it), or restore directly from a file on the device
     const pick = (restore) => {
       const input = h('input', { type: 'file', accept: '.gz,.enc,application/gzip,application/octet-stream', hidden: true, onchange: async () => {
         const f = input.files[0];
@@ -104,7 +104,7 @@ export async function backupsPage(body, ctx) {
           if (!await confirmDialog(tr('Supprimer cette sauvegarde ?'), when(b.created), tr('Supprimer'))) return;
           try { render(await del(`/api/admin/backups/${b.name}`)); } catch (e) { toast(e.message, 'bad'); }
         } }, icon('trash'))));
-    // sauvegardes de ce serveur, puis copies de chaque serveur lié (rangées par serveur d'origine)
+    // backups of this server, then copies of each linked server (grouped by origin server)
     const mine = v.backups.filter((b) => b.mine);
     const others = {};
     for (const b of v.backups.filter((x) => !x.mine)) (others[b.server || b.slug || '?'] ||= []).push(b);

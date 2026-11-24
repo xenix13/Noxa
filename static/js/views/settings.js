@@ -12,7 +12,7 @@ import { renderThemeStore, themePreview } from './themes.js';
 import { disablePush, enablePush, openPushSettings, pushCheckNow, pushState } from '../push.js';
 import { nativeApp } from '../install.js';
 
-// application Noxa installée (bureau, Android) : sa version, le serveur, la recherche de mise à jour
+// installed Noxa app (desktop, Android): its version, the server, the update check
 function nativePanel() {
   const n = nativeApp();
   if (!n) return null;
@@ -24,7 +24,7 @@ function nativePanel() {
       h('button.btn', { onclick: () => n.changeServer() }, tr('Changer de serveur…'))));
 }
 
-// notifications push : nouvel épisode d'une série suivie, titre demandé arrivé
+// push notifications: new episode of a followed show, requested title arrived
 function pushPanel() {
   const box = h('div');
   const panel = h('section.panel', h('h2', tr('Notifications')),
@@ -78,7 +78,7 @@ export const UI_STYLES = [
 ];
 const ACCENTS = ['#ffa43a', '#e0a84f', '#e5484d', '#3dd68c', '#4c9aff', '#a78bfa', '#f472b6', '#2dd4bf', '#f97316'];
 
-// Liste à réordonner (flèches ou glisser-déposer) avec un interrupteur par ligne.
+// List to reorder (arrows or drag and drop) with a switch on each row.
 // items : [{ key, label, hint?, fixed? }] ; onOrder(keys) ; onShow(key, visible)
 function layoutList(items, isOn, onOrder, onShow) {
   const byKey = new Map(items.map((i) => [i.key, i]));
@@ -128,7 +128,7 @@ function layoutList(items, isOn, onOrder, onShow) {
   return list;
 }
 
-// Image choisie -> carré centré de `size` px, en JPEG (data URL)
+// Picked picture -> centred square of `size` px, as JPEG (data URL)
 function squareImage(fileObj, size) {
   return new Promise((resolve, reject) => {
     if (fileObj.size > 30 * 1024 * 1024) { reject(new Error(tr('Image trop lourde'))); return; }
@@ -266,7 +266,7 @@ export const ACCOUNT_GROUP = { title: tr('Mon compte'), items: [
   settingsPage(D, ['device']),
 ] };
 
-// Trakt (compte relié par un code, synchronisé toutes les 6 h) et Letterboxd (export / import de fichiers)
+// Trakt (account linked by a code, synced every 6 h) and Letterboxd (file export / import)
 async function servicesPage(body) {
   const when = (ts) => new Date(ts * 1000).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' });
   const traktBox = h('section.panel', h('h2', 'Trakt'), spinner());
@@ -389,7 +389,7 @@ function accountPage(id, body, rerender) {
     const paintPreview = () => preview.replaceChildren(avatar({ ...me.user, display_name: name.value, avatar_color: color }, 56));
     paintPreview();
     name.addEventListener('input', paintPreview);
-    // image : recadrée au centre en carré de 256 px dans le navigateur, réencodée par le serveur
+    // picture: cropped at the centre to a 256 px square in the browser, encoded again by the server
     const file = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', hidden: true });
     file.addEventListener('change', async () => {
       const f = file.files[0];
@@ -404,14 +404,14 @@ function accountPage(id, body, rerender) {
       toast(msg, 'ok');
       rerender();
     };
-    // galerie d'avatars : catégories, aperçu, fond au choix
+    // avatar gallery: categories, preview, background of one's choice
     const choosePreset = async () => {
       let current = Object.keys(ART)[0];
-      let bg = null; // null : fond conseillé pour l'illustration
+      let bg = null; // null: background advised for the illustration
       const preview = h('div.avatar-preview');
       const label = h('div.avatar-preview-label');
       const paintPreview = () => {
-        preview.innerHTML = artSvg(current, bg, 160); // dessin fixe du code, pas de contenu externe
+        preview.innerHTML = artSvg(current, bg, 160); // fixed drawing from the code, no external content
         label.textContent = ART[current][0];
         swatchRow.querySelectorAll('.swatch').forEach((sw, i) => sw.classList.toggle('on', i === (bg ?? DEFAULT_BG[current] ?? 0)));
         grid.querySelectorAll('.preset').forEach((b) => b.classList.toggle('on', b.dataset.id === current));
@@ -488,17 +488,17 @@ function accountPage(id, body, rerender) {
           toast(tr('Mot de passe modifié. Les autres sessions ont été déconnectées.'), 'ok');
         } catch (e) { toast(e.message, 'bad'); }
       } }, tr('Changer le mot de passe')));
-    // langue de l'interface, propre à ce compte (les noms des langues restent dans leur propre langue)
+    // interface language, specific to this account (language names stay in their own language)
     const language = select(LANGUAGES.map((l) => [l.id, l.name]), lang, { 'aria-label': 'Langue / Language',
       onchange: async (e) => {
         try {
           await put('/api/me/language', { language: e.target.value });
-          useLanguage(e.target.value); // la page se recharge dans la nouvelle langue
+          useLanguage(e.target.value); // the page reloads in the new language
         } catch (err) { toast(err.message, 'bad'); }
       } });
     const languagePanel = h('section.panel', h('h2', tr('Langue')), field('Langue / Language', language,
       tr('Langue des menus et des messages de Noxa, pour ce compte sur tous les appareils.')));
-    // tous les réglages du profil : les mêmes sur chaque serveur lié ; retour aux valeurs par défaut
+    // all the profile settings: the same on each linked server; back to the default values
     const resetPanel = h('section.panel', h('h2', tr('Mes réglages')),
       h('p.muted.small', tr('Vos réglages (apparence, langues, lecture, accueil et menu) sont propres à votre profil et vous suivent sur tous les serveurs liés. Ceux de « Cet appareil » restent propres à ce navigateur.')),
       h('button.btn', { onclick: async () => {
@@ -516,7 +516,7 @@ function accountPage(id, body, rerender) {
     return;
   }
 
-  // langues propres à une bibliothèque : par exemple les animes en VO sous-titrée, les films en VF
+  // languages specific to a library: for example anime in original version with subtitles, movies dubbed
   const libLangsPanel = () => {
     const libs = me.libraries.filter((l) => ['movie', 'show'].includes(l.type));
     if (!libs.length) return null;
@@ -543,7 +543,7 @@ function accountPage(id, body, rerender) {
   };
 
   if (id === 'playback') {
-    // apparence des sous-titres, avec un aperçu qui suit chaque réglage
+    // subtitle appearance, with a preview that follows each setting
     const subStylePanel = () => {
       const sample = h('div.sub-layer', h('span.sub-line', tr('Aperçu des sous-titres\nsur deux lignes')));
       const preview = h('div.sub-preview', { 'aria-hidden': 'true' }, sample);
@@ -611,7 +611,7 @@ function accountPage(id, body, rerender) {
   }
 
   if (id === 'privacy') {
-    // genres masqués : bascule par genre (tous les genres des bibliothèques du compte)
+    // hidden genres: toggle per genre (all the genres of the account's libraries)
     const hidden = new Set(p.hidden_genres || []);
     const genreBox = h('div.chips', spinner());
     get('/api/me/genres').then((gs) => {
@@ -708,7 +708,7 @@ function accountPage(id, body, rerender) {
   }
 
   if (id === 'appearance') {
-    // thèmes : aperçu en vignette (fond, surface, texte, accent)
+    // themes: thumbnail preview (background, surface, text, accent)
     const THEMES = [['dark', tr('Sombre'), '#0b0b0e', '#1c1c22', '#f5f3ef'], ['oled', tr('Noir profond (OLED)'), '#000', '#161619', '#f5f3ef'],
       ['midnight', tr('Bleu nuit'), '#0a0f1c', '#19243f', '#eef2fb'], ['light', tr('Clair'), '#f5f3ee', '#ffffff', '#16161a'],
       ['sepia', tr('Sépia'), '#f1e7d6', '#fbf5ea', '#3b2f22'], ['contrast', tr('Contraste élevé'), '#000', '#1b1b1b', '#ffffff'],
@@ -721,7 +721,7 @@ function accountPage(id, body, rerender) {
     const picker = h('input.color-input', { type: 'color', value: p.accent, title: tr('Autre couleur'),
       onchange: (e) => save({ accent: e.target.value }, tr('Couleur appliquée')) });
     const cardToggle = (key, label) => bindToggle(key, label);
-    // fond d'écran
+    // wallpaper
     const MODES = [['none', tr('Aucun')], ['title', tr('L’image d’un titre')], ['daily', tr('Un de vos titres, différent chaque jour')],
       ['gradient', tr('Un dégradé')], ['color', tr('Une couleur')], ['upload', tr('Une image à vous')]];
     const mode = p.wallpaper_mode === 'title' && !p.wallpaper ? 'none' : p.wallpaper_mode;
@@ -758,7 +758,7 @@ function accountPage(id, body, rerender) {
         h('div.actions-row', h('button.btn', { onclick: () => file.click() }, tr('Choisir une image…')), file),
         h('p.muted.small', tr('JPEG, PNG ou WebP, 8 Mo au plus. L’image reste sur ce serveur.')));
     }
-    // styles d'interface : la mise en page elle-même (navigation, cartes, panneaux, bannière), avec une maquette
+    // interface styles: the layout itself (navigation, cards, panels, banner), with a mock-up
     const styleTiles = h('div.theme-tiles.style-tiles', UI_STYLES.map(([v, label, hint]) => h('button.theme-tile.style-tile', {
       type: 'button', 'aria-pressed': String((p.ui_style || 'classic') === v), title: hint,
       onclick: async () => { await save({ ui_style: v }, tr('Style appliqué')); rerender(); } },
@@ -797,7 +797,7 @@ function accountPage(id, body, rerender) {
     return;
   }
 
-  // --- accueil et barre du haut : ordre et rangées affichées
+  // --- home and top bar: order and rows shown
   const hidden = new Set(p.hidden_libraries);
   const homeHidden = new Set(p.home_hidden);
   const homeItems = [
@@ -841,7 +841,7 @@ function accountPage(id, body, rerender) {
     { onchange: (e) => save({ start_page: e.target.value }, tr('Page d’ouverture enregistrée')) });
   const startPanel = h('section.panel', h('h2', tr('Page d’ouverture')),
     field(tr('Page affichée à l’ouverture de Noxa'), startSel, tr('Les liens directs (fiche, lecture) s’ouvrent toujours à leur adresse.')));
-  // titres masqués pour soi (menu ⋯ d'une fiche) : la liste, pour les rendre de nouveau visibles
+  // titles hidden for oneself (⋯ menu of a title page): the list, to make them visible again
   const hiddenList = h('div.user-list');
   const hiddenPanel = h('section.panel', h('h2', tr('Titres masqués')),
     h('p.muted.small', tr('Masqués par vous seul (menu ⋯ d’une fiche → Masquer pour moi) : ils n’apparaissent plus dans vos bibliothèques, l’accueil, la recherche ni les suggestions.')),
@@ -865,7 +865,7 @@ function accountPage(id, body, rerender) {
     h('button.btn.small', { onclick: async () => { if (await rowDialog(pn)) rerender(); } }, tr('Modifier')),
     h('button.icon-btn', { title: tr('Supprimer'), onclick: async () => { await removePin(pn.id); rerender(); } }, icon('trash')))),
     h('button.btn', { onclick: async () => { if (await rowDialog(null)) rerender(); } }, tr('+ Nouvelle rangée')));
-  // création / modification d'une rangée : bibliothèque, filtres, tri, nombre de titres, nom
+  // creating / editing a row: library, filters, sort, number of titles, name
   const rowDialog = async (pn) => {
     const libs = me.libraries.filter((l) => ['movie', 'show'].includes(l.type));
     if (!libs.length) { toast(tr('Aucune bibliothèque de films ou de séries'), 'bad'); return false; }
@@ -877,7 +877,7 @@ function accountPage(id, body, rerender) {
         const gs = await get(`/api/libraries/${libSel.value}/genres`);
         genre.replaceChildren(...[['', tr('Tous les genres')], ...gs.map((g) => [g.id, g.title])]
           .map(([v, l]) => h('option', { value: v, selected: v === (q.get('genre') || '') }, l)));
-      } catch { /* sans genres */ }
+      } catch { /* no genres */ }
     };
     libSel.addEventListener('change', loadGenres);
     loadGenres();
@@ -911,16 +911,16 @@ function accountPage(id, body, rerender) {
   clear(body, startPanel, heroPanel, rowsPanel, homePanel, navPanel, hiddenPanel);
 }
 
-// ---------------------------------------------------------------- l'espace Paramètres
-// Un seul endroit pour tout régler : menu groupé à gauche (sur téléphone : le menu, puis la page choisie),
-// une page par sujet. Réglages personnels sous /settings/…, réglages du serveur sous /admin/….
+// ---------------------------------------------------------------- the Settings area
+// A single place to set everything: grouped menu on the left (on a phone: the menu, then the chosen page),
+// one page per topic. Personal settings under /settings/…, server settings under /admin/….
 export async function renderSettingsArea(main, area, section, ctx) {
   const me = state.me;
   const groups = [{ ...ACCOUNT_GROUP, area: 'settings' },
     ...(me.user.is_admin ? ADMIN_GROUPS.map((g) => ({ ...g, area: 'admin' })) : [])];
   if (area === 'admin') section = ADMIN_ALIASES[section] || section;
   const all = groups.flatMap((g) => g.items.map((it) => ({ ...it, area: g.area })));
-  // la page qui contient ce sujet (une ancienne adresse #/admin/tasks ouvre « Maintenance », sous-onglet Tâches)
+  // the page that holds this topic (an old #/admin/tasks address opens "Maintenance", Tasks sub-tab)
   const chosen = section ? all.find((it) => it.area === area && it.tabs.some((t) => t.id === section)) : null;
   const current = chosen || all.find((it) => it.area === area) || all[0];
   const tab = current.tabs.find((t) => t.id === section) || current.tabs[0];
@@ -947,24 +947,24 @@ export async function renderSettingsArea(main, area, section, ctx) {
       const ok = words.every((w) => l.all.includes(w));
       l.a.hidden = !ok;
       shown += ok ? 1 : 0;
-      // le lien mène au sous-onglet qui correspond à la recherche
+      // the link leads to the sub-tab matching the search
       const t = words.length ? l.tabs.find((x) => words.every((w) => x.text.includes(w))) : null;
       l.a.setAttribute('href', `#/${l.area}/${(t || l.tabs[0]).id}`);
     }
     nav.querySelectorAll('.settings-group').forEach((g) => { g.hidden = ![...g.querySelectorAll('.settings-link')].some((a) => !a.hidden); });
     nav.querySelector('.settings-empty').hidden = shown > 0;
   });
-  search.addEventListener('keydown', (e) => { // Entrée : ouvre le premier résultat
+  search.addEventListener('keydown', (e) => { // Enter: opens the first result
     if (e.key !== 'Enter') return;
     const first = [...nav.querySelectorAll('.settings-link')].find((a) => !a.hidden);
     if (first) { e.preventDefault(); location.hash = first.getAttribute('href'); }
   });
-  // sous-onglets d'une page qui réunit plusieurs sujets
+  // sub-tabs of a page that gathers several topics
   const subtabs = current.tabs.length > 1 ? h('div.tabs.settings-subtabs', { role: 'tablist' }, current.tabs.map((t) => h('a.tab', {
     href: `#/${current.area}/${t.id}`, role: 'tab', class: t.id === tab.id ? 'tab active' : 'tab', 'aria-selected': String(t.id === tab.id) }, t.label))) : null;
 
   const body = h('div.settings-body');
-  // administration des serveurs liés : choix du serveur réglé par les pages « Serveur », « Médiathèque », « Lecture »
+  // administration of the linked servers: server choice set by the "Server", "Media library", "Playback" pages
   const serverBar = h('div.server-pick', { hidden: true });
   const content = h('section.settings-content',
     h('a.settings-back', { href: `#/${area}` }, icon('back'), tr('Paramètres')),
@@ -975,7 +975,7 @@ export async function renderSettingsArea(main, area, section, ctx) {
     try {
       const sv = await get('/api/admin/servers');
       const t = adminTarget();
-      if (t && !sv.peers.some((p) => p.id === t.id)) setAdminTarget(null);  // serveur délié depuis
+      if (t && !sv.peers.some((p) => p.id === t.id)) setAdminTarget(null);  // server unlinked since
       if (sv.peers.length) {
         const sel = select([['', tr('{name} (ce serveur)', { name: sv.local.name })],
           ...sv.peers.map((p) => [p.id, p.online ? p.name : tr('{name} (injoignable)', { name: p.name })])], (adminTarget() || {}).id || '');

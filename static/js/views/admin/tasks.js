@@ -4,11 +4,11 @@ import { locale, plural, tr } from '../../i18n.js';
 import { clear, field, h, icon, modal, select, toast, toggle } from '../../ui.js';
 import { since } from './util.js';
 
-// ---------------------------------------------------------- tâches planifiées
-// lundi … dimanche, dans la langue de l'interface (le 1er janvier 2024 est un lundi)
+// ---------------------------------------------------------- scheduled tasks
+// Monday … Sunday, in the interface language (1 January 2024 is a Monday)
 const WEEKDAYS = [...Array(7)].map((_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(locale(), { weekday: 'long' }));
 const TASK_ICONS = { scan: 'search', metadata: 'film', chapters: 'chapters', intros: 'skip', subtitles: 'subs', livetv: 'tv', cleanup: 'trash' };
-// catégories envoyées par le serveur (en français : ce sont aussi des clés de traduction)
+// categories sent by the server (in French: they are also translation keys)
 const CATEGORIES = ['Bibliothèques', 'Lecture', 'TV en direct', 'Maintenance'];
 
 function scheduleText(s) {

@@ -1,7 +1,7 @@
 import { tr } from '../i18n.js';
 
-// Pages de l'administration, rangées par thème dans le menu des Paramètres.
-// keys : mots qui la font trouver avec la recherche du menu.
+// Administration pages, grouped by topic in the Settings menu.
+// keys: words that let the menu search find it.
 const ADMIN_DEFS = [
   { title: tr('Serveur'), items: [
     { id: 'dashboard', label: tr('Vue d’ensemble'), icon: 'dashboard', lead: tr('Version, état du serveur et lectures en cours.'),
@@ -46,7 +46,7 @@ const ADMIN_DEFS = [
       keys: tr('iptv m3u xmltv chaînes guide epg télévision box') },
   ] },
 ];
-// Pages du menu : une page peut réunir plusieurs sujets, en sous-onglets (l'adresse de chacun reste #/admin/<id>).
+// Menu pages: a page can gather several topics, as sub-tabs (each keeps its #/admin/<id> address).
 export function settingsPage(defs, ids, opts = {}) {
   const first = defs[ids[0]];
   return { id: ids[0], label: opts.label || first.label, icon: opts.icon || first.icon, lead: opts.lead || first.lead,

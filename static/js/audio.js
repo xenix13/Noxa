@@ -1,6 +1,6 @@
-// Lecteur audio de l'application (livres audio) : une barre en bas de l'écran, qui continue pendant
-// qu'on navigue. Un livre en plusieurs fichiers se lit à la suite comme un seul (position et chapitres sur la
-// durée totale). Vitesse, minuterie, chapitres ; commandes de l'écran verrouillé (MediaSession).
+// The app's audio player (audiobooks): a bar at the bottom of the screen, which keeps playing while
+// browsing. A book in several files plays in a row as a single one (position and chapters over the
+// total duration). Speed, sleep timer, chapters; lock screen controls (MediaSession).
 import { post } from './api.js';
 import { fmtTime, h, icon, store, toast } from './ui.js';
 import { tr } from './i18n.js';
@@ -8,7 +8,7 @@ import { tr } from './i18n.js';
 const SPEEDS = [0.8, 1, 1.1, 1.25, 1.5, 1.75, 2];
 const REPORT_EVERY = 15000;
 
-let cur = null;      // ce qui est chargé : { kind, id, title, subtitle, cover, files, chapters, duration, progressUrl, offsets }
+let cur = null;      // what is loaded: { kind, id, title, subtitle, cover, files, chapters, duration, progressUrl, offsets }
 let bar = null;
 let audio = null;
 let fileIndex = 0;
@@ -22,7 +22,7 @@ const totalDur = () => (cur ? cur.duration || cur.offsets[cur.offsets.length - 1
 const chapterAt = (ms) => (cur && cur.chapters ? cur.chapters.findIndex((c) => ms >= c.s && ms < c.e) : -1);
 
 export function nowPlaying() { return cur ? { kind: cur.kind, id: cur.id, playing: !audio.paused } : null; }
-const notify = () => listeners.forEach((fn) => { try { fn(nowPlaying()); } catch { /* vue fermée */ } });
+const notify = () => listeners.forEach((fn) => { try { fn(nowPlaying()); } catch { /* view closed */ } });
 
 function ensure() {
   if (bar) return;
@@ -82,7 +82,7 @@ function ensure() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) report({}, true); });
   if ('mediaSession' in navigator) {
     const ms = navigator.mediaSession;
-    const set = (a, fn) => { try { ms.setActionHandler(a, fn); } catch { /* action non prise en charge */ } };
+    const set = (a, fn) => { try { ms.setActionHandler(a, fn); } catch { /* action not supported */ } };
     set('play', () => audio.play());
     set('pause', () => audio.pause());
     set('seekbackward', (e) => seek(totalPos() - ((e && e.seekOffset) || 30) * 1000));
@@ -123,7 +123,7 @@ function clearSleep() {
   bar.refs.sleepBtn.title = tr('Minuterie');
 }
 
-// minuterie : désactivée -> 15 -> 30 -> 45 -> 60 min -> fin du chapitre (livre) -> désactivée
+// sleep timer: off -> 15 -> 30 -> 45 -> 60 min -> end of chapter (book) -> off
 let sleepStep = 0;
 function cycleSleep() {
   const steps = [0, 15, 30, 45, 60, ...(cur.chapters && cur.chapters.length > 1 ? ['chapter'] : [])];
@@ -157,7 +157,7 @@ function chapterMenu() {
 function jumpChapter(dir) {
   if (!cur.chapters || cur.chapters.length < 2) { seek(totalPos() + dir * 30000); return; }
   let i = chapterAt(totalPos());
-  if (dir < 0 && totalPos() - cur.chapters[Math.max(0, i)].s > 4000) dir = 0;  // « précédent » : début du chapitre d'abord
+  if (dir < 0 && totalPos() - cur.chapters[Math.max(0, i)].s > 4000) dir = 0;  // "previous": start of the chapter first
   i = Math.max(0, Math.min(cur.chapters.length - 1, i + dir));
   seek(cur.chapters[i].s + 1);
 }

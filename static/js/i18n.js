@@ -1,7 +1,7 @@
-// Langue de l'interface. Le texte du code est en français et sert de clé : tr('Paramètres') renvoie la
-// traduction de la langue choisie (static/js/i18n/<langue>.js), ou le français s'il n'y en a pas.
-// La langue vient du compte (choisie dans Paramètres → Mon compte), gardée sur l'appareil pour s'afficher
-// dès l'ouverture ; avant la connexion, c'est la langue par défaut du serveur (choisie par un administrateur).
+// Interface language. The text in the code is in French and serves as the key: tr('Paramètres') returns the
+// translation in the chosen language (static/js/i18n/<language>.js), or the French when there is none.
+// The language comes from the account (chosen in Settings → My account), kept on the device to show
+// from the start; before sign-in, it is the server's default language (chosen by an administrator).
 import en from './i18n/en.js';
 
 export const LANGUAGES = [{ id: 'fr', name: 'Français' }, { id: 'en', name: 'English' }];
@@ -26,11 +26,11 @@ function initial() {
 export let lang = initial();
 document.documentElement.lang = lang;
 
-// Format des dates et des nombres (toLocaleDateString, Intl…)
+// Date and number format (toLocaleDateString, Intl…)
 export const locale = () => (lang === 'en' ? 'en-US' : 'fr-FR');
 
-// Un même mot français peut demander deux traductions : la clé porte alors un contexte, « bouton|Lecture »
-// (affiché « Lecture » en français, « Play » en anglais).
+// The same French word can need two translations: the key then carries a context, "bouton|Lecture"
+// (shown "Lecture" in French, "Play" in English).
 export function tr(text, vars) {
   const dict = DICTS[lang];
   let s = (dict && dict[text]) || text.slice(text.indexOf('|') + 1);
@@ -38,15 +38,15 @@ export function tr(text, vars) {
   return s;
 }
 
-// Singulier ou pluriel selon la langue (« 0 épisode » en français, « 0 episodes » en anglais).
+// Singular or plural depending on the language ("0 épisode" in French, "0 episodes" in English).
 // Les deux formes contiennent {n}.
 export function plural(n, one, other, vars) {
   const single = lang === 'fr' ? Math.abs(n) < 2 : n === 1;
   return tr(single ? one : other, { n, ...vars });
 }
 
-// Langue du compte connu : si elle change l'interface, on la garde et la page est rechargée (le texte
-// calculé au chargement des modules doit être refait). Renvoie true si un rechargement est lancé.
+// Language of the known account: if it changes the interface, it is kept and the page is reloaded (the text
+// computed when the modules loaded must be redone). Returns true when a reload is started.
 export function useLanguage(l) {
   if (!LANGUAGES.some((x) => x.id === l)) return false;
   try { localStorage.setItem(STORE, l); } catch { /* stockage indisponible */ }

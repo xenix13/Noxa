@@ -1,4 +1,4 @@
-// Collections, playlists et « À regarder ».
+// Collections, playlists and "Watchlist".
 import { del, get, put } from '../api.js';
 import { state } from '../app.js';
 import { discoverCard } from './discover.js';
@@ -83,7 +83,7 @@ export async function renderPlaylist(main, pid, ctx) {
       h('div.filters',
         first ? h('a.btn.primary', { href: `#/play/${first.id}?playlist=${p.id}` }, icon('play'), tr('Tout lire')) : null,
         pinButton({ type: 'playlist', ref: p.id, title: p.title }),
-        // partagée : tout le foyer la voit, la complète et la réordonne (chacun n'y voit que ce à quoi il a accès)
+        // shared: the whole household sees it, adds to it and reorders it (each person only sees what they have access to)
         p.mine ? toggle(tr('Partager avec le foyer'), p.shared, { onchange: async (e) => {
           try { await put(`/api/playlists/${p.id}`, { shared: e.target.checked }); toast(e.target.checked ? tr('Playlist partagée avec le foyer') : tr('Playlist de nouveau personnelle'), 'ok'); }
           catch (ex) { toast(ex.message, 'bad'); e.target.checked = !e.target.checked; }

@@ -1,10 +1,10 @@
-// Téléchargements pour regarder hors ligne.
-// - Le serveur prépare un MP4 (H.264 / AAC, lisible partout) ; on le récupère par morceaux de 16 Mo, quatre à la
-//   fois, ce qui permet de reprendre après une coupure ou une fermeture de l'application. Hors Safari, le fichier
-//   est un MP4 fragmenté : ses morceaux se récupèrent pendant que le serveur le prépare encore.
-// - Les morceaux, l'affiche et les sous-titres vont dans le stockage du navigateur (Cache API) ; la fiche et
-//   l'avancement dans IndexedDB. Rien ne quitte l'appareil.
-// - Hors ligne, les positions de lecture sont gardées puis renvoyées au serveur au retour du réseau.
+// Downloads to watch offline.
+// - The server prepares an MP4 (H.264 / AAC, playable everywhere); it is fetched in 16 MB chunks, four at a
+//   time, which allows resuming after a network cut or after the app was closed. Outside Safari, the file
+//   is a fragmented MP4: its chunks are fetched while the server is still preparing it.
+// - The chunks, the poster and the subtitles go into the browser's storage (Cache API); the record and
+//   the progress into IndexedDB. Nothing leaves the device.
+// - Offline, playback positions are kept, then sent back to the server when the network returns.
 import { del, get, post } from './api.js';
 import { browserCaps } from './caps.js';
 import { img } from './ui.js';
@@ -13,11 +13,11 @@ import { tr, locale } from './i18n.js';
 const DB_NAME = 'nexis-offline';
 const MEDIA = 'nexis-offline-media';
 const CHUNK = 16 * 1024 * 1024;
-const OLD_CHUNK = 8 * 1024 * 1024; // téléchargements commencés avant le passage à 16 Mo
+const OLD_CHUNK = 8 * 1024 * 1024; // downloads started before the switch to 16 MB
 const PARALLEL = 4;
-// Safari (et tout navigateur d'iPhone / iPad) : MP4 classique, récupéré une fois prêt
+// Safari (and any iPhone / iPad browser): plain MP4, fetched once ready
 const progressiveOk = () => !/iphone|ipad|ipod/i.test(navigator.userAgent) && !(/safari/i.test(navigator.userAgent) && !/chrome|chromium|crios|android|fxios|edg/i.test(navigator.userAgent));
-// ce que CET appareil sait lire (le fichier gardé n'est lu que sur lui) : le serveur ne convertit que le reste
+// what THIS device can play (the kept file is only played on it): the server only converts the rest
 export const deviceCaps = () => { const c = browserCaps(); return { video: c.video, audio: c.audio, containers: ['mp4'] }; };
 
 let dbPromise = null;
@@ -49,7 +49,7 @@ const one = (store, key) => tx(store, 'readonly', (s) => s.get(key));
 
 export const supported = () => 'indexedDB' in window && 'caches' in window && window.isSecureContext;
 
-// ------------------------------------------------------------------ qui regarde (aussi hors ligne)
+// ------------------------------------------------------------------ who is watching (also offline)
 const ME_KEY = 'nexis.offline.me';
 export function rememberMe(me) {
   try { localStorage.setItem(ME_KEY, JSON.stringify({ user: me.user, prefs: me.prefs, libraries: [], features: {} })); } catch { /* ignore */ }
@@ -61,21 +61,21 @@ export function rememberedMe() {
   try { return JSON.parse(localStorage.getItem(ME_KEY) || 'null'); } catch { return null; }
 }
 
-// ------------------------------------------------------------------ abonnement (pages qui affichent l'état)
+// ------------------------------------------------------------------ subscription (pages that show the state)
 const listeners = new Set();
 export function onDownloads(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 const notify = () => listeners.forEach((fn) => { try { fn(); } catch (e) { console.warn(e); } });
 
-// ------------------------------------------------------------------ application installée : continuer en arrière-plan
-// Android gèle une application qu'on quitte : tant qu'un téléchargement est en cours, l'application Noxa se déclare
-// « au travail » (notification « Noxa télécharge… » avec la progression) et le transfert continue, écran éteint
-// compris. Ordinateur : pas de mise en veille pendant un téléchargement.
-const busy = new Map(); // téléchargements en cours (clé -> enregistrement)
+// ------------------------------------------------------------------ installed app: keep going in the background
+// Android freezes an app that is left: while a download runs, the Noxa app declares itself
+// "at work" ("Noxa is downloading…" notification with the progress) and the transfer goes on, screen off
+// included. Computer: no sleep during a download.
+const busy = new Map(); // downloads in progress (key -> record)
 let toldActive = false;
 let tellTimer = null;
 const nativeDownloads = () => (window.NoxaAndroid && window.NoxaAndroid.downloads ? (j) => window.NoxaAndroid.downloads(j)
   : window.noxaNative && window.noxaNative.downloads ? (j) => window.noxaNative.downloads(j) : null);
-const NET_WAIT = 30 * 60 * 1000; // réseau perdu : l'application reste éveillée 30 min pour réessayer
+const NET_WAIT = 30 * 60 * 1000; // network lost: the app stays awake 30 min to try again
 const isBusy = (rec) => ['queued', 'preparing', 'downloading'].includes(rec.state)
   || (rec.state === 'paused' && Date.now() - (rec.pausedAt || 0) < NET_WAIT);
 function track(rec, gone = false) {
@@ -86,8 +86,8 @@ function tellNative() {
   const send = nativeDownloads();
   if (!send) return;
   const active = busy.size > 0;
-  if (!active && !toldActive) return; // rien en cours, rien annoncé
-  if (active === toldActive && tellTimer) return; // prochain envoi déjà prévu (au plus un par seconde)
+  if (!active && !toldActive) return; // nothing running, nothing announced
+  if (active === toldActive && tellTimer) return; // next send already planned (at most one per second)
   const now = () => {
     tellTimer = null;
     const list = [...busy.values()];
@@ -103,7 +103,7 @@ function tellNative() {
           : cur.state === 'paused' ? tr('En attente du réseau…') : tr('En attente')) : '' }));
     } catch { /* ancienne application */ }
   };
-  if (active !== toldActive) { clearTimeout(tellTimer); now(); return; } // début ou fin : tout de suite
+  if (active !== toldActive) { clearTimeout(tellTimer); now(); return; } // start or end: right away
   tellTimer = setTimeout(now, 1000);
 }
 
@@ -118,10 +118,10 @@ export async function list(uid) {
 }
 export const find = (uid, rk) => (supported() ? one('downloads', keyOf(uid, rk)) : Promise.resolve(null));
 
-// ------------------------------------------------------------------ demander un téléchargement
-// opts : { quality, audio (id), subs: [ids des sous-titres texte à garder], burn (id d'un sous-titre image) }
+// ------------------------------------------------------------------ requesting a download
+// opts: { quality, audio (id), subs: [ids of the text subtitles to keep], burn (id of a picture subtitle) }
 export async function download(uid, item, opts) {
-  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); // pas d'effacement par le navigateur
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); // no eviction by the browser
   const key = keyOf(uid, item.id);
   const existing = await one('downloads', key);
   if (existing && existing.state !== 'error') return existing;
@@ -137,11 +137,11 @@ export async function download(uid, item, opts) {
   return rec;
 }
 
-// ------------------------------------------------------------------ file : une préparation / un transfert à la fois
+// ------------------------------------------------------------------ queue: one preparation / one transfer at a time
 let running = false;
-// Coupure de réseau (Wi-Fi instable, application mise en arrière-plan par le système…) : on réessaie tout seul,
-// de plus en plus espacé (10 s, 20 s, 40 s, puis chaque minute), et tout de suite quand la connexion revient ou que
-// Noxa repasse au premier plan. Plus besoin de rouvrir la page Téléchargements.
+// Network cut (unstable Wi-Fi, app sent to the background by the system…): retried automatically,
+// more and more spaced out (10 s, 20 s, 40 s, then every minute), and right away when the connection returns or
+// Noxa comes back to the foreground. No need to reopen the Downloads page anymore.
 let resumeTimer = null;
 let resumeDelay = 0;
 function scheduleResume() {
@@ -150,7 +150,7 @@ function scheduleResume() {
   resumeTimer = setTimeout(() => { resumeTimer = null; pump(); }, resumeDelay);
 }
 function resumeNow() {
-  if (!resumeTimer) return; // rien en attente
+  if (!resumeTimer) return; // nothing waiting
   clearTimeout(resumeTimer);
   resumeTimer = null;
   resumeDelay = 0;
@@ -159,17 +159,17 @@ function resumeNow() {
 window.addEventListener('online', resumeNow);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) resumeNow(); });
 
-// le serveur répond-il ? (on vérifie avant de déclarer la connexion perdue)
+// does the server answer? (checked before declaring the connection lost)
 async function reachable() {
   try {
     const r = await fetch('/api/status', { cache: 'no-store', headers: { 'X-Noxa': '1' }, signal: AbortSignal.timeout(10000) });
     return r.status < 500;
   } catch { return false; }
 }
-// erreur passagère (réseau, morceau coupé, serveur ou proxy momentanément indisponible) : à réessayer, pas une erreur
+// passing error (network, chunk cut, server or proxy briefly unavailable): to retry, not an error
 const transient = (e) => !navigator.onLine || e instanceof TypeError || e.name === 'AbortError' || e.name === 'TimeoutError'
   || e.status === 0 || e.status >= 500 || e.incomplete || /^HTTP 5\d\d$/.test(e.message);
-// petites reprises sur place : jusqu'à ~30 s à attendre que le serveur réponde de nouveau
+// small retries in place: up to ~30 s waiting for the server to answer again
 async function waitNetwork() {
   for (const ms of [1000, 2000, 4000, 8000, 15000]) {
     await new Promise((ok) => setTimeout(ok, ms));
@@ -177,7 +177,7 @@ async function waitNetwork() {
   }
   return false;
 }
-const retries = new Map(); // clé -> { got, n } : reprises sans progrès (évite de tourner en rond)
+const retries = new Map(); // key -> { got, n }: retries without progress (avoids going round in circles)
 
 export async function pump() {
   if (running || !supported()) return;
@@ -190,16 +190,16 @@ export async function pump() {
       const pending = (await all('downloads')).filter((d) => ['queued', 'preparing', 'downloading', 'paused'].includes(d.state));
       const next = pending[0];
       if (!next) break;
-      // les deux suivants : préparation demandée tout de suite, le serveur avance pendant ce transfert-ci
+      // the next two: preparation requested right away, the server moves on during this transfer
       for (const later of pending.slice(1, 3)) if (!later.job) requestJob(later).catch(() => {});
       const ok = await work(next);
-      if (!ok) { stalled = true; break; } // réseau coupé : nouvel essai automatique
+      if (!ok) { stalled = true; break; } // network cut: new automatic try
       resumeDelay = 0;
     }
   } finally {
     running = false;
     if (stalled) scheduleResume();
-    // file terminée, ou réseau absent depuis plus de 30 min : l'application peut se rendormir
+    // queue finished, or network missing for more than 30 min: the app can go back to sleep
     for (const [k, d] of busy) if (!isBusy(d) || (!stalled && d.state === 'paused')) busy.delete(k);
     tellNative();
   }
@@ -219,7 +219,7 @@ async function requestJob(rec) {
   return job;
 }
 
-// morceaux [rec.got, upto) : quatre à la fois ; rec.got avance sur ceux reçus d'affilée (reprise exacte)
+// chunks [rec.got, upto): four at a time; rec.got moves over those received in a row (exact resume)
 async function transfer(rec, upto, cache) {
   const size = rec.chunk || (rec.got ? OLD_CHUNK : CHUNK);
   if (!rec.chunk) await save(rec, { chunk: size });
@@ -234,7 +234,7 @@ async function transfer(rec, upto, cache) {
     if (res.status === 404) { const e = new Error('gone'); e.gone = true; throw e; }
     if (res.status !== 206 && res.status !== 200) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
-    if (blob.size !== end - start + 1) { const e = new Error('morceau incomplet'); e.incomplete = true; throw e; } // connexion coupée
+    if (blob.size !== end - start + 1) { const e = new Error('morceau incomplet'); e.incomplete = true; throw e; } // connection cut
     await cache.put(mediaUrl(rec.key, `chunk-${n}`), new Response(blob));
     done.add(n);
     let got = rec.got;
@@ -259,16 +259,16 @@ async function resetChunks(rec, cache, patch) {
 async function work(rec) {
   const cache = await caches.open(MEDIA);
   try {
-    if (rec.unstable) await save(rec, { unstable: false }); // reste d'une coupure (application fermée entre-temps)
+    if (rec.unstable) await save(rec, { unstable: false }); // left over from a cut (app closed meanwhile)
     if (!rec.posterSaved) {
       const art = rec.item.type === 'episode' ? (rec.item.thumb || rec.item.show_thumb) : rec.item.thumb;
       if (art) {
         const res = await fetch(img(art, 400, rec.item.type === 'episode' ? 225 : 600));
         if (res.ok) await cache.put(mediaUrl(rec.key, 'poster'), res);
       }
-      for (const s of rec.item.subtitles) {  // sous-titres texte : les répliques, déjà converties par le serveur
+      for (const s of rec.item.subtitles) {  // text subtitles: the lines, already converted by the server
         let r = await get(`/api/items/${rec.rk}/subtitles/${s.id}`);
-        for (let i = 0; i < 90 && r && (r.pending || r.partial); i++) {  // encore en extraction sur le serveur
+        for (let i = 0; i < 90 && r && (r.pending || r.partial); i++) {  // still being extracted on the server
           await new Promise((ok) => setTimeout(ok, 2000));
           r = await get(`/api/items/${rec.rk}/subtitles/${s.id}`);
         }
@@ -277,14 +277,14 @@ async function work(rec) {
       }
       await save(rec, { posterSaved: true });
     }
-    // 1. préparation sur le serveur ; les parties déjà écrites se récupèrent pendant ce temps (MP4 fragmenté)
+    // 1. preparation on the server; the parts already written are fetched meanwhile (fragmented MP4)
     for (;;) {
       let job;
       try {
         job = rec.job ? await get(`/api/downloads/${rec.job}`) : null;
       } catch (e) {
         if (e.status !== 404) throw e;
-        job = null; // serveur redémarré : on redemande
+        job = null; // server restarted: ask again
       }
       if (!job) {
         if (rec.got) await resetChunks(rec, cache, {});
@@ -292,7 +292,7 @@ async function work(rec) {
       }
       if (job.state === 'error') { await save(rec, { state: 'error', error: job.error }); return true; }
       if (job.gen !== undefined && rec.gen !== undefined && job.gen !== rec.gen) {
-        await resetChunks(rec, cache, { gen: job.gen }); // nouvel essai sur le serveur : on repart de zéro
+        await resetChunks(rec, cache, { gen: job.gen }); // new try on the server: start again from zero
       }
       if (job.state === 'ready') {
         if (!rec.chunk) await save(rec, { chunk: rec.got ? OLD_CHUNK : CHUNK });
@@ -301,19 +301,19 @@ async function work(rec) {
       }
       await save(rec, { state: 'preparing', prep: job.progress || 0, waiting: !!job.waiting, convert: job.mode === 'transcode', gen: job.gen });
       if (job.progressive && job.ready) {
-        const whole = Math.floor(job.ready / (rec.chunk || CHUNK)); // morceaux entièrement écrits
+        const whole = Math.floor(job.ready / (rec.chunk || CHUNK)); // chunks fully written
         if (whole > rec.got) {
           try { await transfer(rec, whole, cache); } catch (e) {
-            if (!e.gone && !/HTTP 409/.test(e.message)) throw e; // 409 : rattrapé par la préparation, on attend
+            if (!e.gone && !/HTTP 409/.test(e.message)) throw e; // 409: caught up with the preparation, wait
           }
           continue;
         }
       }
       await new Promise((r) => setTimeout(r, 2500));
       const fresh = await one('downloads', rec.key);
-      if (!fresh) return true; // supprimé entre-temps
+      if (!fresh) return true; // deleted meanwhile
     }
-    // 2. transfert de ce qui reste (reprend là où il s'était arrêté)
+    // 2. transfer of what is left (resumes where it stopped)
     await save(rec, { state: 'downloading' });
     try {
       await transfer(rec, rec.chunks, cache);
@@ -321,24 +321,24 @@ async function work(rec) {
       if (e.gone) { await save(rec, { job: null, state: 'queued', got: 0 }); return true; }
       throw e;
     }
-    if (!(await one('downloads', rec.key))) return true; // supprimé entre-temps
-    del(`/api/downloads/${rec.job}`).catch(() => {}); // le serveur peut effacer sa copie
+    if (!(await one('downloads', rec.key))) return true; // deleted meanwhile
+    del(`/api/downloads/${rec.job}`).catch(() => {}); // the server can erase its copy
     await save(rec, { state: 'done', job: null, doneAt: Date.now() });
     return true;
   } catch (e) {
     if (e.name === 'QuotaExceededError') {
-      const app = window.noxaNative || window.NoxaAndroid; // application : pas d'autorisation à donner, l'appareil est plein
+      const app = window.noxaNative || window.NoxaAndroid; // app: no permission to give, the device is full
       await save(rec, { state: 'error', error: app ? tr('Plus de place sur l’appareil. Supprimez un téléchargement ou libérez de l’espace.')
         : tr('Espace de stockage épuisé. Autorisez plus d’espace ou supprimez un téléchargement.') });
       return true;
     }
     if (transient(e)) {
-      // le serveur répond de nouveau (coupure brève) : on reprend tout de suite, là où on en était
+      // the server answers again (short cut): resume right away, where it was
       const r = retries.get(rec.key);
       const n = r && r.got === rec.got ? r.n + 1 : 0;
       retries.set(rec.key, { got: rec.got, n });
       if (n < 6) {
-        await save(rec, { unstable: true }); // affiché : « Connexion instable : nouvel essai… »
+        await save(rec, { unstable: true }); // shown: "Unstable connection: trying again…"
         const back = await waitNetwork();
         await save(rec, { unstable: false });
         if (back) return true;
@@ -366,7 +366,7 @@ export async function removeDownload(key) {
   notify();
 }
 
-// plusieurs d'un coup (sélection de la page Téléchargements) : le stockage n'est parcouru qu'une fois
+// several at once (selection on the Downloads page): the storage is only scanned once
 export async function removeMany(keys) {
   const wanted = new Set(keys);
   const prefixes = [];
@@ -402,7 +402,7 @@ export async function playable(uid, rk) {
   const parts = [];
   for (let n = 0; n < rec.chunks; n++) {
     const res = await cache.match(mediaUrl(rec.key, `chunk-${n}`));
-    if (!res) return null; // effacé par le navigateur (place manquante)
+    if (!res) return null; // erased by the browser (not enough space)
     parts.push(await res.blob());
   }
   const urls = [];
@@ -428,7 +428,7 @@ export async function posterUrl(rec) {
   return res ? URL.createObjectURL(await res.blob()) : null;
 }
 
-// Épisode suivant… parmi les téléchargements
+// Next episode… among the downloads
 export async function nextDownloaded(uid, item) {
   if (item.type !== 'episode') return null;
   const eps = (await list(uid)).filter((d) => d.state === 'done' && d.item.show_id === item.show_id);
@@ -436,9 +436,9 @@ export async function nextDownloaded(uid, item) {
   return after.length ? after[0].item : null;
 }
 
-// ------------------------------------------------------------------ téléchargements intelligents (réglage de l'appareil)
-// Un épisode téléchargé regardé jusqu'au bout : l'épisode suivant se télécharge (mêmes langues, même qualité), et,
-// si on le demande, l'épisode vu est supprimé. Fait au retour du réseau si on regardait hors ligne.
+// ------------------------------------------------------------------ smart downloads (device setting)
+// A downloaded episode watched to the end: the next episode is downloaded (same languages, same quality), and,
+// when asked, the watched episode is deleted. Done when the network returns if it was watched offline.
 const SMART_KEY = 'nexis.dl.smart';
 const SMART_QUEUE = 'nexis.dl.smartQueue';
 const readLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? d; } catch { return d; } };
@@ -482,7 +482,7 @@ async function runSmart() {
           await download(x.uid, full, { ...matchTracks(rec, full), quality: rec.opts.quality, smart: true });
         }
         if (s.clean) await removeDownload(x.key);
-      } catch { left.push(x); } // réseau coupé entre-temps : on réessaiera
+      } catch { left.push(x); } // network cut meanwhile: will try again
     }
   } finally {
     if (left.length) writeLS(SMART_QUEUE, [...readLS(SMART_QUEUE, []), ...left]);
@@ -490,7 +490,7 @@ async function runSmart() {
   }
 }
 
-// ------------------------------------------------------------------ positions de lecture hors ligne
+// ------------------------------------------------------------------ offline playback positions
 export async function saveProgress(uid, item, position, duration, ended) {
   await put('progress', { key: keyOf(uid, item.id), id: String(item.id), uid, position, duration, ended: !!ended, at: Math.floor(Date.now() / 1000) });
   const rec = await one('downloads', keyOf(uid, item.id));
@@ -508,12 +508,12 @@ export async function syncProgress(uid) {
     if (!pending.length) return;
     await post('/api/progress/offline', { items: pending });
     await Promise.all(pending.map((p) => remove('progress', p.key)));
-  } catch { /* on réessaiera */ } finally {
+  } catch { /* will try again */ } finally {
     syncing = false;
   }
 }
 
-// Place accordée par le NAVIGATEUR à Noxa (ce n'est pas la place libre du téléphone) et stockage persistant
+// Space the BROWSER grants Noxa (this is not the phone's free space) and persistent storage
 export async function usage() {
   try {
     const [est, persisted] = await Promise.all([navigator.storage.estimate(), navigator.storage.persisted ? navigator.storage.persisted() : false]);
@@ -521,7 +521,7 @@ export async function usage() {
   } catch { return null; }
 }
 
-// Demande au navigateur de garder les téléchargements (et, sur Firefox, de lever la limite de 10 Go)
+// Asks the browser to keep the downloads (and, on Firefox, to lift the 10 GB limit)
 export async function askPersist() {
   try { return navigator.storage && navigator.storage.persist ? await navigator.storage.persist() : false; } catch { return false; }
 }

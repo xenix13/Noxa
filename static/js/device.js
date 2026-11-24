@@ -1,6 +1,6 @@
-// Réglages propres à cet appareil (ce navigateur, cette TV), gardés dans le navigateur et prioritaires sur
-// ceux du profil : qualité de lecture, taille des sous-titres (une TV se regarde de plus loin), animations,
-// navigation à la télécommande.
+// Settings specific to this device (this browser, this TV), kept in the browser and taking priority over
+// the profile's: playback quality, subtitle size (a TV is watched from further away), animations,
+// remote control navigation.
 const KEY = 'nexis-device';
 
 export function device() {
@@ -13,12 +13,12 @@ export function device() {
 export function setDevice(patch) {
   const d = { ...device(), ...patch };
   for (const k of Object.keys(d)) if (d[k] === '' || d[k] == null) delete d[k];
-  try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* stockage indisponible : réglage pour cette session */ }
+  try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* storage unavailable: setting for this session */ }
   applyDevice();
   return d;
 }
 
-// préférences du profil, corrigées par celles de l'appareil
+// profile preferences, corrected by the device's
 export function deviceOverrides() {
   const d = device();
   const o = {};
@@ -27,7 +27,7 @@ export function deviceOverrides() {
   return o;
 }
 
-// appareil modeste (peu de mémoire ou de cœurs, transparence réduite demandée par le système) : effets allégés
+// modest device (little memory or few cores, reduced transparency asked by the system): lighter effects
 export function modestDevice() {
   const mem = navigator.deviceMemory;
   const cores = navigator.hardwareConcurrency;
@@ -39,13 +39,13 @@ export function applyDevice() {
   const d = device();
   const r = document.documentElement;
   r.classList.toggle('reduce-motion', d.motion === 'reduced');
-  // effets visuels : flou, transparence, ombres ; « allégés » pour une TV ou un appareil modeste
+  // visual effects: blur, transparency, shadows; "lighter" for a TV or a modest device
   r.classList.toggle('lite', d.effects === 'lite' || (d.effects !== 'full' && modestDevice()));
   if (d.remote === 'on') r.classList.add('remote');
   else if (d.remote === 'off') r.classList.remove('remote');
 }
 
-// Identifiant de cet appareil (télécommande) : tiré au hasard une fois, gardé dans le navigateur
+// Id of this device (remote control): drawn at random once, kept in the browser
 export function deviceId() {
   try {
     let id = localStorage.getItem('nexis-device-id');
@@ -57,7 +57,7 @@ export function deviceId() {
   } catch { return 'session' + Math.random().toString(16).slice(2, 14); }
 }
 
-// Nom de l'appareil montré dans la télécommande : choisi dans Cet appareil, sinon navigateur et système
+// Device name shown in the remote: chosen in This device, otherwise browser and system
 export function deviceName() {
   const set = device().name;
   if (set) return set;

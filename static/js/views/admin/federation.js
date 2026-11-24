@@ -5,7 +5,7 @@ import { plural, tr } from '../../i18n.js';
 import { clear, confirmDialog, field, h, icon, modal, select, toast, toggle } from '../../ui.js';
 import { since } from './util.js';
 
-// ----------------------------------------------------------------- serveurs liés
+// ----------------------------------------------------------------- linked servers
 async function inviteDialog(view) {
   const address = h('input', { value: view.address_manual || view.address, placeholder: view.address });
   const out = h('div');
@@ -39,7 +39,7 @@ async function joinDialog() {
   const address = h('input', { placeholder: tr('facultatif, ex. 192.168.1.30:8421') });
   const accounts = h('div');
   const err = h('p.form-error');
-  let choices = null; // identifiants présents des deux côtés, une fois l'invitation vérifiée
+  let choices = null; // usernames present on both sides, once the invitation is checked
   invite.addEventListener('input', () => { choices = null; clear(accounts); });
   const body = h('div.form',
     field(tr('Invitation créée sur l’autre serveur'), invite),
@@ -69,7 +69,7 @@ async function joinDialog() {
         if (!choices) {
           const preview = await post('/api/admin/federation/join/preview', { invite: invite.value.trim() });
           showChoices(preview);
-          if (choices.length) { err.textContent = ''; return false; } // l'administrateur vérifie, puis relance
+          if (choices.length) { err.textContent = ''; return false; } // the administrator checks, then tries again
         }
         const picked = {};
         for (const x of choices) picked[x.c.username] = x.same.value === 'merge' ? { merge: true } : { rename: x.rename.value.trim() };
@@ -81,7 +81,7 @@ async function joinDialog() {
 
 const shortPrint = (fp) => (fp ? fp.slice(0, 32).toUpperCase().match(/.{4}/g).join(' ') : '—');
 
-// Accepter ou non d'être administré depuis un serveur lié (réglé sur place : jamais depuis un autre serveur)
+// Accept or not to be administered from a linked server (set on site: never from another server)
 function remoteAdminPanel() {
   if (adminTarget()) return null;
   const box = h('section.panel', h('h2', tr('Administration depuis les serveurs liés')));

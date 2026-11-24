@@ -22,7 +22,7 @@ export async function statsPage(body, ctx) {
     const tile = (label, value, sub) => h('div.stat-tile', h('div.stat-label', label), h('div.stat-value', value), sub ? h('div.stat-sub', sub) : null);
     const tModes = r.modes;
     const pct = (n) => (t.plays ? Math.round((n / t.plays) * 100) : 0);
-    // une seule série (heures par jour) : barres, valeur au survol, titre qui la nomme
+    // a single series (hours per day): bars, value on hover, title that names it
     const max = Math.max(1, ...r.per_day.map((d) => d.seconds));
     const chart = h('div.stat-chart', { role: 'img', 'aria-label': tr('Heures de visionnage par jour') },
       r.per_day.map((d) => h('div.stat-col', { title: `${new Date(d.day).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })} : ${hours(d.seconds)}` },

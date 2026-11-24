@@ -1,4 +1,4 @@
-// « Découvrir » : catalogues Netflix, Prime Video, Disney+… et demandes via Seerr.
+// "Discover": Netflix, Prime Video, Disney+… catalogues and requests through Seerr.
 import { get, post } from '../api.js';
 import { state } from '../app.js';
 import { clear, h, icon, modal, row, select, spinner, toast } from '../ui.js';
@@ -17,7 +17,7 @@ export function tmdbImg(path, kind = 'poster') {
 
 const titleHref = (c) => (c.item_id ? `#/item/${c.item_id}` : `#/discover/title/${c.media_type}/${c.tmdb_id}`);
 
-// Demande depuis une carte, sans quitter la liste : film tout de suite, série après le choix des saisons
+// Request from a card, without leaving the list: movie right away, show after choosing the seasons
 async function quickRequest(c, btn, paint) {
   btn.disabled = true;
   try {
@@ -38,7 +38,7 @@ async function quickRequest(c, btn, paint) {
 
 const shortDate = (d) => { try { return new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
 
-// opts.request : bouton « Demander » sur la carte (Seerr branché) ; opts.date : date de sortie à la place de l'année
+// opts.request: "Request" button on the card (Seerr connected); opts.date: release date instead of the year
 export function discoverCard(c, opts = {}) {
   let badge = h('span', { hidden: true });
   const ask = h('button.dcard-ask', { type: 'button', title: tr('Demander'), 'aria-label': tr('Demander « {title} »', { title: c.title }) }, '+');
@@ -60,7 +60,7 @@ export function discoverCard(c, opts = {}) {
   return card;
 }
 
-// Recherche : résultats pendant la frappe (sans remplir l'historique), Entrée pour valider
+// Search: results while typing (without filling the history), Enter to confirm
 function searchBox(value) {
   const input = h('input', { type: 'search', value, placeholder: tr('Un film, une série…'), 'aria-label': tr('Rechercher un titre') });
   const target = () => { const q = input.value.trim(); return q ? `#/discover?q=${encodeURIComponent(q)}` : '#/discover'; };
@@ -69,7 +69,7 @@ function searchBox(value) {
     clearTimeout(timer);
     timer = setTimeout(() => {
       if (!input.isConnected || target() === location.hash) return;
-      // première lettre : une entrée d'historique (le bouton Retour ramène à Découvrir) ; ensuite on la remplace
+      // first letter: one history entry (the Back button returns to Discover); then it is replaced
       if (new URLSearchParams(location.hash.split('?')[1] || '').get('q') === null) location.hash = target();
       else location.replace(target());
     }, 450);
@@ -84,7 +84,7 @@ const browseHref = (o) => `#/discover?${new URLSearchParams(Object.entries(o).fi
 const SECTION_TITLES = () => ({ upcoming_movie: tr('Films à venir'), upcoming_tv: tr('Séries à venir'),
   popular_movie: tr('Films populaires'), popular_tv: tr('Séries populaires') });
 
-// raccourcis en haut de Découvrir : les listes les plus utiles en un clic
+// shortcuts at the top of Discover: the most useful lists in one click
 function shortcuts(active) {
   const items = [[tr('Tendances'), { sort: 'trending', type: 'movie' }], [tr('Films à venir'), { sort: 'upcoming', type: 'movie' }],
     [tr('Séries à venir'), { sort: 'upcoming', type: 'tv' }], [tr('Films populaires'), { sort: 'popular', type: 'movie' }],
@@ -108,7 +108,7 @@ export async function renderDiscover(main, ctx) {
       h('div.grid', items.map((c) => discoverCard(c, { request: r.seerr })))) : null);
     clear(main, head, h('p.muted', tr('Résultats pour « {q} »', { q })),
       r.results.length ? [group(tr('Films'), by('movie')), group(tr('Séries'), by('tv'))] : h('div.empty', tr('Aucun titre trouvé.')));
-    if (typing) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } // on continue de taper
+    if (typing) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } // still typing
     return;
   }
   if (provider || ctx.query.get('sort') || ctx.query.get('type') || ctx.query.get('genre')) return renderBrowse(main, head, Number(provider) || 0, ctx);
@@ -129,7 +129,7 @@ export async function renderDiscover(main, ctx) {
     dataCredit());
 }
 
-// Liste complète : films ou séries, tri (populaires, tendances, à venir…), genre et service, « Voir plus » en bas
+// Full list: movies or shows, sort (popular, trending, upcoming…), genre and service, "See more" at the bottom
 async function renderBrowse(main, head, provider, ctx) {
   const type = ctx.query.get('type') === 'tv' ? 'tv' : 'movie';
   const sorts = SORT_LABELS();
@@ -138,8 +138,8 @@ async function renderBrowse(main, head, provider, ctx) {
   const go = (k, v) => {
     const o = { provider: provider || '', type, sort, genre: genre || '' };
     o[k] = v;
-    if (k === 'type') o.genre = '';                                   // les genres diffèrent entre films et séries
-    if ((o.provider || o.genre) && o.sort === 'trending') o.sort = 'popular'; // tendances : sans filtre
+    if (k === 'type') o.genre = '';                                   // genres differ between movies and shows
+    if ((o.provider || o.genre) && o.sort === 'trending') o.sort = 'popular'; // trending: no filter
     location.hash = browseHref(o);
   };
   const grid = h('div.grid');
@@ -165,7 +165,7 @@ async function renderBrowse(main, head, provider, ctx) {
       for (const g of r.genres || []) genreSel.append(h('option', { value: g.id, selected: g.id === genre }, g.name));
       for (const p of r.providers || []) provSel.append(h('option', { value: p.id, selected: p.id === provider }, p.name));
       const label = (sorts.find(([v]) => v === sort) || sorts[0])[1];
-      // (replaceChildren écrit « null » tel quel : pas de valeur vide dans la liste)
+      // (replaceChildren writes "null" as is: no empty value in the list)
       title.replaceChildren(...[r.provider && r.provider.logo ? h('img.provider-logo.big', { src: tmdbImg(r.provider.logo, 'logo'), alt: '' }) : null,
         [r.provider ? r.provider.name : null, type === 'tv' ? tr('Séries') : tr('Films'), label].filter(Boolean).join(' · ')].filter(Boolean));
       document.title = `${tr('Découvrir')} · Noxa`;

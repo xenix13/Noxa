@@ -25,7 +25,7 @@ async function userForm(user, libraries, defaultLang = 'fr', others = []) {
   const age = select(AGE_LIMITS, user.max_age == null ? '' : String(user.max_age));
   const unrated = toggle(tr('Autoriser les contenus sans classification'), user.allow_unrated);
   const kids = toggle(tr('Interface enfant : grandes vignettes, menu simplifié'), user.kids);
-  // temps d'écran et limites du compte
+  // screen time and account limits
   const minutes = select([['', tr('Illimité')], ['30', tr('30 min')], ['45', tr('45 min')], ['60', tr('1 h')], ['90', tr('1 h 30')],
     ['120', tr('2 h')], ['180', tr('3 h')], ['240', tr('4 h')], ['360', tr('6 h')]],
   user.daily_minutes ? String(user.daily_minutes) : '');
@@ -66,7 +66,7 @@ async function userForm(user, libraries, defaultLang = 'fr', others = []) {
   age.addEventListener('change', sync);
   sync();
   const err = h('p.form-error');
-  // téléphone perdu : l'administrateur désactive la double authentification du compte
+  // phone lost: the administrator turns off the account's two-factor authentication
   const twoFactor = !isNew && user.two_factor ? h('div.twofa-admin',
     h('span.small', tr('Double authentification activée.')),
     h('button.btn.small', { type: 'button', onclick: async (e) => {
@@ -137,7 +137,7 @@ export async function usersTab(body, ctx) {
   if (!ctx.isCurrent()) return;
   const libraries = libs.libraries;
   const defaultLang = settings.default_language;
-  // langue proposée aux nouveaux comptes (et affichée avant la connexion)
+  // language offered to new accounts (and shown before sign-in)
   const langSel = select(LANGUAGES.map((l) => [l.id, l.name]), defaultLang, { onchange: async (e) => {
     try { await put('/api/admin/settings', { default_language: e.target.value }); toast(tr('Langue par défaut enregistrée'), 'ok'); reload(); }
     catch (ex) { toast(ex.message, 'bad'); }

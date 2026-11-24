@@ -1,6 +1,6 @@
-// Logos des plateformes (page Applications, bouton Installer). Apple, Android et Linux : Simple Icons
-// (https://simpleicons.org, CC0-1.0) ; Windows : quatre carrés. Les marques appartiennent à leurs propriétaires ;
-// les logos indiquent seulement où l'application s'installe.
+// Platform logos (Apps page, Install button). Apple, Android and Linux: Simple Icons
+// (https://simpleicons.org, CC0-1.0); Windows: four squares. Trademarks belong to their owners;
+// the logos only show where the app installs.
 import { h } from './ui.js';
 
 const PATHS = {

@@ -1,5 +1,5 @@
 import { tr } from './i18n.js';
-// QR code dessiné en SVG (bibliothèque qrcode-generator, MIT, fournie dans static/vendor/qrcode)
+// QR code drawn as SVG (qrcode-generator library, MIT, shipped in static/vendor/qrcode)
 export async function qrSvg(text, size = 200) {
   const { default: qrcode } = await import('/vendor/qrcode/qrcode.mjs');
   const qr = qrcode(0, 'M');

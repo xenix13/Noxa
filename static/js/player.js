@@ -17,27 +17,27 @@ import { AIRPLAY_CAPS, CHROMECAST_CAPS, castDeviceName, castLoad, loadCastSdk, w
 
 const REPORT_EVERY = 10000;
 const HIDE_AFTER = 3000;
-// Secondes de vidéo à avoir en réserve avant de démarrer / de reprendre après une coupure.
-// Une conversion à la volée produit à peine plus vite que le temps réel : on prend de l'avance.
+// Seconds of video to have buffered before starting / resuming after a stall.
+// An on-the-fly conversion produces barely faster than real time: get ahead.
 const PREROLL = { direct: 5, copy: 12, transcode: 20 };
-const PREROLL_SEEK = { direct: 3, copy: 6, transcode: 10 }; // après un saut : réserve plus courte
+const PREROLL_SEEK = { direct: 3, copy: 6, transcode: 10 }; // after a seek: shorter buffer
 const REBUFFER = { direct: 6, copy: 15, transcode: 25 };
 const PREPARE_MAX = 10 * 60 * 1000;
-// décalage d'horloge avec le serveur (regarder ensemble), gardé d'un épisode à l'autre
+// clock offset with the server (watch together), kept from one episode to the next
 const clock = { offset: 0, at: 0 };
 const CLOCK_TTL = 10 * 60 * 1000;
 
 
-// Vitesse de lecture et minuterie de mise en veille : gardées d'un épisode à l'autre (le lecteur est recréé)
+// Playback speed and sleep timer: kept from one episode to the next (the player is recreated)
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 let speed = 1;
-let speedChosen = false; // vitesse choisie dans le lecteur : gardée d'un épisode à l'autre, sinon celle du profil
-const sleep = { at: 0, endOfItem: false }; // at : instant de la mise en pause (ms) ; endOfItem : à la fin de la vidéo
+let speedChosen = false; // speed chosen in the player: kept from one episode to the next, otherwise the profile's
+const sleep = { at: 0, endOfItem: false }; // at: instant of the pause (ms); endOfItem: at the end of the video
 
 export async function renderPlayer(root, rk, ctx) {
-  const hlsReady = loadHls(); // en parallèle du chargement de la fiche
-  const prefs = { ...state.me.prefs, ...deviceOverrides() }; // réglages de l'appareil prioritaires
-  const BACK = (Number(prefs.skip_back) || 10) * 1000, FWD = (Number(prefs.skip_forward) || 30) * 1000; // sauts du profil
+  const hlsReady = loadHls(); // in parallel with loading the title page
+  const prefs = { ...state.me.prefs, ...deviceOverrides() }; // device settings take priority
+  const BACK = (Number(prefs.skip_back) || 10) * 1000, FWD = (Number(prefs.skip_forward) || 30) * 1000; // profile's skips
   const isAdmin = state.me.user.is_admin;
   const video = h('video.video', { playsinline: true, preload: 'auto', 'x-webkit-airplay': 'allow' });
   const subLayer = h('div.sub-layer', { style: { fontSize: `${(prefs.sub_size / 100) * 2.4}vmin` } });
@@ -76,11 +76,11 @@ export async function renderPlayer(root, rk, ctx) {
   const groupBanner = h('div.group-banner', { hidden: true });
   const skipLabel = h('span', tr('Passer l’intro'));
   const skipBtn = h('button.skip-btn', { hidden: true }, icon('skip'), skipLabel);
-  let skipping = null; // repère que le bouton « Passer » fait sauter (intro ou récap)
+  let skipping = null; // marker the "Skip" button jumps over (intro or recap)
   const nextCard = h('div.next-card', { hidden: true });
   const backBtn = h('button.ctl.back', { 'aria-label': tr('Retour') }, icon('back'));
   const miniBtn = h('button.ctl', { 'aria-label': tr('Réduire le lecteur'), title: tr('Réduire (i) : continuer à naviguer') }, icon('pip'));
-  // commandes du lecteur réduit (coin de l'écran)
+  // controls of the mini player (corner of the screen)
   const miniPlay = h('button.ctl', { 'aria-label': tr('Lecture/Pause') }, icon('pause'));
   const miniBar = h('div.mini-bar',
     h('button.ctl', { 'aria-label': tr('Agrandir le lecteur'), title: tr('Agrandir') }, icon('full')), miniPlay,
@@ -102,7 +102,7 @@ export async function renderPlayer(root, rk, ctx) {
   // ------------------------------------------------------------ state
   let item, session = null, hls = null, base = 0, cues = [], cueKey = '', cueMax = 0;
   let jassub = null, jassubKey = '', pgs = null, pgsKey = '';
-  // sous-titres encore en cours d'extraction : prêts jusqu'à subsUntil (ms), rechargés régulièrement
+  // subtitles still being extracted: ready up to subsUntil (ms), reloaded regularly
   let subsUntil = null, subsRefresh = null;
   const SUBS_REFRESH = 20000;
   let audioSel = null, subSel = null, quality = prefs.quality;
@@ -110,20 +110,20 @@ export async function renderPlayer(root, rk, ctx) {
   let idleTimer = null, scrubbing = false, startedAt = 0;
   let switching = true, finished = false; // no progress reports while a stream is (re)starting or after the end
   let rebuffering = false, stalls = [], lowerHinted = false, everPlayed = false;
-  let bandwidth = null; // débit mesuré (kbit/s), pour la qualité automatique
-  let convSpeed = -1;   // vitesse de la conversion du serveur (x temps réel), -1 : inconnue
-  let titleKbps = 0;    // débit retenu pour ce titre seulement (conversion trop lente du serveur)
+  let bandwidth = null; // measured bandwidth (kbit/s), for automatic quality
+  let convSpeed = -1;   // speed of the server's conversion (x real time), -1: unknown
+  let titleKbps = 0;    // bandwidth kept for this title only (server conversion too slow)
   let slowHinted = false;
-  let airplay = false; // la vidéo passe sur une Apple TV : flux natif, lisible sans la session du navigateur
+  let airplay = false; // the video goes to an Apple TV: native stream, playable without the browser session
 
-  // téléchargement lu hors ligne (#/offline/…) : fichier gardé sur l'appareil, rien ne passe par le serveur
+  // download played offline (#/offline/…): file kept on the device, nothing goes through the server
   const offline = !!ctx.offline;
   let local = null;
-  // « Regarder ensemble » : position partagée par le groupe (voir seance/syncplay.py)
+  // "Watch together": position shared by the group (see noxa/syncplay.py)
   const groupId = offline ? null : ctx.query.get('group');
   let group = null;
 
-  // lecteur réduit : il survit à la navigation, il ne dépend donc plus de la page qui l'a ouvert
+  // mini player: it survives navigation, so it no longer depends on the page that opened it
   let mini = false, detached = false;
   const current = () => !destroyed && (detached || ctx.isCurrent());
   const duration = () => (session && session.duration) || (item && item.duration) || 0;
@@ -155,7 +155,7 @@ export async function renderPlayer(root, rk, ctx) {
   const lp = withLibLangs(prefs, item);
   audioSel = pickAudio(item.audio || [], lp, item.track_prefs);
   subSel = pickSubtitle(item.subtitles || [], audioSel, lp, item.track_prefs);
-  // choix faits sur la fiche juste avant de lancer
+  // choices made on the title page just before starting
   const qa = ctx.query.get('a'), qs = ctx.query.get('s');
   if (qa !== null) audioSel = (item.audio || []).find((a) => String(a.id) === qa) || audioSel;
   if (qs !== null) subSel = qs === '0' ? null : ((item.subtitles || []).find((x) => String(x.id) === qs) || subSel);
@@ -174,7 +174,7 @@ export async function renderPlayer(root, rk, ctx) {
       const r = await get(`/api/items/${item.id}/trickplay`);
       if (r.ready) trick = r;
       else if (again && !destroyed) setTimeout(() => loadTrick(false), 60000);
-    } catch { /* pas d'aperçu */ }
+    } catch { /* no preview */ }
   };
   if (!offline) loadTrick(true);
   const rememberTracks = () => offline ? null : put(`/api/items/${item.id}/tracks`, trackPayload(audioSel, subSel)).catch(() => {});
@@ -198,7 +198,7 @@ export async function renderPlayer(root, rk, ctx) {
   paintGroup();
 
   const savedVol = Number(store('seance.volume'));
-  const keepVol = prefs.remember_volume !== false; // volume et coupure du son gardés (réglage du profil)
+  const keepVol = prefs.remember_volume !== false; // volume and mute kept (profile setting)
   video.volume = keepVol && Number.isFinite(savedVol) && store('seance.volume') !== null ? savedVol : 1;
   video.muted = keepVol && store('seance.muted') === '1';
   if (!speedChosen) speed = Number(prefs.default_speed) || 1;
@@ -212,7 +212,7 @@ export async function renderPlayer(root, rk, ctx) {
     timeoutRetry: { maxNumRetry: retries, retryDelayMs: 1000, maxRetryDelayMs: 4000 },
     errorRetry: { maxNumRetry: retries, retryDelayMs: 1000, maxRetryDelayMs: 8000 },
   } });
-  // Flux HLS : playlist VOD complète, horodatages d'origine -> currentTime = position réelle.
+  // HLS stream: complete VOD playlist, original timestamps -> currentTime = real position.
   const HLS_CONFIG = {
     maxBufferLength: 60, maxMaxBufferLength: 120, backBufferLength: 90,
     manifestLoadPolicy: slow(60000, 90000, 2),
@@ -228,7 +228,7 @@ export async function renderPlayer(root, rk, ctx) {
     loader.hidden = false;
     errorLayer.hidden = true;
     const previous = session && session.stream;
-    // en groupe, recharger (langue, sous-titres incrustés, qualité) met les autres en pause jusqu'à ce qu'on soit prêt
+    // in a group, reloading (language, burnt-in subtitles, quality) pauses the others until we are ready
     if (group && previous && !destroyed) gsend('buffering', { position: Math.round(offset), reason: 'reload' });
     if (hls) { hls.destroy(); hls = null; }
     if (video.getAttribute('src')) { video.removeAttribute('src'); video.load(); }
@@ -246,7 +246,7 @@ export async function renderPlayer(root, rk, ctx) {
         no_direct: forceHls || undefined,
         caps: airplay ? AIRPLAY_CAPS : browserCaps(), cast: airplay || undefined,
         playlist: ctx.query.get('playlist') || undefined, shuffle: ctx.query.get('shuffle') || undefined,
-        cold: (isAdmin && ctx.query.get('cold') === '1') || undefined, // essai de la copie sur le stockage froid
+        cold: (isAdmin && ctx.query.get('cold') === '1') || undefined, // trying the copy on cold storage
         audio: audioSel ? audioSel.id : null, subtitle: subSel ? subSel.id : 0, replace: previous || undefined });
     } catch (e) { if (seq === startSeq) showError(e.message, true); return; }
     if (destroyed || seq !== startSeq) {
@@ -260,7 +260,7 @@ export async function renderPlayer(root, rk, ctx) {
     recapSkipped = false;
     nextBtn.hidden = !session.next;
     updateIntroMark();
-    // la lecture ne démarre qu'une fois les sous-titres prêts (pas de trou au début de l'épisode)
+    // playback only starts once the subtitles are ready (no gap at the start of the episode)
     const subsReady = loadSubtitles(seq);
     let autoplayed = false;
     const autoplay = async () => {
@@ -268,11 +268,11 @@ export async function renderPlayer(root, rk, ctx) {
       autoplayed = true;
       await subsReady;
       if (seq !== startSeq || destroyed) return;
-      // on laisse le tampon se remplir avant de démarrer : pas de coupure dans les premières secondes
+      // let the buffer fill before starting: no stall in the first seconds
       await waitBuffer((everPlayed ? PREROLL_SEEK : PREROLL)[session.mode] ?? 12, 90000, seq);
       if (seq !== startSeq || destroyed) return;
       if (group) {
-        // en groupe : on signale qu'on est prêt, la lecture part quand tout le monde l'est
+        // in a group: say we are ready, playback starts when everyone is
         loader.hidden = true;
         switching = false;
         gsend('ready');
@@ -284,7 +284,7 @@ export async function renderPlayer(root, rk, ctx) {
     await hlsReady;
     if (seq !== startSeq || destroyed) return;
     if (session.mode === 'direct') {
-      // le navigateur lit le fichier tel quel
+      // the browser plays the file as is
       video.src = session.url;
       video.addEventListener('loadedmetadata', () => {
         if (session.offset) video.currentTime = session.offset / 1000;
@@ -292,7 +292,7 @@ export async function renderPlayer(root, rk, ctx) {
       }, { once: true });
       video.addEventListener('error', () => {
         if (seq === startSeq && session.mode === 'direct' && !destroyed) {
-          // format refusé par ce navigateur : on bascule sur un flux converti
+          // format refused by this browser: switch to a converted stream
           forceHls = true;
           start(Math.max(session.offset, pos()));
         }
@@ -332,12 +332,12 @@ export async function renderPlayer(root, rk, ctx) {
   }
 
 
-  // ---------------------------------------------------------- tampon vidéo
+  // ---------------------------------------------------------- video buffer
   const aheadSec = () => {
     const b = video.buffered, t = video.currentTime;
     for (let i = 0; i < b.length; i++) {
       if (t >= b.start(i) - 0.3 && t <= b.end(i)) return b.end(i) - t;
-      // tout début d'un flux : la première plage peut commencer un peu après la position
+      // very start of a stream: the first range can start a little after the position
       if (b.start(i) >= t && b.start(i) - t < 1.5) return b.end(i) - t;
     }
     return 0;
@@ -357,14 +357,14 @@ export async function renderPlayer(root, rk, ctx) {
     });
   }
 
-  // Coupure en cours de lecture : on met en pause le temps de refaire une vraie réserve,
-  // plutôt que de repartir dès la première seconde reçue et de recouper aussitôt.
-  let groupQuietUntil = 0;   // juste après un ordre du groupe (lecture, saut) : un court chargement est normal
+  // Stall during playback: pause long enough to build a real buffer again,
+  // rather than restarting at the first second received and stalling again right away.
+  let groupQuietUntil = 0;   // right after an order from the group (play, seek): a short loading is normal
   let stallTimer = null;
   function onStall() {
     if (switching || video.seeking || rebuffering || finished || destroyed || !session || video.paused) return;
     if (group) {
-      // en groupe, une coupure met tout le monde en attente : on ne la signale que si elle dure
+      // in a group, a stall puts everyone on hold: only report it when it lasts
       if (Date.now() < groupQuietUntil || stallTimer) return;
       stallTimer = setTimeout(() => {
         stallTimer = null;
@@ -385,27 +385,27 @@ export async function renderPlayer(root, rk, ctx) {
     paintPlay();
     if (group) gsend('buffering');
     waitBuffer(REBUFFER[session.mode] ?? 15, 45000, seq).then(() => {
-      if (!rebuffering) return; // l'utilisateur a repris la main entre-temps
+      if (!rebuffering) return; // the user took over meanwhile
       rebuffering = false;
       if (seq !== startSeq || destroyed) return;
-      if (group) { paintPlay(); gsend('ready'); return; } // le groupe repart quand tout le monde est prêt
+      if (group) { paintPlay(); gsend('ready'); return; } // the group starts again when everyone is ready
       video.play().catch(() => paintPlay());
     });
     if (stalls.length >= 2 && quality === 'auto') {
-      stepDown(); // qualité automatique : on descend d'un cran tout seul (connexion, ou conversion trop lente)
+      stepDown(); // automatic quality: step down one notch by itself (connection, or conversion too slow)
     } else if (stalls.length >= 2 && ['original', '1080p'].includes(quality) && !lowerHinted) {
       lowerHinted = true;
       suggestLowerQuality(session.mode === 'transcode');
     }
   }
 
-  // Qualité automatique et lecture qui saccade malgré la mesure : un cran plus bas, et la mesure gardée pour les
-  // prochaines lectures est revue à la baisse
+  // Automatic quality and playback stuttering despite the measurement: one notch lower, and the measurement kept for
+  // the next playbacks is lowered
   function stepDown() {
     if (!session) return;
     if (session.mode === 'transcode' && convSpeed > 0 && convSpeed < 1) {
-      // c'est le serveur qui ne convertit pas assez vite, pas la connexion : la mesure du débit reste valable
-      // pour les lectures suivantes ; ce titre seul descend en 720p, pas plus bas
+      // it is the server that does not convert fast enough, not the connection: the bandwidth measurement stays valid
+      // for the next playbacks; only this title goes down to 720p, no lower
       stalls = [];
       const speed = `×${convSpeed.toFixed(1).replace('.', ',')}`;
       if (['original', '1080p'].includes(session.auto_quality)) {
@@ -420,7 +420,7 @@ export async function renderPlayer(root, rk, ctx) {
     }
     if (session.auto_quality === '480p') return;
     stalls = [];
-    // débit revu à la baisse, sous celui du fichier : le serveur choisit la qualité convertie qui y tient
+    // bandwidth lowered, below the file's: the server picks the converted quality that fits
     const rate = ({ '1080p': 8000, '720p': 4000 })[session.auto_quality] || session.source_kbps || 8000;
     bandwidth = Math.max(300, Math.round(Math.min(bandwidth || rate * 1.3, rate * 1.2) * 0.6));
     saveBandwidth(bandwidth);
@@ -438,15 +438,15 @@ export async function renderPlayer(root, rk, ctx) {
     setTimeout(() => box.remove(), 20000);
   }
 
-  // Avant la toute première lecture : toutes les pistes de sous-titres sont extraites du fichier
-  // (une seule lecture, à pleine vitesse, sans flux vidéo en concurrence sur le partage réseau).
+  // Before the very first playback: all the subtitle tracks are extracted from the file
+  // (a single read, at full speed, with no video stream competing on the network share).
   async function prepare(at = 0) {
-    if (offline) return; // téléchargement : sous-titres déjà sur l'appareil
+    if (offline) return; // download: subtitles already on the device
     const t0 = Date.now();
     let hint = null;
     while (!destroyed && current()) {
       let r;
-      // prêt dès que les sous-titres couvrent les premières minutes à regarder : la suite arrive pendant la lecture
+      // ready as soon as the subtitles cover the first minutes to watch: the rest arrives during playback
       try { r = await get(`/api/items/${item.id}/prepare?wait=10&at=${Math.round(at)}`); } catch (e) {
         console.warn('[seance] préparation', e.message);
         break;
@@ -458,7 +458,7 @@ export async function renderPlayer(root, rk, ctx) {
     if (hint) hint.remove();
   }
 
-  // ASS / SSA : rendu fidèle par libass (WebAssembly) — positions, polices du fichier, karaoké, panneaux.
+  // ASS / SSA: faithful rendering by libass (WebAssembly) — positions, the file's fonts, karaoke, signs.
   let JassubClass;
   async function jassubClass() {
     if (JassubClass === undefined) {
@@ -473,7 +473,7 @@ export async function renderPlayer(root, rk, ctx) {
     return JassubClass;
   }
   function dropJassub() {
-    if (jassub) { try { jassub.destroy(); } catch { /* déjà détruit */ } }
+    if (jassub) { try { jassub.destroy(); } catch { /* already destroyed */ } }
     jassub = null;
     jassubKey = '';
   }
@@ -494,7 +494,7 @@ export async function renderPlayer(root, rk, ctx) {
       const content = await res.text();
       jassub.setTrack(content);
       subsUntil = partialOf(res);
-    } catch { /* on réessaie au prochain tour */ }
+    } catch { /* try again next round */ }
     if (subsUntil !== null) keepRefreshing(seq, refreshAss);
   }
 
@@ -540,7 +540,7 @@ export async function renderPlayer(root, rk, ctx) {
     }
   }
 
-  // PGS (Blu-ray) : images rendues dans le navigateur par libpgs
+  // PGS (Blu-ray): pictures rendered in the browser by libpgs
   function dropPgs() {
     if (pgs) { try { pgs.dispose(); } catch { /* */ } if (pgs.ownCanvas) pgs.ownCanvas.remove(); }
     pgs = null;
@@ -572,7 +572,7 @@ export async function renderPlayer(root, rk, ctx) {
       const [{ PgsRenderer }, data] = await Promise.all([import('/vendor/libpgs/libpgs.js'), fetchSup(seq)]);
       if (seq !== startSeq || destroyed) return false;
       const canvas = h('canvas.pgs-layer');
-      video.after(canvas);  // sous les commandes, au-dessus de l'image
+      video.after(canvas);  // under the controls, above the picture
       const r = new PgsRenderer({ video, canvas, workerUrl: '/vendor/libpgs/libpgs.worker.js', aspectRatio: 'contain' });
       r.ownCanvas = canvas;
       pgs = r;
@@ -588,7 +588,7 @@ export async function renderPlayer(root, rk, ctx) {
     }
   }
 
-  // Les sous-titres sont normalement déjà prêts (prepare) ; filet de sécurité pour les pistes externes.
+  // Subtitles are normally already ready (prepare); safety net for external tracks.
   const SUBS_MAX_WAIT = 120000;
   async function loadSubtitles(seq) {
     clearTimeout(subsRefresh);
@@ -619,7 +619,7 @@ export async function renderPlayer(root, rk, ctx) {
           cueKey = '';
           cueMax = cues.reduce((m, c) => Math.max(m, c.e - c.s), 0);
           subsUntil = r.partial ? r.until : null;
-          if (r.partial) keepRefreshing(seq, poll);  // la suite arrive pendant la lecture
+          if (r.partial) keepRefreshing(seq, poll);  // the rest arrives during playback
         } catch (e) {
           console.warn('[seance] sous-titres', e.message);
         }
@@ -643,8 +643,8 @@ export async function renderPlayer(root, rk, ctx) {
     const d = duration();
     ms = Math.max(0, d ? Math.min(ms, d - 3000) : ms);
     if (group && !remote) gsend('seek', { position: Math.round(ms) });
-    // la playlist couvre toute la vidéo : le lecteur va chercher les bons segments, le serveur relance
-    // ffmpeg au bon endroit si besoin : plus besoin de recréer le flux
+    // the playlist covers the whole video: the player fetches the right segments, the server restarts
+    // ffmpeg at the right place if needed: no need to recreate the stream anymore
     video.currentTime = ms / 1000;
   }
   const seekBy = (delta) => seekTo(pos() + delta);
@@ -666,7 +666,7 @@ export async function renderPlayer(root, rk, ctx) {
       }).catch(() => {});
   }
 
-  // temps d'écran (profil limité par un administrateur) : prévenu quelques minutes avant, arrêt à la limite
+  // screen time (profile limited by an administrator): warned a few minutes before, stop at the limit
   let screenWarned = false;
   function screenTime(sc) {
     if (sc.blocked) {
@@ -725,7 +725,7 @@ export async function renderPlayer(root, rk, ctx) {
       const mid = (lo + hi) >> 1;
       if (cues[mid].s <= p) { found = mid; lo = mid + 1; } else hi = mid - 1;
     }
-    // toutes les répliques affichées en même temps (dialogue + panneau, deux personnages…)
+    // all the lines shown at the same time (dialogue + sign, two characters…)
     const active = [];
     for (let i = found; i >= 0 && p - cues[i].s <= cueMax && active.length < 8; i--) if (p <= cues[i].e) active.unshift(i);
     const key = active.join(',');
@@ -762,12 +762,12 @@ export async function renderPlayer(root, rk, ctx) {
     const d = duration();
     if (!next || nextDismissed || !d) return;
     const creditsAt = m.credits ? m.credits.start : d - 25000;
-    // pendant le générique : une proposition, sans compte à rebours (on peut regarder le générique)
+    // during the credits: a suggestion, without a countdown (the credits can be watched)
     if (p >= creditsAt && nextCard.hidden && !video.paused && !nextAtEnd) showNextCard(next, false);
     if (p < creditsAt - 2000 && !nextCard.hidden && !nextAtEnd) hideNextCard();
   }
 
-  // countdown : à la fin de la vidéo, le suivant démarre après le délai choisi (Réglages), sauf si on annule
+  // countdown: at the end of the video, the next one starts after the chosen delay (Settings), unless cancelled
   function showNextCard(next, countdown) {
     let left = countdown ? Math.max(0, Number(prefs.next_delay ?? 5)) : null;
     const counter = h('span.next-count');
@@ -813,7 +813,7 @@ export async function renderPlayer(root, rk, ctx) {
     location.replace(`#/play/${session.next.id}${keep}`);
   }
 
-  // ------------------------------------------------------------ lecteur réduit
+  // ------------------------------------------------------------ mini player
   function minimize() {
     if (mini || destroyed || !ctx.minimize) return;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -852,7 +852,7 @@ export async function renderPlayer(root, rk, ctx) {
       onclick: () => { menu.hidden = true; onPick(); } }, h('span', label), hint ? h('span.muted.small', hint) : null,
     active ? icon('check') : null);
     const restart = () => start(pos());
-    // sous-titres affichés par le navigateur (texte, ASS, PGS) : on change de piste sans relancer la vidéo
+    // subtitles shown by the browser (text, ASS, PGS): the track changes without restarting the video
     const burned = (x) => !!x && !x.overlay && !(x.pgs && browserCaps().pgs);
     const pickSub = (x) => {
       const before = subSel;
@@ -950,8 +950,8 @@ export async function renderPlayer(root, rk, ctx) {
 
   // ------------------------------------------------------------ regarder ensemble
   async function syncClock() {
-    if (Date.now() - clock.at < CLOCK_TTL) return; // mesuré récemment (épisode précédent) : rien à refaire
-    // décalage entre l'horloge du serveur et la nôtre : on garde la mesure au plus court aller-retour
+    if (Date.now() - clock.at < CLOCK_TTL) return; // measured recently (previous episode): nothing to redo
+    // offset between the server's clock and ours: the measurement with the shortest round trip is kept
     let best = null;
     for (let i = 0; i < 3; i++) {
       const t0 = Date.now();
@@ -963,8 +963,8 @@ export async function renderPlayer(root, rk, ctx) {
     }
     if (best) Object.assign(clock, { offset: best.offset, at: Date.now() });
   }
-  // chaque événement porte l'heure du serveur à l'envoi : elle ne peut pas être en avance sur la nôtre
-  // corrigée, donc elle affine la mesure sans requête de plus
+  // each event carries the server time at sending: it cannot be ahead of our corrected
+  // clock, so it refines the measurement without an extra request
   function refineClock(serverMs) {
     if (serverMs) clock.offset = Math.max(clock.offset, serverMs - Date.now());
   }
@@ -977,7 +977,7 @@ export async function renderPlayer(root, rk, ctx) {
     return post(`/api/together/${group.id}/cmd`, { action, ...extra }).catch((e) => {
       if (e.status === 403 && ['play', 'pause', 'seek'].includes(action)) {
         toast(e.message, 'bad');
-        applyGroup(group.state); // on revient à la position du groupe
+        applyGroup(group.state); // back to the group's position
       } else if (e.status === 404) leaveGroupMode(tr('Le groupe est terminé'));
     });
   }
@@ -1036,7 +1036,7 @@ export async function renderPlayer(root, rk, ctx) {
       location.replace(`#/play/${st.item_id}?group=${group.id}`);
       return;
     }
-    if (switching) return; // la vidéo se charge encore : on appliquera l'état une fois prête
+    if (switching) return; // the video is still loading: the state will be applied once it is ready
     const target = groupTarget(st);
     const meWaited = st.waiting && (st.waiting_ids || []).includes(state.me.user.id);
     groupBanner.hidden = !st.waiting;
@@ -1047,7 +1047,7 @@ export async function renderPlayer(root, rk, ctx) {
       groupQuietUntil = Date.now() + 4000;
       if (Math.abs(pos() - target) > 400) seekTo(target, true);
       if (meWaited && !groupReadyPending) {
-        // on recharge à la nouvelle position, puis on prévient le groupe
+        // reload at the new position, then tell the group
         groupReadyPending = true;
         const seq = startSeq;
         waitBuffer(PREROLL_SEEK[session.mode] ?? 6, 30000, seq).then(() => {
@@ -1071,8 +1071,8 @@ export async function renderPlayer(root, rk, ctx) {
     lastDrift = now;
     const diff = p - groupTarget(st);
     if (Math.abs(diff) > 2000) { video.playbackRate = 1; seekTo(groupTarget(st), true); return; }
-    // petit écart : on accélère ou ralentit un peu (le son garde sa hauteur), sans saut visible ;
-    // ±8 % rattrape 1 s en une douzaine de secondes
+    // small gap: play a little faster or slower (the audio keeps its pitch), without a visible jump;
+    // ±8 % catches up 1 s in about twelve seconds
     video.playbackRate = Math.abs(diff) < 150 ? 1 : Math.min(1.08, Math.max(0.92, 1 - diff / 2500));
   }
   function paintGroup() {
@@ -1136,13 +1136,13 @@ export async function renderPlayer(root, rk, ctx) {
       else { gsend('pause', { position: pos() }); video.pause(); }
       return;
     }
-    if (rebuffering) { rebuffering = false; paintPlay(); return; } // reste en pause : la reprise auto est annulée
+    if (rebuffering) { rebuffering = false; paintPlay(); return; } // stays paused: the automatic resume is cancelled
     if (video.paused) video.play().catch(() => {}); else video.pause();
   };
   const toggleFull = () => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    // plein écran sur la page entière, pas sur le lecteur : il est reconstruit à chaque épisode, et le plein
-    // écran s'arrêterait à chaque passage à l'épisode suivant
+    // fullscreen on the whole page, not on the player: it is rebuilt at each episode, and
+    // fullscreen would stop at each move to the next episode
     else document.documentElement.requestFullscreen().catch(() => player.requestFullscreen().catch(() => {}));
   };
   const wake = () => {
@@ -1182,7 +1182,7 @@ export async function renderPlayer(root, rk, ctx) {
   video.addEventListener('pause', () => { paintPlay(); wake(); if (!rebuffering) report('paused', true); remoteState(); });
   video.addEventListener('seeked', () => remoteState());
 
-  // ------------------------------------------------------------ télécommande (un autre appareil du compte pilote celui-ci)
+  // ------------------------------------------------------------ remote control (another device of the account drives this one)
   let remoteEs = null, remoteTimer = null, remoteLast = 0;
   const myDevice = deviceId();
   function remoteState(force = false) {
@@ -1222,7 +1222,7 @@ export async function renderPlayer(root, rk, ctx) {
         if (v && !s) break;
         subSel = s;
         rememberTracks();
-        start(pos()); // (piste choisie à distance : on recharge, sans chercher si elle peut s'afficher sans relancer)
+        start(pos()); // (track chosen remotely: reload, without checking whether it could show without restarting)
         break;
       }
       case 'stop': goBack(); break;
@@ -1233,8 +1233,8 @@ export async function renderPlayer(root, rk, ctx) {
       speed: tr('vitesse'), audio: tr('langue audio'), subtitle: tr('sous-titres'), stop: tr('arrêt') })[c.action] || c.action }));
     setTimeout(() => remoteState(true), 400);
   }
-  // ------------------------------------------------------------ diffusion sur une TV (AirPlay, Chromecast)
-  // AirPlay : Safari envoie à l'Apple TV l'adresse de la vidéo ; on la remplace par un flux natif « pour TV »
+  // ------------------------------------------------------------ casting to a TV (AirPlay, Chromecast)
+  // AirPlay: Safari sends the video address to the Apple TV; it is replaced by a native "for TV" stream
   const stopAirplay = watchAirplay(video, (on) => { airplayBtn.hidden = !on || offline; }, (wireless) => {
     if (wireless === airplay) return;
     airplay = wireless;
@@ -1243,7 +1243,7 @@ export async function renderPlayer(root, rk, ctx) {
   });
   airplayBtn.addEventListener('click', () => { if (video.webkitShowPlaybackTargetPicker) video.webkitShowPlaybackTargetPicker(); });
 
-  // Chromecast : le SDK de Google (Chrome, Edge) trouve les appareils ; le serveur prépare un flux qu'il sait lire
+  // Chromecast: Google's SDK (Chrome, Edge) finds the devices; the server prepares a stream it can play
   let castFw = null, castStream = null, castRemote = null, castCtl = null, castTimer = null, castAt = 0;
   const castPos = () => (castRemote ? Math.round(castRemote.currentTime * 1000) : castAt);
   function paintCast() {
@@ -1272,7 +1272,7 @@ export async function renderPlayer(root, rk, ctx) {
       const s = await post('/api/play', { id: item.id, offset: Math.round(at), quality: 'original', caps: CHROMECAST_CAPS, cast: true,
         audio: audioSel ? audioSel.id : null, subtitle: 0 });
       castStream = s.stream;
-      // la lecture d'ici s'arrête (le serveur ne prépare plus qu'un flux, celui de la TV)
+      // playback here stops (the server only prepares one stream, the TV's)
       if (session && session.stream) post('/api/stop', { stream: session.stream }).catch(() => {});
       if (hls) { hls.destroy(); hls = null; }
       await castLoad(castFw, { url: s.url, mode: s.mode, offset: s.offset, title: item.type === 'episode' ? item.show : item.title,
@@ -1281,7 +1281,7 @@ export async function renderPlayer(root, rk, ctx) {
       castCtl = new castFw.RemotePlayerController(castRemote);
       castCtl.addEventListener(castFw.RemotePlayerEventType.ANY_CHANGE, paintCast);
       clearInterval(castTimer);
-      castTimer = setInterval(() => {  // progression du compte, comme une lecture ici
+      castTimer = setInterval(() => {  // progress of the account, like a playback here
         if (!castRemote || !castRemote.isConnected) return;
         castAt = castPos();
         paintCast();
@@ -1339,12 +1339,12 @@ export async function renderPlayer(root, rk, ctx) {
     paintTime();
     paintSubtitles(p);
     paintMarkers(p);
-    // saut au-delà de ce qui est déjà extrait : on le dit plutôt que d'afficher un écran sans sous-titres
+    // seek beyond what is already extracted: say so rather than show a screen without subtitles
     subsPending.hidden = subsUntil === null || p <= subsUntil;
     if (!video.paused) report('playing');
   });
   video.addEventListener('progress', paintTime);
-  // sous-titres texte calés sur chaque image affichée (timeupdate n'arrive que toutes les ~250 ms)
+  // text subtitles aligned on each frame shown (timeupdate only comes every ~250 ms)
   if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
     const onFrame = (_now, meta) => {
       if (destroyed) return;
@@ -1353,8 +1353,8 @@ export async function renderPlayer(root, rk, ctx) {
     };
     video.requestVideoFrameCallback(onFrame);
   }
-  // vitesse choisie : remise après chaque chargement (un nouveau flux la remet à 1), pas en groupe (la
-  // synchronisation se sert de la vitesse pour rattraper les écarts)
+  // chosen speed: set again after each load (a new stream resets it to 1), not in a group (the
+  // synchronisation uses the speed to catch up gaps)
   const applySpeed = () => { if (!group) { video.defaultPlaybackRate = speed; video.playbackRate = speed; } };
   video.addEventListener('loadedmetadata', applySpeed);
   const setSpeed = (v) => { speed = v; speedChosen = true; applySpeed(); toast(tr('Vitesse ×{v}', { v: String(v).replace('.', ',') })); };
@@ -1363,7 +1363,7 @@ export async function renderPlayer(root, rk, ctx) {
     const i = SPEEDS.indexOf(speed);
     setSpeed(SPEEDS[Math.min(SPEEDS.length - 1, Math.max(0, (i < 0 ? 1 : i) + dir))]);
   };
-  // minuterie : vérifiée chaque seconde, la lecture est mise en pause à l'heure dite
+  // sleep timer: checked every second, playback is paused at the set time
   const sleepTimer = setInterval(() => {
     if (sleep.at && Date.now() >= sleep.at) {
       sleep.at = 0;
@@ -1383,14 +1383,14 @@ export async function renderPlayer(root, rk, ctx) {
     finished = true;
     paintPlay();
     player.classList.remove('idle');
-    if (sleep.endOfItem) { // minuterie « fin de la vidéo » : pas d'épisode suivant
+    if (sleep.endOfItem) { // "end of the video" sleep timer: no next episode
       sleep.endOfItem = false;
       toast(tr('Minuterie : fin de la lecture'));
       return;
     }
     if (session.next) {
       nextAtEnd = true;
-      showNextCard(session.next, prefs.autoplay_next && !mini); // réduit : on propose sans interrompre la navigation
+      showNextCard(session.next, prefs.autoplay_next && !mini); // mini player: suggest without interrupting navigation
     }
   });
   document.addEventListener('fullscreenchange', onFullscreen);
@@ -1409,7 +1409,7 @@ export async function renderPlayer(root, rk, ctx) {
     const ch = chapters.find((c) => t >= c.start && t < c.end);
     previewChapter.textContent = ch && (ch.title || chapters.length > 1) ? (ch.title || tr('Chapitre {p1}', { p1: chapters.indexOf(ch) + 1 })) : '';
     if (trick) {
-      // vignette tirée de la planche d'aperçus (grille cols x rows)
+      // thumbnail taken from the preview sheet (grid cols x rows)
       const n = Math.min(trick.count - 1, Math.floor(t / 1000 / trick.interval));
       const perSheet = trick.cols * trick.rows;
       const sheet = Math.floor(n / perSheet) + 1;
@@ -1451,7 +1451,7 @@ export async function renderPlayer(root, rk, ctx) {
     if (mini || (e.target.closest && e.target.closest('input, select, textarea'))) return;
     wake();
     if (!chapterPanel.hidden && ['ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(e.key)) {
-      // dans la sélection de chapitre, les flèches passent d'une vignette à l'autre
+      // in the chapter selection, the arrows move from one thumbnail to the next
       const cards = [...chapterPanel.querySelectorAll('.chapter-card')];
       let i = cards.indexOf(document.activeElement);
       if (e.key === 'Enter' || e.key === ' ') { if (i >= 0) { e.preventDefault(); cards[i].click(); } return; }
@@ -1462,7 +1462,7 @@ export async function renderPlayer(root, rk, ctx) {
       cards[i].scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
       return;
     }
-    // télécommande : flèches = d'un bouton à l'autre quand on est dans les commandes (sauf la barre de temps)
+    // remote: arrows = from one button to the next when in the controls (except the time bar)
     const inControls = player.contains(document.activeElement) && document.activeElement !== player
       && !document.activeElement.classList.contains('video');
     const arrow = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key);
@@ -1473,10 +1473,10 @@ export async function renderPlayer(root, rk, ctx) {
     }
     if (!inControls && remoteMode() && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
-      playBtn.focus(); // comme sur une TV : haut / bas font apparaître les commandes
+      playBtn.focus(); // like on a TV: up / down show the controls
       return;
     }
-    // touches réglables (Paramètres → Cet appareil) ; les touches média et Échap restent fixes
+    // configurable keys (Settings → This device); media keys and Escape stay fixed
     const action = actionFor(e.key);
     if (action && !(e.key === 'Enter') && !e.ctrlKey && !e.metaKey && !e.altKey) {
       const run = { play: togglePlay, back: () => seekBy(-BACK), forward: () => seekBy(BACK),
@@ -1497,7 +1497,7 @@ export async function renderPlayer(root, rk, ctx) {
       case 'Escape': case 'BrowserBack': case 'GoBack':
         if (!chapterPanel.hidden) chapterPanel.hidden = true;
         else if (!menu.hidden) menu.hidden = true;
-        else if (inControls && remoteMode()) { document.activeElement.blur(); player.classList.add('idle'); } // cacher les commandes
+        else if (inControls && remoteMode()) { document.activeElement.blur(); player.classList.add('idle'); } // hide the controls
         else if (!document.fullscreenElement) goBack();
         break;
       default:
@@ -1519,19 +1519,19 @@ export async function renderPlayer(root, rk, ctx) {
     if (Date.now() - startedAt > 3000 && !switching) report('stopped', true);
     if (session && !offline) post('/api/stop', { stream: session.stream }, { keepalive: true }).catch(() => {});
     destroyed = true;
-    if (local) setTimeout(local.release, 0); // libère le fichier gardé en mémoire de travail
+    if (local) setTimeout(local.release, 0); // frees the file kept in working memory
     if (group) {
       if (group.es) group.es.close();
-      // on reste dans le groupe si on enchaîne sur un autre épisode du groupe
+      // stay in the group when chaining to another episode of the group
       if (!location.hash.includes(`group=${group.id}`)) post(`/api/together/${group.id}/leave`, {}, { keepalive: true }).catch(() => {});
     }
     clearInterval(nextTimer);
     clearInterval(sleepTimer);
     clearInterval(remoteTimer);
     stopAirplay();
-    clearInterval(castTimer); // la diffusion continue sur la TV si l'on quitte le lecteur
+    clearInterval(castTimer); // casting continues on the TV when the player is left
     if (remoteEs) { remoteEs.close(); post('/api/remote/state', { device: myDevice, state: null }, { keepalive: true }).catch(() => {}); }
-    // minuterie : elle suit l'enchaînement des épisodes, pas un retour à la navigation
+    // sleep timer: it follows the chain of episodes, not a return to browsing
     if (!/^#\/(play|offline)\//.test(location.hash)) Object.assign(sleep, { at: 0, endOfItem: false });
     clearTimeout(idleTimer);
     document.removeEventListener('keydown', onKey);

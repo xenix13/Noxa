@@ -3,7 +3,7 @@ import { playAudio } from '../audio.js';
 import { clear, fmtDuration, fmtTime, h, icon, img, select, store, toast } from '../ui.js';
 import { plural, tr } from '../i18n.js';
 
-// Livres audio : la bibliothèque (couvertures, « En cours »), et la fiche d'un livre (chapitres, reprise).
+// Audiobooks: the library (covers, "In progress"), and a book's page (chapters, resume).
 const cover = (b, size) => (b.thumb ? img(b.thumb, size, size) : '');
 
 function bookTile(b) {

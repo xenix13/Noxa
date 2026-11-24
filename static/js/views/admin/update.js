@@ -5,10 +5,10 @@ import { locale, tr } from '../../i18n.js';
 import { clear, confirmDialog, field, h, select, toast } from '../../ui.js';
 import { followUpdate } from '../../updater.js';
 
-// --------------------------------------------------------------- mise à jour
-// La vérification interroge GitHub (résultat gardé 30 min côté serveur) ; le bouton force une nouvelle vérification.
+// --------------------------------------------------------------- update
+// The check queries GitHub (result kept 30 min on the server side); the button forces a new check.
 export async function updatePage(body) {
-  // serveur lié choisi dans le sélecteur : sa version, pas celle de ce serveur
+  // linked server chosen in the selector: its version, not this server's
   const version = adminTarget() ? (await get('/api/admin/update')).current : state.status.version;
   const box = h('div');
   const checkBtn = h('button.btn', { onclick: () => load(true) }, tr('Rechercher une mise à jour'));
@@ -26,7 +26,7 @@ export async function updatePage(body) {
       if (refresh) {
         toast(u.available ? tr('Noxa {latest} est disponible', { latest: u.latest }) : (u.check_error ? u.check_error : tr('Aucune mise à jour disponible')),
           u.check_error ? 'bad' : 'ok');
-        await refreshMe().catch(() => {}); // indicateur de la barre du haut
+        await refreshMe().catch(() => {}); // top bar indicator
       }
     } catch (e) {
       box.replaceChildren(h('p.form-error.small', e.message));

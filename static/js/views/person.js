@@ -2,7 +2,7 @@ import { get } from '../api.js';
 import { clear, h, posterCard } from '../ui.js';
 import { plural, tr } from '../i18n.js';
 
-// Fiche d'une personne : ses films et séries présents sur le serveur (distribution et réalisation)
+// A person's page: their movies and shows present on the server (cast and directing)
 export async function renderPerson(main, name, ctx) {
   const r = await get(`/api/person?name=${encodeURIComponent(name)}`);
   if (!ctx.isCurrent()) return;

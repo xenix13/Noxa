@@ -5,7 +5,7 @@ import { tr } from '../../i18n.js';
 import { clear, confirmDialog, field, h, icon, modal, select, toast, toggle } from '../../ui.js';
 import { since } from './util.js';
 
-// ------------------------------------------------------------ TV en direct
+// ------------------------------------------------------------ live TV
 async function liveSourceForm(src) {
   const isNew = !src;
   src = src || { name: '', m3u_url: '', epg_url: '', user_agent: '', enabled: true };
