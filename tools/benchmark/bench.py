@@ -37,7 +37,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 IMAGES = {
-    "noxa": "ghcr.io/xenix13/noxa:4.1.4",
+    "noxa": "ghcr.io/xenix13/noxa:4.2.0",
     "jellyfin": "jellyfin/jellyfin:10.10.7",
     "plex": "plexinc/pms-docker:1.43.5.11079-b3b13e506",
 }
