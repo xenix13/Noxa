@@ -1,27 +1,27 @@
-"""Stockage froid : des copies des films et épisodes rangées ailleurs que sur les disques de la bibliothèque.
+"""Cold storage: copies of movies and episodes kept somewhere other than the library disks.
 
-Un titre archivé garde tout ce qui le décrit dans Noxa (affiches, résumé, historique, sous-titres téléchargés) ;
-seul son fichier vidéo existe aussi (ou seulement, plus tard) sur un stockage froid. Quand le fichier de la
-bibliothèque n'est plus là, Noxa lit la copie froide : directement si le stockage est un dossier de la machine
-(disque USB, NAS monté, partage SMB), sinon par une adresse locale que seul ffmpeg connaît (/cold/<jeton>), qui
-relit le stockage morceau par morceau (WebDAV, S3, SFTP, rclone).
+An archived title keeps everything that describes it in Noxa (posters, overview, history, downloaded subtitles);
+only its video file also exists (or, later, only exists) on a cold storage. When the library file
+is gone, Noxa reads the cold copy: directly when the storage is a folder of the machine
+(USB disk, mounted NAS, SMB share), otherwise through a local address only ffmpeg knows (/cold/<token>), which
+reads the storage chunk by chunk (WebDAV, S3, SFTP, rclone).
 
-Plusieurs stockages peuvent coexister ; un titre peut en avoir une copie sur chacun. Les copies se font en tâche de
-fond, une à la fois, débit limité pendant une lecture, et chaque copie est vérifiée (taille, morceaux relus) avant
-d'être comptée.
+Several storages can coexist; a title can have a copy on each. Copies are made in the
+background, one at a time, with a capped rate during a playback, and each copy is checked (size, chunks read back) before
+it counts.
 
-Types :
-  - local  : un dossier de cette machine (disque USB, NAS déjà monté par le système, volume Docker) ;
-  - smb    : un partage SMB/CIFS monté en écriture par seance-mountd (installation par script ou paquet) ;
-  - sftp   : un serveur SSH (Hetzner Storage Box, NAS…) — par curl, clé du serveur vérifiée (empreinte retenue) ;
-  - webdav : Nextcloud, Synology, Hetzner Storage Box… ;
-  - s3     : AWS et compatibles (Backblaze B2, Wasabi, Scaleway, OVH, MinIO), envoi en plusieurs parties ;
-  - rclone : n'importe quel « remote » rclone déjà configuré (pCloud, Mega, Google Drive…), si rclone est installé ;
-  - peer   : un serveur de la fédération qui accepte d'accueillir des archives (place réservée par son administrateur),
-             par le canal chiffré des serveurs liés.
+Types:
+  - local  : a folder of this machine (USB disk, NAS already mounted by the system, Docker volume);
+  - smb    : an SMB/CIFS share mounted read-write by seance-mountd (install by script or package);
+  - sftp   : an SSH server (Hetzner Storage Box, NAS…) — through curl, server key checked (fingerprint pinned);
+  - webdav : Nextcloud, Synology, Hetzner Storage Box…;
+  - s3     : AWS and compatibles (Backblaze B2, Wasabi, Scaleway, OVH, MinIO), multipart upload;
+  - rclone : any rclone "remote" already set up (pCloud, Mega, Google Drive…), when rclone is installed;
+  - peer   : a federation server that agrees to host archives (space reserved by its administrator),
+             through the encrypted channel of the linked servers.
 
-Cache local : un titre lu depuis un stockage en ligne est ramené dans <données>/cold-cache, avec les épisodes qui
-suivent ; la place prise reste dans un budget, les plus anciens repartent d'abord (la copie froide, elle, reste).
+Local cache: a title played from an online storage is brought back into <data>/cold-cache, with the following
+episodes; the space used stays within a budget, the oldest go first (the cold copy itself stays).
 """
 import hashlib
 import http.client
@@ -48,9 +48,9 @@ KINDS = ("local", "smb", "sftp", "webdav", "s3", "rclone", "peer")
 SECRETS = ("password", "secret_key")
 BLOCK = 1 << 20
 SIDECAR_EXT = (".srt", ".ass", ".ssa", ".vtt", ".sub", ".idx", ".sup")
-SAMPLES = 6              # morceaux relus pour vérifier une copie (en plus du début et de la fin)
+SAMPLES = 6              # chunks read back to check a copy (besides the start and the end)
 SAMPLE = 256 * 1024
-PART = 64 * 1024 * 1024  # S3 : taille d'une partie (agrandie au-delà de ~600 Go : 10 000 parties au plus)
+PART = 64 * 1024 * 1024  # S3: part size (enlarged beyond ~600 GB: 10,000 parts at most)
 TOKEN_TTL = 12 * 3600
 SYSTEM_DIRS = ("/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/proc", "/run", "/sbin", "/sys", "/usr", "/var/lib")
 
@@ -60,7 +60,7 @@ class ColdError(Exception):
 
 
 def safe_part(s):
-    """Nom utilisable partout (SMB, Windows, S3) : sans caractères interdits, sans « .. »."""
+    """Name usable everywhere (SMB, Windows, S3): no forbidden characters, no ".."."""
     s = re.sub(r'[<>:"\\|?*\x00-\x1f]', "_", str(s)).strip().rstrip(".")
     return "_" if s in ("", ".", "..") else s[:200]
 
@@ -74,8 +74,8 @@ def safe_name(name):
 
 # ====================================================================== stockages
 class Backend:
-    """Interface : put(name, reader, size), size(name), open(name, start, end) -> itérateur d'octets,
-    delete(name), check(), free() ; local_path(name) : chemin lisible directement (dossier), sinon None."""
+    """Interface: put(name, reader, size), size(name), open(name, start, end) -> byte iterator,
+       delete(name), check(), free(); local_path(name): path readable directly (folder), otherwise None."""
     remote = True
 
     def __init__(self, conf, cold):
@@ -178,7 +178,7 @@ class Local(Backend):
             return
         except OSError as e:
             raise ColdError(i18n.tr("Suppression impossible : {e}").format(e=e.strerror or e))
-        # dossiers devenus vides, jusqu'à la racine du stockage
+        # folders left empty, up to the storage root
         root = os.path.realpath(self.root())
         d = os.path.dirname(p)
         while d.startswith(root + os.sep):
@@ -196,10 +196,10 @@ class Local(Backend):
 
 
 class SMB(Local):
-    """Partage monté en écriture par seance-mountd sous /mnt/seance/cold-<id>."""
+    """Share mounted read-write by seance-mountd under /mnt/seance/cold-<id>."""
 
     def root(self):
-        return self.conf["mount"]  # le sous-dossier éventuel est monté directement à cet endroit
+        return self.conf["mount"]  # the optional sub-folder is mounted directly at this place
 
     def _ready(self):
         if not os.path.ismount(self.conf["mount"]):
@@ -300,7 +300,7 @@ class WebDAV(Backend):
             c.close()
             raise ColdError(f"Lecture WebDAV : HTTP {r.status}")
         it = _iter_response(c, r)
-        if r.status == 200 and start:  # serveur sans Range : on saute le début
+        if r.status == 200 and start:  # server without Range: the start is skipped
             skip = start
             for b in it:
                 if skip >= len(b):
@@ -342,7 +342,7 @@ def _limit(it, n):
 
 
 class _Slice:
-    """Une partie d'un envoi S3 : au plus n octets lus dans la source."""
+    """One part of an S3 upload: at most n bytes read from the source."""
 
     def __init__(self, reader, n):
         self.reader, self.left = reader, n
@@ -433,7 +433,7 @@ class S3(Backend):
 
 
 def curl_sftp():
-    """curl de cette machine sait-il faire du SFTP ?"""
+    """Can this machine's curl do SFTP?"""
     exe = shutil.which("curl")
     if not exe:
         return False
@@ -445,8 +445,8 @@ def curl_sftp():
 
 
 def _pump(p, reader, timeout=None):
-    """Envoie la source sur l'entrée du programme (curl, rclone) en lisant ses sorties à côté ; -> (sortie, erreurs).
-    (communicate() refermerait l'entrée dès le premier morceau.)"""
+    """Sends the source to the program's input (curl, rclone) while reading its outputs alongside; -> (output, errors).
+       (communicate() would close the input after the first chunk.)"""
     out, err = [], []
     readers = [threading.Thread(target=lambda: out.append(p.stdout.read()), daemon=True),
                threading.Thread(target=lambda: err.append(p.stderr.read()), daemon=True)]
@@ -460,7 +460,7 @@ def _pump(p, reader, timeout=None):
                     break
                 p.stdin.write(b)
     except BrokenPipeError:
-        pass  # le programme a abandonné : son message d'erreur le dira
+        pass  # the program gave up: its error message will say why
     except BaseException:
         p.kill()
         raise
@@ -489,8 +489,8 @@ def _curl_quote(s):
 
 
 class SFTP(Backend):
-    """Par curl (libssh) : identifiants passés par un descripteur (jamais sur la ligne de commande), clé du serveur
-    vérifiée (empreinte MD5 retenue au premier essai, confirmée par l'administrateur)."""
+    """Through curl (libssh): credentials passed through a descriptor (never on the command line), server key
+       checked (MD5 fingerprint pinned at the first try, confirmed by the administrator)."""
 
     def _path(self, name=""):
         base = (self.conf.get("path") or "").strip().strip("/")
@@ -537,7 +537,7 @@ class SFTP(Backend):
         return i18n.tr("SFTP : {e}").format(e=(lines[0] if lines else "erreur")[:200])
 
     def fingerprint(self):
-        """Empreinte MD5 de la clé du serveur (curl la donne en refusant une empreinte fausse)."""
+        """MD5 fingerprint of the server key (curl gives it when refusing a wrong fingerprint)."""
         p = self._run(["-o", "/dev/null", self.url()], check_key=False, stream=True)
         _, err = p.communicate(timeout=40)
         p.stdout.close()
@@ -664,7 +664,7 @@ PEER_CHUNK = 16 * 1024 * 1024
 
 
 class Peer(Backend):
-    """Archives gardées par un serveur lié (canal chiffré des serveurs liés, morceaux de 16 Mo)."""
+    """Archives kept by a linked server (encrypted channel of the linked servers, 16 MB chunks)."""
 
     def _fed(self):
         from ..federation import FedError
@@ -749,9 +749,9 @@ class Peer(Backend):
 BACKENDS = {"local": Local, "smb": SMB, "sftp": SFTP, "webdav": WebDAV, "s3": S3, "rclone": Rclone, "peer": Peer}
 
 
-# ====================================================================== réglages d'un stockage
+# ====================================================================== storage settings
 def valid_conf(kind, b, old=None):
-    """Réglages envoyés par l'administration -> conf (un secret laissé vide garde l'ancienne valeur)."""
+    """Settings sent by the administration -> conf (a secret left empty keeps the old value)."""
     old = dict(old or {})
 
     def txt(k, pattern, limit=300, required=True):
@@ -789,7 +789,7 @@ def valid_conf(kind, b, old=None):
         if conf["hostkey"] and not re.match(r"^[0-9a-f]{32}$", conf["hostkey"]):
             raise ColdError("Empreinte de la clé du serveur invalide")
         if old.get("host") and (old.get("host"), old.get("port")) != (conf["host"], conf["port"]) and not b.get("hostkey"):
-            conf["hostkey"] = ""  # autre serveur : nouvelle empreinte à confirmer
+            conf["hostkey"] = ""  # another server: new fingerprint to confirm
         return conf
     if kind == "webdav":
         url = txt("url", r"^https?://[^\s]{3,1000}$", 1000)
@@ -824,9 +824,9 @@ def public_conf(conf):
     return out
 
 
-# ====================================================================== lecture de la source pendant une copie
+# ====================================================================== reading the source during a copy
 class _Reader:
-    """Source d'une copie : empreinte SHA-256, progression, débit limité pendant une lecture, annulation."""
+    """Source of a copy: SHA-256 fingerprint, progress, capped rate during a playback, cancellation."""
 
     def __init__(self, it, job, cold):
         self.it = iter(it)
@@ -870,12 +870,12 @@ class _Reader:
                 time.sleep(min(ahead, 2))
 
 
-MIN_GAIN = 0.9  # compressé, le fichier doit faire moins de 90 % de l'original (sinon l'original est gardé)
+MIN_GAIN = 0.9  # compressed, the file must be under 90 % of the original (otherwise the original is kept)
 QUALITY = {"high": (22, 21), "balanced": (26, 24), "small": (30, 27)}  # (carte graphique : cq, processeur : crf)
 
 
 def compress_cmd(src, out, probe, hw, quality, height):
-    """ffmpeg : vidéo en HEVC, tout le reste recopié (MKV)."""
+    """ffmpeg: video in HEVC, everything else copied (MKV)."""
     from ..transcoder import hw_input
     v = probe["video"]
     vi = v["index"]
@@ -887,7 +887,7 @@ def compress_cmd(src, out, probe, hw, quality, height):
     cmd += [*media.input_args(src), "-map", "0", "-map", "-0:d", "-c", "copy", "-map_metadata", "0", "-map_chapters", "0",
             "-max_muxing_queue_size", "4096"]
     for sub in probe.get("subs") or []:
-        if sub.get("codec") == "mov_text":  # sous-titres d'un MP4 : du texte que le MKV n'accepte qu'en SRT
+        if sub.get("codec") == "mov_text":  # subtitles of an MP4: text that MKV only accepts as SRT
             cmd += [f"-c:{sub['index']}", "srt"]
     vf = [f"scale=-2:{height}"] if height and (v.get("height") or 0) > height else []
     if hw and hw["engine"] == "vaapi":
@@ -919,4 +919,4 @@ def _file_blocks(path, start=0, end=None):
             yield b
 
 
-# ====================================================================== le service
+# ====================================================================== the service

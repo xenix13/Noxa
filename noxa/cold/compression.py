@@ -14,7 +14,7 @@ from .storage import ColdError, MIN_GAIN, QUALITY, SAMPLE, SAMPLES, _Reader, _fi
 
 
 class CompressionMixin:
-    # ---------------------------------------------------------------- archives d'autres serveurs (hébergées ici)
+    # ---------------------------------------------------------------- archives of other servers (hosted here)
     def hosted_dir(self, peer_id):
         return os.path.join(self.ctx.data_dir, "cold-hosted", str(int(peer_id)))
 
@@ -33,7 +33,7 @@ class CompressionMixin:
         return float(self.ctx.db.setting("cold_host_gb", "0") or 0) * 1e9
 
 
-    # ---------------------------------------------------------------- compression des archives (HEVC)
+    # ---------------------------------------------------------------- archive compression (HEVC)
     def compress_conf(self):
         db = self.ctx.db
         q = db.setting("cold_compress_quality", "balanced")
@@ -42,7 +42,7 @@ class CompressionMixin:
 
     @staticmethod
     def compressible(probe):
-        """(oui ?, raison) : vidéo déjà compacte (HEVC, AV1, VP9) ou HDR (gardée telle quelle pour ne rien abîmer)."""
+        """(yes?, reason): video already compact (HEVC, AV1, VP9) or HDR (kept as is so as not to damage anything)."""
         from ..transcoder import HDR_TRANSFERS
         v = (probe or {}).get("video")
         if not v:
@@ -61,8 +61,8 @@ class CompressionMixin:
             return False
 
     def compress(self, src, row, job):
-        """Réencode la vidéo en HEVC (carte graphique si configurée, sinon processeur), sons, sous-titres, chapitres et
-        polices recopiés tels quels. -> (fichier, description) ; None si ce n'est pas utile (raison dans job["note"])."""
+        """Encodes the video again in HEVC (graphics card when set up, otherwise processor); audio, subtitles, chapters and
+        fonts copied as is. -> (file, description); None when it is not worth it (reason in job["note"])."""
         probe = json.loads(row["probe"] or "{}") if isinstance(row["probe"], str) else (row["probe"] or {})
         ok, why = self.compressible(probe)
         if not ok:
@@ -91,7 +91,7 @@ class CompressionMixin:
         stop = threading.Event()
 
         def watch():
-            # annulation ; et par le processeur, pause pendant qu'une lecture est convertie (elle passe d'abord)
+            # cancellation; and on the processor, paused while a playback is converted (it goes first)
             paused = False
             while not stop.wait(2):
                 if job.get("cancel"):
@@ -149,7 +149,7 @@ class CompressionMixin:
             pass
 
     def recompress(self, item_id, store_id, job):
-        """Compresse une copie déjà archivée : relue depuis le stockage, réencodée, renvoyée, l'ancienne effacée."""
+        """Compresses a copy already archived: read back from the storage, encoded again, sent back, the old one erased."""
         db = self.ctx.db
         c = db.one("SELECT * FROM cold_copies WHERE item_id=? AND store_id=?", (item_id, store_id))
         row = db.one("SELECT id, key, library_id, file_size, probe FROM items WHERE id=?", (item_id,))
@@ -193,7 +193,7 @@ class CompressionMixin:
         return size, reader.sha.hexdigest()
 
     def queue_compress(self, store_id=None):
-        """Compresser les archives déjà faites (celles qui en valent la peine)."""
+        """Compress the archives already made (those worth it)."""
         db = self.ctx.db
         now = int(time.time())
         n = 0

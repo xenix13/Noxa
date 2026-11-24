@@ -33,7 +33,7 @@ class CopiesMixin:
         return cls(store["conf"], self)
 
     def available(self):
-        """Types utilisables sur cette installation (et pourquoi pas)."""
+        """Types usable on this installation (and why not)."""
         smb_ok = os.path.exists(env("MOUNTD_SOCK") or mountd.SOCK) and not env("DOCKER")
         return {"local": None,
                 "smb": None if smb_ok else i18n.tr("Indisponible ici (Docker, ou service de montage absent) : montez le "
@@ -54,12 +54,12 @@ class CopiesMixin:
         return bool(key) and not media.is_strm(key) and not os.path.isfile(key)
 
     def source(self, row, prefer_cold=False):
-        """Ce que ffmpeg doit lire pour cet élément : son fichier, sinon sa copie ramenée en local (cache), sinon une
-        copie froide (chemin d'un dossier, ou « cold:http://127.0.0.1:…/cold/<jeton> »). None si rien n'est lisible."""
+        """What ffmpeg must read for this item: its file, otherwise its copy brought back locally (cache), otherwise a
+        cold copy (path of a folder, or "cold:http://127.0.0.1:…/cold/<token>"). None when nothing is readable."""
         return self.resolve(row, prefer_cold)[0]
 
     def resolve(self, row, prefer_cold=False):
-        """-> (source, description) : description (probe) propre à une copie compressée, None sinon (celle de la fiche)."""
+        """-> (source, description): description (probe) specific to a compressed copy, None otherwise (the record's)."""
         key = row["key"]
         if not prefer_cold and key and (media.is_strm(key) or os.path.isfile(key)):
             return key, None
@@ -68,7 +68,7 @@ class CopiesMixin:
             if cached:
                 return cached, self._probe_of(row, self.ctx.db.scalar("SELECT probe FROM cold_cache WHERE item_id=?", (row["id"],)))
         copies = [c for c in self.copies(row["id"]) if c["enabled"] and c["verified_at"]]
-        # dossiers (disque, partage monté) d'abord : lecture directe, la plus rapide
+        # folders (disk, mounted share) first: direct read, the fastest
         copies.sort(key=lambda c: (c["kind"] not in ("local", "smb"), c["position"]))
         for c in copies:
             store = self.store(c["store_id"])
@@ -86,7 +86,7 @@ class CopiesMixin:
 
     @staticmethod
     def _probe_of(row, copy_probe):
-        """Description d'une copie compressée, avec les sous-titres externes de la fiche (fichiers à part)."""
+        """Description of a compressed copy, with the record's external subtitles (separate files)."""
         if not copy_probe:
             return None
         p = json.loads(copy_probe) if isinstance(copy_probe, str) else dict(copy_probe)
@@ -113,7 +113,7 @@ class CopiesMixin:
         return v if v and v["expires"] >= time.time() else None
 
 
-    # ---------------------------------------------------------------- cache local (titres ramenés)
+    # ---------------------------------------------------------------- local cache (titles brought back)
     def cache_conf(self):
         db = self.ctx.db
         return {"gb": float(db.setting("cold_cache_gb", "20") or 0), "keep_free_gb": float(db.setting("cold_cache_free_gb", "10") or 0),
@@ -133,7 +133,7 @@ class CopiesMixin:
         return r["path"]
 
     def prefetch(self, row):
-        """Lecture depuis un stockage en ligne : ce titre, et les épisodes suivants de la série, ramenés en local."""
+        """Playback from an online storage: this title, and the next episodes of the show, brought back locally."""
         c = self.cache_conf()
         if c["gb"] <= 0:
             return 0
@@ -177,7 +177,7 @@ class CopiesMixin:
         row = db.one("SELECT id, key FROM items WHERE id=?", (item_id,))
         if not row or not self.local_missing(row) or self.cached(item_id):
             return
-        # seulement les copies en ligne : un dossier ou un partage monté se lit déjà directement
+        # only the online copies: a folder or a mounted share is already read directly
         copies = [cp for cp in self.copies(item_id) if cp["enabled"] and cp["verified_at"] and cp["kind"] not in ("local", "smb")]
         if not copies:
             return
@@ -206,8 +206,8 @@ class CopiesMixin:
                (item_id, path, cp["size"], now, now, cp["probe"]))
 
     def _make_room(self, need):
-        """Place pour `need` octets dans le budget du cache (et en gardant de la place libre sur le disque) :
-        les titres ramenés depuis le plus longtemps sans lecture repartent d'abord."""
+        """Room for `need` bytes in the cache budget (while keeping free space on the disk):
+        the titles brought back that have gone longest without playback go first."""
         c = self.cache_conf()
         db = self.ctx.db
         budget = c["gb"] * 1e9

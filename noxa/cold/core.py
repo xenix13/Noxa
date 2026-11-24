@@ -11,9 +11,9 @@ class Cold(CopiesMixin, CompressionMixin, JobsMixin):
         self.ctx = ctx
         self.lock = threading.Lock()
         self.tokens = {}       # jeton -> {store, name, size, expires}
-        self.running = None    # tâche en cours (dict partagé avec _Reader : done, cancel)
+        self.running = None    # running job (dict shared with _Reader: done, cancel)
         self.worker = None
         self.wake = threading.Event()
-        self.fetch_queue = []  # titres à ramener en local
+        self.fetch_queue = []  # titles to bring back locally
         self.fetching = None
         self.fetcher = None

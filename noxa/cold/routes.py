@@ -53,7 +53,7 @@ def register(app, ctx, x):
             raise err(e)
 
     def test_conf(kind, conf):
-        """Essai réel (écrire, relire, effacer un petit fichier). SFTP : l'empreinte du serveur d'abord."""
+        """Real test (write, read back, erase a small file). SFTP: the server fingerprint first."""
         b = BACKENDS[kind](conf, cold)
         if kind == "sftp" and not conf.get("hostkey"):
             return {"ok": False, "fingerprint": b.fingerprint()}
@@ -68,7 +68,7 @@ def register(app, ctx, x):
             r = mountd.call("add", args, sock_path=env("MOUNTD_SOCK"), timeout=90)
         except mountd.MountError as e:
             raise HTTPError(400, str(e))
-        conf = {k: v for k, v in conf.items() if k != "password"}  # le mot de passe reste chez seance-mountd
+        conf = {k: v for k, v in conf.items() if k != "password"}  # the password stays with seance-mountd
         conf["mount"] = r.get("path") or os.path.join(mountd.MOUNT_ROOT, f"cold-{sid}")
         return conf
 
@@ -150,14 +150,14 @@ def register(app, ctx, x):
         s = cold.store(int(req.params["sid"]))
         if not s:
             raise HTTPError(404, "Stockage inconnu")
-        # un titre dont c'est la seule copie (fichier absent de la bibliothèque) ne doit pas devenir illisible
+        # a title whose only copy this is (file missing from the library) must not become unplayable
         only = [r for r in db.all("SELECT c.item_id, i.key FROM cold_copies c JOIN items i ON i.id=c.item_id WHERE c.store_id=? "
                                   "AND NOT EXISTS (SELECT 1 FROM cold_copies o WHERE o.item_id=c.item_id AND o.store_id!=c.store_id)",
                                   (s["id"],)) if cold.local_missing(r)]
         if only:
             raise HTTPError(409, i18n.tr("{n} titre(s) n'existent plus que sur ce stockage : impossible de le retirer").format(n=len(only)))
         db.run("DELETE FROM cold_jobs WHERE store_id=?", (s["id"],))
-        db.run("DELETE FROM cold_copies WHERE store_id=?", (s["id"],))  # les fichiers restent sur le stockage
+        db.run("DELETE FROM cold_copies WHERE store_id=?", (s["id"],))  # the files stay on the storage
         db.run("DELETE FROM cold_stores WHERE id=?", (s["id"],))
         if s["kind"] == "smb":
             db.release()
@@ -190,7 +190,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/admin/cold/compress", auth="admin")
     def cold_compress_info(req):
-        """Compression des archives : réglages, carte graphique utilisée, archives qui en profiteraient."""
+        """Archive compression: settings, graphics card used, archives that would benefit."""
         hw = ctx.hw()
         todo = [c for c in db.all("SELECT c.size, i.probe FROM cold_copies c JOIN items i ON i.id=c.item_id "
                                   "WHERE c.compressed=0 AND c.verified_at IS NOT NULL") if cold.compressible(json.loads(c["probe"] or "{}"))[0]]
@@ -241,7 +241,7 @@ def register(app, ctx, x):
             raise HTTPError(409, str(e))
         return {"ok": ok}
 
-    # ---------------------------------------------------- cache local et accueil des archives des serveurs liés
+    # ---------------------------------------------------- local cache and hosting the linked servers' archives
     @app.route("GET", "/api/admin/cold/extra", auth="admin")
     def cold_extra(req):
         peers = {p["id"]: p["name"] for p in db.all("SELECT id, name FROM peers")}
@@ -295,7 +295,7 @@ def register(app, ctx, x):
 
     @app.route("PUT", "/fed/cold/blob", auth="peer")
     def fed_cold_put(req):
-        """Un morceau (16 Mo au plus) d'une archive envoyée par un serveur lié, écrit à la suite des précédents."""
+        """A chunk (16 MB at most) of an archive sent by a linked server, written after the previous ones."""
         p = hosted_path(req, req.arg("name"))
         part = p + ".part"
         offset = int(req.arg("offset") or 0)
@@ -322,7 +322,7 @@ def register(app, ctx, x):
                 f.write(b)
                 left -= len(b)
             f.truncate()
-        req._body = b""  # corps déjà lu ici : le serveur web ne doit pas le relire
+        req._body = b""  # body already read here: the web server must not read it again
         return {"ok": True, "size": offset + length}
 
     @app.route("POST", "/fed/cold/commit", auth="peer")
@@ -343,7 +343,7 @@ def register(app, ctx, x):
         return {"size": os.path.getsize(p)}
 
     def byte_range(req, size):
-        """En-tête Range -> (début, fin, statut) ; None si la plage est hors du fichier."""
+        """Range header -> (start, end, status); None when the range is outside the file."""
         start, end, status = 0, size - 1, 200
         rng = (req.headers.get("Range") or "").strip()
         m = re.match(r"^bytes=(\d*)-(\d*)$", rng) if rng else None
@@ -387,7 +387,7 @@ def register(app, ctx, x):
                 pass
         return {"ok": True}
 
-    # lecture d'une copie froide par ffmpeg (adresse locale, jeton secret, jamais derrière un proxy)
+    # cold copy read by ffmpeg (local address, secret token, never behind a proxy)
     @app.route("GET", r"/cold/(?P<tok>[A-Za-z0-9_-]{20,64})", auth=None)
     def cold_stream(req):
         t = cold.token(req.params["tok"])

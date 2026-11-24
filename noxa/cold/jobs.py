@@ -10,9 +10,9 @@ from .storage import ColdError, SAMPLE, SAMPLES, SIDECAR_EXT, _BytesReader, _Rea
 
 
 class JobsMixin:
-    # ---------------------------------------------------------------- débit
+    # ---------------------------------------------------------------- rate
     def rate_limit(self):
-        """Octets par seconde permis pour une copie (0 : sans limite). Plus bas pendant une lecture."""
+        """Bytes per second allowed for a copy (0: no limit). Lower during a playback."""
         db = self.ctx.db
         try:
             playing = db.scalar("SELECT COUNT(*) FROM streams WHERE last_seen>?", (int(time.time()) - 90,))
@@ -21,7 +21,7 @@ class JobsMixin:
         mb = float(db.setting("cold_rate_play" if playing else "cold_rate", "10" if playing else "0") or 0)
         return int(mb * 1024 * 1024)
 
-    # ---------------------------------------------------------------- noms sur le stockage
+    # ---------------------------------------------------------------- names on the storage
     def name_for(self, row, store_id):
         db = self.ctx.db
         lib = db.one("SELECT name, paths FROM libraries WHERE id=?", (row["library_id"],)) or {"name": "Noxa", "paths": "[]"}
@@ -40,7 +40,7 @@ class JobsMixin:
 
     @staticmethod
     def sidecars(key):
-        """Sous-titres posés à côté du fichier (même nom) : copiés avec lui."""
+        """Subtitles placed next to the file (same name): copied with it."""
         d, base = os.path.split(key)
         stem = os.path.splitext(base)[0]
         try:
@@ -96,7 +96,7 @@ class JobsMixin:
     def _loop(self):
         db = self.ctx.db
         try:
-            db.run("UPDATE cold_jobs SET state='queued' WHERE state='running'")  # arrêt de Noxa pendant une copie
+            db.run("UPDATE cold_jobs SET state='queued' WHERE state='running'")  # Noxa stopped during a copy
             while True:
                 job = db.one("SELECT * FROM cold_jobs WHERE state='queued' ORDER BY created_at, id LIMIT 1")
                 if not job:
@@ -130,9 +130,9 @@ class JobsMixin:
         finally:
             db.release()
 
-    # ---------------------------------------------------------------- une copie
+    # ---------------------------------------------------------------- one copy
     def archive(self, item_id, store_id, job=None):
-        """Copie le fichier de l'élément (et ses sous-titres voisins) sur le stockage, puis la vérifie."""
+        """Copies the item's file (and its neighbouring subtitles) to the storage, then checks it."""
         job = job if job is not None else {"done": 0, "total": 0, "cancel": False}
         db = self.ctx.db
         row = db.one("SELECT id, key, library_id, file_size, probe FROM items WHERE id=?", (item_id,))
@@ -144,7 +144,7 @@ class JobsMixin:
         b = self.backend(store)
         name = self.name_for(row, store_id)
         meta = {"compressed": 0, "orig_size": None, "probe": None}
-        # source : le fichier de la bibliothèque, sinon une copie déjà faite sur un autre stockage
+        # source: the library file, otherwise a copy already made on another storage
         if row["key"] and os.path.isfile(row["key"]):
             src = row["key"]
             size = os.path.getsize(row["key"])
@@ -189,7 +189,7 @@ class JobsMixin:
         b.put(name, reader, size)
         if reader.done != size:
             raise ColdError("Lecture du fichier interrompue")
-        # vérification : taille sur le stockage, et morceaux relus (début, fin, quelques-uns au hasard)
+        # check: size on the storage, and chunks read back (start, end, a few at random)
         if b.size(name) != size:
             raise ColdError("Copie incomplète sur le stockage")
         offsets = {0, max(0, size - SAMPLE)} | {random.randrange(0, max(1, size - SAMPLE)) for _ in range(SAMPLES)}
@@ -217,7 +217,7 @@ class JobsMixin:
         return name
 
     def forget(self, item_id, store_id, delete_file=True):
-        """Retire une copie froide (et son fichier sur le stockage)."""
+        """Removes a cold copy (and its file on the storage)."""
         c = self.ctx.db.one("SELECT * FROM cold_copies WHERE item_id=? AND store_id=?", (item_id, store_id))
         if not c:
             return False
@@ -236,7 +236,7 @@ class JobsMixin:
         self.ctx.db.run("DELETE FROM cold_copies WHERE id=?", (c["id"],))
         return True
 
-    # ---------------------------------------------------------------- état pour l'administration
+    # ---------------------------------------------------------------- status for the administration
     def status(self):
         db = self.ctx.db
         jobs = db.all("SELECT j.*, i.title, i.type, s.title AS show_title, i.idx, p.idx AS season FROM cold_jobs j "

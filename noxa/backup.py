@@ -1,20 +1,20 @@
-"""Sauvegarde et restauration du serveur.
+"""Server backup and restore.
 
-Une sauvegarde est une archive .tar.gz qui contient :
-- seance.db : la base (comptes, mots de passe chiffrés, double authentification, historique, notes, playlists,
-  réglages, bibliothèques, métadonnées), copiée par l'API de sauvegarde de SQLite (cohérente même en pleine
-  écriture) ;
-- federation/ : identité et certificats des serveurs liés (sans elle, il faudrait les lier à nouveau) ;
-- push/ : clé des notifications (sans elle, chaque appareil devrait se réabonner) ;
-- avatars/ : images de profil ;
-- subtitles/ : sous-titres téléchargés depuis OpenSubtitles (comptés sur un quota quotidien) ;
-- manifest.json : version de Noxa et de la base, date.
-Les vidéos et les photos n'y sont pas : elles restent dans leurs dossiers. Les caches (images redimensionnées,
-sous-titres extraits, aperçus) se refont tout seuls.
+A backup is a .tar.gz archive that holds:
+- seance.db: the database (accounts, hashed passwords, two-factor authentication, history, ratings, playlists,
+  settings, libraries, metadata), copied through SQLite's backup API (consistent even in the middle of
+  writes);
+- federation/: identity and certificates of the linked servers (without it, they would have to be linked again);
+- push/: notification key (without it, each device would have to subscribe again);
+- avatars/: profile pictures;
+- subtitles/: subtitles downloaded from OpenSubtitles (counted against a daily quota);
+- manifest.json: Noxa and database version, date.
+Videos and photos are not in it: they stay in their folders. The caches (resized pictures,
+extracted subtitles, previews) rebuild themselves.
 
-Restaurer se fait en deux temps, parce que la base est ouverte tant que Noxa tourne : l'archive est vérifiée
-puis dépliée dans data/restore-pending, et c'est au démarrage suivant, avant d'ouvrir la base, que les
-fichiers sont mis en place. Ceux d'avant sont gardés dans data/before-restore-<date>.
+Restoring happens in two steps, because the database is open while Noxa runs: the archive is checked
+then unpacked into data/restore-pending, and it is at the next start, before the database is opened, that the
+files are put in place. The previous ones are kept in data/before-restore-<date>.
 """
 import json
 import logging
@@ -43,7 +43,7 @@ ENC_SUFFIX = ".enc"
 MAGIC = b"NEXISENC1\n"
 KDF_ROUNDS = 300000
 PENDING = "restore-pending"
-KEEP_BEFORE = 2  # copies « avant restauration » gardées
+KEEP_BEFORE = 2  # "before restore" copies kept
 MAX_UPLOAD = 8 * 1024 ** 3
 
 
@@ -56,7 +56,7 @@ def directory(ctx):
 
 
 def check_directory(path):
-    """Dossier de destination choisi par l'administrateur : absolu, existant, accessible en écriture."""
+    """Destination folder chosen by the administrator: absolute, existing, writable."""
     if not isinstance(path, str) or not path.startswith("/") or "\0" in path or len(path) > 400:
         raise BackupError("Chemin absolu attendu (ex. /mnt/nas/sauvegardes)")
     path = os.path.normpath(path)
@@ -68,7 +68,7 @@ def check_directory(path):
 
 
 def slug(name):
-    """Nom du serveur pour un nom de fichier : « Salon de Léa » -> « salon-de-lea »."""
+    """Server name for a file name: "Salon de Léa" -> "salon-de-lea"."""
     from .names import fold
     s = re.sub(r"[^a-z0-9]+", "-", fold(name or "noxa")).strip("-")[:32].strip("-")
     return s or "noxa"
@@ -91,7 +91,7 @@ def _schema(db_path):
 
 
 def create(ctx, label="", keep=None, distribute=True):
-    """Nouvelle sauvegarde -> {name, size, created, ...}. keep : nombre d'archives automatiques gardées."""
+    """New backup -> {name, size, created, ...}. keep: number of automatic archives kept."""
     dest = directory(ctx)
     os.makedirs(dest, mode=0o700, exist_ok=True)
     now = time.time()
@@ -115,9 +115,9 @@ def create(ctx, label="", keep=None, distribute=True):
         man = os.path.join(tmp_dir, "manifest.json")
         with open(man, "w", encoding="utf-8") as f:
             json.dump(manifest, f)
-        fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # mots de passe, clés : lisible par Noxa seul
+        fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # passwords, keys: readable by Noxa only
         with os.fdopen(fd, "wb") as raw, tarfile.open(fileobj=raw, mode="w:gz", compresslevel=6) as tar:
-            tar.add(man, "manifest.json")  # en premier : la liste lit seulement le début de l'archive
+            tar.add(man, "manifest.json")  # first: the list only reads the start of the archive
             tar.add(db_copy, "seance.db")
             for d in DIRS:
                 p = os.path.join(ctx.data_dir, d)
@@ -136,7 +136,7 @@ def create(ctx, label="", keep=None, distribute=True):
         prune(ctx, keep)
     log.info("Sauvegarde %s (%.1f Mo)", final, os.path.getsize(final) / 1e6)
     if distribute:
-        distribute_later(ctx, final)  # copies vers les serveurs liés et les stockages externes, en tâche de fond
+        distribute_later(ctx, final)  # copies to the linked servers and the external storages, in the background
     return describe(final, uid)
 
 
@@ -156,7 +156,7 @@ def describe(path, local_uid=None):
                            server=man.get("server") or None, server_uid=man.get("server_uid") or None)
     except (OSError, tarfile.TarError, ValueError, EOFError):
         out["broken"] = True
-    # sauvegarde de ce serveur, ou copie venue d'un serveur lié (anciennes archives sans identité : celles d'ici)
+    # backup of this server, or copy from a linked server (old archives without identity: those from here)
     out["mine"] = not out["server_uid"] or local_uid is None or out["server_uid"] == local_uid
     return out
 
@@ -184,8 +184,8 @@ def origin(b):
 
 
 def prune(ctx, keep):
-    """Ne garde que les `keep` sauvegardes automatiques les plus récentes de chaque serveur (celles d'ici et les
-    copies de chaque serveur lié) ; celles faites à la main restent."""
+    """Keeps only the `keep` most recent automatic backups of each server (those from here and the
+    copies of each linked server); those made by hand stay."""
     seen = {}
     for b in listing(ctx):
         if not b["auto"]:
@@ -199,9 +199,9 @@ def prune(ctx, keep):
                 pass
 
 
-# ------------------------------------------------------------------ chiffrement (copies envoyées hors du serveur)
-# AES-256 en mode CTR (openssl) puis HMAC-SHA256 sur l'ensemble (chiffrer puis authentifier) ; clés tirées de la
-# phrase secrète par PBKDF2-SHA256. Format : MAGIC, sel (16), IV (16), données chiffrées, HMAC (32).
+# ------------------------------------------------------------------ encryption (copies sent off the server)
+# AES-256 in CTR mode (openssl) then HMAC-SHA256 over the whole (encrypt then authenticate); keys derived from the
+# passphrase with PBKDF2-SHA256. Format: MAGIC, salt (16), IV (16), encrypted data, HMAC (32).
 def _keys(passphrase, salt):
     k = hashlib.pbkdf2_hmac("sha256", passphrase.encode(), salt, KDF_ROUNDS, 64)
     return k[:32], k[32:]
@@ -264,7 +264,7 @@ def decrypt_file(src, dst, passphrase):
 
 
 def plain_copy(ctx, path, passphrase=None):
-    """Archive à restaurer : déchiffrée à côté si besoin (phrase donnée, sinon celle enregistrée) -> chemin."""
+    """Archive to restore: decrypted alongside when needed (given passphrase, otherwise the saved one) -> path."""
     if not is_encrypted(path):
         return path, False
     pw = passphrase or ctx.db.setting("backup_passphrase")
@@ -290,7 +290,7 @@ def _allowed(name):
 
 
 def validate(path):
-    """Archive lisible, venue de Noxa, et d'une base que cette version sait ouvrir -> manifeste."""
+    """Readable archive, made by Noxa, of a database this version can open -> manifest."""
     from .db import MIGRATIONS
     try:
         with tarfile.open(path, "r:gz") as tar:
@@ -312,7 +312,7 @@ def validate(path):
 
 
 def stage(data_dir, path):
-    """Vérifie l'archive et la déplie pour le prochain démarrage."""
+    """Checks the archive and unpacks it for the next start."""
     if not os.path.isfile(path):
         raise BackupError("Fichier introuvable")
     man = validate(path)
@@ -348,7 +348,7 @@ def stage(data_dir, path):
 
 
 def apply_pending(data_dir):
-    """Au démarrage, avant d'ouvrir la base : met en place une restauration préparée. -> manifeste ou None."""
+    """At start, before opening the database: puts a prepared restore in place. -> manifest or None."""
     pending = os.path.join(data_dir, PENDING)
     if not os.path.isfile(os.path.join(pending, "seance.db")):
         return None
@@ -370,7 +370,7 @@ def apply_pending(data_dir):
     shutil.rmtree(pending, ignore_errors=True)
     old_dir, new_dir = man.get("data_dir"), os.path.abspath(data_dir)
     if isinstance(old_dir, str) and old_dir and old_dir != new_dir:
-        # autre dossier de données (nouveau serveur) : chemins des sous-titres téléchargés mis à jour
+        # another data folder (new server): paths of the downloaded subtitles updated
         c = sqlite3.connect(os.path.join(data_dir, "seance.db"))
         try:
             c.execute("UPDATE items SET probe=replace(probe, ?, ?) WHERE probe LIKE ?",
@@ -389,7 +389,7 @@ def apply_pending(data_dir):
 
 
 def read_body(req, dest_path, limit=MAX_UPLOAD):
-    """Corps de la requête écrit par morceaux dans un fichier (sans passer par la limite des requêtes ordinaires)."""
+    """Request body written in chunks to a file (without going through the limit of ordinary requests)."""
     try:
         length = int(req.headers.get("Content-Length") or 0)
     except ValueError:
@@ -397,7 +397,7 @@ def read_body(req, dest_path, limit=MAX_UPLOAD):
     if not 0 < length <= limit:
         raise BackupError("Fichier vide ou trop volumineux")
     left = length
-    req._body = b""  # corps lu ici (le serveur ne doit pas le relire après la réponse)
+    req._body = b""  # body read here (the server must not read it again after the answer)
     try:
         with open(os.open(dest_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
             while left:
@@ -408,14 +408,14 @@ def read_body(req, dest_path, limit=MAX_UPLOAD):
                 left -= len(chunk)
     except BaseException:
         if left:
-            req.handler.close_connection = True  # reste du corps non lu : la connexion ne peut pas resservir
+            req.handler.close_connection = True  # rest of the body not read: the connection cannot be reused
         raise
 
 
 def adopt(ctx, path, label="envoi", own=False):
-    """Archive reçue (navigateur, stockage externe, chemin du serveur) : déchiffrée si besoin, vérifiée, et rangée
-    dans le dossier des sauvegardes sous un nom qui dit de quel serveur elle vient -> description.
-    own : le fichier est un fichier temporaire de Noxa (déplacé plutôt que copié)."""
+    """Archive received (browser, external storage, server path): decrypted when needed, checked, and stored
+    in the backups folder under a name that tells which server it comes from -> description.
+    own: the file is a temporary file of Noxa (moved rather than copied)."""
     dest = directory(ctx)
     os.makedirs(dest, mode=0o700, exist_ok=True)
     plain, decrypted = plain_copy(ctx, path, getattr(ctx, "_passphrase", None))
@@ -437,7 +437,7 @@ def adopt(ctx, path, label="envoi", own=False):
 
 
 def receive(ctx, req, passphrase=None):
-    """Archive envoyée depuis le navigateur (pour restaurer sur un nouveau serveur) -> description."""
+    """Archive sent from the browser (to restore on a new server) -> description."""
     dest = directory(ctx)
     os.makedirs(dest, mode=0o700, exist_ok=True)
     part = os.path.join(dest, f".upload-{os.getpid()}-{time.time_ns()}")
@@ -451,7 +451,7 @@ def receive(ctx, req, passphrase=None):
             os.remove(part)
 
 
-# ------------------------------------------------------------------ recopies : serveurs liés et stockages externes
+# ------------------------------------------------------------------ copies: linked servers and external storages
 def remotes(ctx):
     try:
         return json.loads(ctx.db.setting("backup_remotes") or "[]")
@@ -505,7 +505,7 @@ def name_for_peer(peer, name):
 
 
 def push_to_peer(ctx, peer, path):
-    """Copie d'une sauvegarde de ce serveur chez un serveur lié (qui garde celles de chaque serveur à part)."""
+    """Copy of a backup of this server to a linked server (which keeps each server's apart)."""
     from .federation import FedError
     size = os.path.getsize(path)
     with open(path, "rb") as f:
@@ -528,8 +528,8 @@ def push_to_peer(ctx, peer, path):
 
 
 def push_to_storage(ctx, rid, path):
-    """Envoi vers un stockage externe : chiffré si une phrase secrète est enregistrée ; anciennes copies
-    automatiques de ce serveur retirées au-delà du nombre gardé."""
+    """Upload to an external storage: encrypted when a passphrase is saved; old automatic
+    copies of this server removed beyond the number kept."""
     from .remote_storage import StorageError
     r, st = storage_for(ctx, rid)
     pw = ctx.db.setting("backup_passphrase")
@@ -556,8 +556,8 @@ def push_to_storage(ctx, rid, path):
 
 
 def distribute(ctx, path):
-    """Après une sauvegarde : copies vers les serveurs liés (si activé) et les stockages externes activés.
-    Un échec est noté (et signalé par une alerte) sans arrêter les autres copies."""
+    """After a backup: copies to the linked servers (when enabled) and the enabled external storages.
+    A failure is noted (and flagged by an alert) without stopping the other copies."""
     db = ctx.db
     results = []
     if db.setting("backup_to_peers", "1") == "1" and getattr(ctx, "fed", None):
@@ -621,7 +621,7 @@ def register(app, ctx, x):
 
     @app.route("POST", "/fed/backup", auth="peer")
     def fed_backup(req):
-        """Copie d'une sauvegarde envoyée par un serveur lié : gardée à part, au nom de ce serveur."""
+        """Copy of a backup sent by a linked server: kept apart, under that server's name."""
         if db.setting("backup_from_peers", "1") != "1":
             raise HTTPError(403, "Ce serveur ne garde pas les sauvegardes des serveurs liés")
         name = req.headers.get("X-Backup-Name") or ""
@@ -686,7 +686,7 @@ def register(app, ctx, x):
         if kind == "s3":
             db.release()
             try:
-                remote_storage.make(kind, conf, lambda c: None).check()  # clés et compartiment vérifiés tout de suite
+                remote_storage.make(kind, conf, lambda c: None).check()  # keys and bucket checked right away
             except remote_storage.StorageError as e:
                 raise HTTPError(400, str(e))
         items.append(r)
@@ -798,7 +798,7 @@ def register(app, ctx, x):
 
     @app.route("POST", f"/api/admin/backups/remotes/{RID}/restore", auth="admin")
     def remote_restore(req):
-        """Restaurer une sauvegarde gardée sur un stockage externe : téléchargée, déchiffrée, puis mise en place."""
+        """Restore a backup kept on an external storage: downloaded, decrypted, then put in place."""
         r = get_remote(req)
         b = req.json()
         fid, pw = b.get("id"), b.get("passphrase") or None
@@ -822,10 +822,10 @@ def register(app, ctx, x):
             raise HTTPError(400, str(e))
         return restart_after(stage_described(desc))
 
-    # ---------------------------------------------------------------- restauration en une étape
+    # ---------------------------------------------------------------- one-step restore
     @app.route("POST", "/api/admin/backups/restore-file", auth="admin")
     def restore_file(req):
-        """Restaurer directement depuis un fichier choisi sur l'appareil (archive .tar.gz, ou .enc chiffrée)."""
+        """Restore directly from a file picked on the device (.tar.gz archive, or encrypted .enc)."""
         db.release()
         try:
             desc = receive(ctx, req, req.headers.get("X-Backup-Passphrase") or None)
@@ -835,7 +835,7 @@ def register(app, ctx, x):
 
     @app.route("POST", "/api/admin/backups/restore-path", auth="admin")
     def restore_path(req):
-        """Restaurer depuis un fichier présent sur le serveur (disque externe, NAS monté…)."""
+        """Restore from a file present on the server (external disk, mounted NAS…)."""
         b = req.json()
         path = str(b.get("path") or "")
         if not path.startswith("/") or "\0" in path or not os.path.isfile(path):

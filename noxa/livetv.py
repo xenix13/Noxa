@@ -1,11 +1,11 @@
-"""TV en direct (IPTV) : listes de chaînes M3U, guide des programmes XMLTV, lecture dans le navigateur.
+"""Live TV (IPTV): M3U channel lists, XMLTV programme guide, playback in the browser.
 
-- Un administrateur ajoute une ou plusieurs sources : une liste M3U (adresse http(s) ou fichier sur le
-  serveur) et, si besoin, un guide XMLTV (souvent indiqué dans l'en-tête de la liste, « url-tvg »).
-- Toutes les personnes du foyer voient les chaînes (sauf les groupes masqués par l'administrateur).
-- Le navigateur ne sait pas lire un flux MPEG-TS : Noxa le reçoit avec ffmpeg et le redécoupe en HLS
-  (vidéo recopiée si elle est en H.264, son converti en AAC stéréo). Une chaîne regardée par plusieurs
-  personnes n'est reçue qu'une fois, et ffmpeg s'arrête quand plus personne ne la regarde.
+- An administrator adds one or more sources: an M3U list (http(s) address or file on the
+  server) and, if needed, an XMLTV guide (often given in the list header, "url-tvg").
+- Everyone in the household sees the channels (except the groups hidden by the administrator).
+- The browser cannot play an MPEG-TS stream: Noxa receives it with ffmpeg and cuts it again into HLS
+  (video copied when it is H.264, audio converted to stereo AAC). A channel watched by several
+  people is received only once, and ffmpeg stops when nobody watches it anymore.
 """
 import gzip
 import hashlib
@@ -33,12 +33,12 @@ DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Ge
 MAX_M3U = 64 * 1024 * 1024
 MAX_EPG = 512 * 1024 * 1024
 MAX_LOGO = 2 * 1024 * 1024
-EPG_PAST = 3 * 3600        # programmes déjà terminés gardés (pour l'affichage du guide)
+EPG_PAST = 3 * 3600        # programmes already finished kept (for the guide display)
 EPG_AHEAD = 4 * 86400
-IDLE_STOP = 45             # s sans requête d'un spectateur : la chaîne est coupée
-CHECK_TIMEOUT = 8          # s pour qu'une chaîne réponde lors de la vérification
-CHECK_GAP = 0.2            # s entre deux vérifications : pas de rafale chez le fournisseur
-DEAD_AFTER = 2             # vérifications ratées d'affilée avant de masquer une chaîne
+IDLE_STOP = 45             # s without a request from a viewer: the channel is cut
+CHECK_TIMEOUT = 8          # s for a channel to answer during the check
+CHECK_GAP = 0.2            # s between two checks: no burst at the provider
+DEAD_AFTER = 2             # failed checks in a row before a channel is hidden
 ATTR = re.compile(r'([A-Za-z0-9_-]+)="([^"]*)"')
 
 
@@ -47,14 +47,14 @@ class LiveError(Exception):
 
 
 class LiveGone(LiveError):
-    """La session a été arrêtée (plus personne ne regarde) pendant qu'on l'attendait."""
+    """The session was stopped (nobody watches anymore) while it was being waited for."""
 
 
-# ------------------------------------------------------------------ adresses autorisées
-# Le contenu d'une liste M3U vient du fournisseur IPTV : ses adresses ne doivent pas permettre de faire lire au
-# serveur ses propres fichiers ni d'utiliser les protocoles « internes » de ffmpeg (concat:, subfile:, data:…).
+# ------------------------------------------------------------------ allowed addresses
+# The content of an M3U list comes from the IPTV provider: its addresses must not make the server read
+# its own files nor use ffmpeg's "internal" protocols (concat:, subfile:, data:…).
 STREAM_SCHEMES = {"http", "https", "rtsp", "rtsps", "rtmp", "rtmps", "rtp", "udp"}
-PROTOCOLS = {  # protocoles ffmpeg nécessaires pour chaque type d'adresse (-protocol_whitelist)
+PROTOCOLS = {  # ffmpeg protocols needed for each type of address (-protocol_whitelist)
     "http": "http,https,tcp,tls,crypto", "https": "http,https,tcp,tls,crypto",
     "rtsp": "rtsp,rtsps,rtp,srtp,udp,tcp,tls", "rtsps": "rtsp,rtsps,rtp,srtp,udp,tcp,tls",
     "rtmp": "rtmp,rtmps,rtmpt,rtmpts,tcp,tls", "rtmps": "rtmp,rtmps,rtmpt,rtmpts,tcp,tls",
@@ -70,8 +70,8 @@ def scheme_of(url):
 
 
 def stream_url_ok(url, allow_local=False):
-    """Adresse de chaîne acceptable : flux réseau, ou fichier local si la liste elle-même est un fichier
-    du serveur (choisi par l'administrateur)."""
+    """Acceptable channel address: network stream, or local file when the list itself is a file
+    of the server (chosen by the administrator)."""
     sc = scheme_of(url or "")
     if sc == "file":
         return allow_local and ".." not in url.split("/")
@@ -79,7 +79,7 @@ def stream_url_ok(url, allow_local=False):
 
 
 def _gunzip(data, limit):
-    """Décompression bornée (une archive minuscule peut se décompresser en plusieurs Go)."""
+    """Bounded decompression (a tiny archive can decompress into several GB)."""
     try:
         out = gzip.GzipFile(fileobj=io.BytesIO(data)).read(limit + 1)
     except (OSError, EOFError) as e:
@@ -89,9 +89,9 @@ def _gunzip(data, limit):
     return out
 
 
-# ------------------------------------------------------------------ lecture des sources
+# ------------------------------------------------------------------ reading the sources
 def _open(url, ua=None, limit=MAX_M3U, timeout=60, allow_local=True):
-    """Contenu d'une adresse http(s) ou (si permis) d'un fichier du serveur, décompressé si .gz."""
+    """Content of an http(s) address or (when allowed) of a server file, decompressed when .gz."""
     if url.startswith("/"):
         if not allow_local:
             raise LiveError("Adresse refusée : seules les adresses http(s) sont acceptées ici")
@@ -120,9 +120,9 @@ def _open(url, ua=None, limit=MAX_M3U, timeout=60, allow_local=True):
 
 
 def check_stream(ch, timeout=CHECK_TIMEOUT):
-    """La chaîne répond-elle ? True / False, ou None quand on ne sait pas vérifier (rtsp, udp…).
+    """Does the channel answer? True / False, or None when it cannot be checked (rtsp, udp…).
 
-    On lit seulement le début de la réponse (une playlist HLS, ou quelques Ko d'un flux MPEG-TS)."""
+        Only the start of the answer is read (an HLS playlist, or a few KB of an MPEG-TS stream)."""
     url = ch["url"]
     if not re.match(r"^https?://", url or "", re.I) or not stream_url_ok(url):
         return None
@@ -137,7 +137,7 @@ def check_stream(ch, timeout=CHECK_TIMEOUT):
 
 
 def parse_m3u(text):
-    """-> (en-tête {url-tvg…}, [chaînes]) ; chaque chaîne : name, url, group, logo, tvg_id, tvg_name, number…"""
+    """-> (header {url-tvg…}, [channels]); each channel: name, url, group, logo, tvg_id, tvg_name, number…"""
     header, out, cur, opts = {}, [], None, {}
     for raw in text.splitlines():
         line = raw.strip().lstrip("﻿")
@@ -179,7 +179,7 @@ def parse_m3u(text):
 
 
 def xmltv_time(s):
-    """« 20261023203000 +0200 » -> timestamp (UTC si aucun fuseau n'est indiqué)."""
+    """"20261023203000 +0200" -> timestamp (UTC when no time zone is given)."""
     s = (s or "").strip()
     m = re.match(r"^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*([+-]\d{4})?", s)
     if not m:
@@ -196,7 +196,7 @@ def xmltv_time(s):
 
 
 def parse_xmltv(data, keys_by_id, keys_by_name, now=None):
-    """Programmes des chaînes connues -> liste de (clé, début, fin, titre, sous-titre, description, catégorie)."""
+    """Programmes of the known channels -> list of (key, start, end, title, subtitle, description, category)."""
     now = now or time.time()
     lo, hi = now - EPG_PAST, now + EPG_AHEAD
     id_map = {}
@@ -239,7 +239,7 @@ def epg_key(ch):
     return ch.get("tvg_id") or fold(ch.get("tvg_name") or ch["name"])
 
 
-# ------------------------------------------------------------------ sessions de lecture
+# ------------------------------------------------------------------ playback sessions
 class Session:
     def __init__(self, sid, channel, folder, mode):
         self.sid = sid
@@ -249,11 +249,11 @@ class Session:
         self.proc = None
         self.started = time.time()
         self.last = time.time()
-        self.viewers = {}       # user_id -> (nom, dernière requête)
+        self.viewers = {}       # user_id -> (name, last request)
         self.err = []
 
     def alive(self):
-        if self.proc is None:  # en cours de démarrage (analyse du flux)
+        if self.proc is None:  # starting (stream analysis)
             return time.time() - self.started < 30
         return self.proc.poll() is None
 
@@ -275,7 +275,7 @@ class LiveTV:
         self.by_channel = {}     # channel id -> sid
         self.refreshing = threading.Lock()
 
-    # ------------------------------------------------------------ réglages
+    # ------------------------------------------------------------ settings
     def settings(self):
         db = self.ctx.db
         return {"max_sessions": self.ctx.setting_int("live_max_sessions", 2),
@@ -319,8 +319,8 @@ class LiveTV:
                     chunk = gone[i:i + 500]
                     db.run(f"DELETE FROM live_channels WHERE id IN ({','.join('?' * len(chunk))})", chunk)
                 db.run("UPDATE live_sources SET refreshed_at=?, error=NULL WHERE id=?", (now, src["id"]))
-            # guide choisi par l'administrateur, sinon celui qu'indique la liste (http(s) seulement, sauf si
-            # la liste est elle-même un fichier du serveur)
+            # guide chosen by the administrator, otherwise the one the list gives (http(s) only, unless
+            # the list is itself a server file)
             epg_url = src["epg_url"] or (header.get("url-tvg") or header.get("x-tvg-url") or "").split(",")[0].strip()
             n_prog = None
             if epg_url:
@@ -384,9 +384,9 @@ class LiveTV:
         finally:
             self.refreshing.release()
 
-    # ------------------------------------------------------------ vérification des chaînes
+    # ------------------------------------------------------------ channel checks
     def record_check(self, cid, ok):
-        """Résultat d'une vérification : une chaîne est masquée après DEAD_AFTER échecs d'affilée."""
+        """Result of a check: a channel is hidden after DEAD_AFTER failures in a row."""
         if ok is None:
             return
         db = self.ctx.db
@@ -398,7 +398,7 @@ class LiveTV:
                    "ok=CASE WHEN fails+1 >= ? THEN 0 ELSE ok END WHERE id=?", (now, DEAD_AFTER, cid))
 
     def check_channels(self, source_id=None, progress=None, cancelled=None):
-        """Vérifie une à une les chaînes des sources actives (groupes masqués exclus). -> résumé."""
+        """Checks one by one the channels of the active sources (hidden groups left out). -> summary."""
         db = self.ctx.db
         where, args = "", []
         if source_id is not None:
@@ -415,7 +415,7 @@ class LiveTV:
             if progress:
                 progress(n, len(chans))
             with self.lock:
-                playing = ch["id"] in self.by_channel  # en cours de lecture : elle répond, et on ne la dérange pas
+                playing = ch["id"] in self.by_channel  # being played: it answers, and it is not disturbed
             ok = True if playing else check_stream(ch)
             self.record_check(ch["id"], ok)
             dead += ok is False
@@ -433,7 +433,7 @@ class LiveTV:
         if os.path.isfile(path):
             with open(path, "rb") as f:
                 return f.read()
-        data = _open(url, limit=MAX_LOGO, timeout=15, allow_local=False)  # adresse venue de la liste M3U
+        data = _open(url, limit=MAX_LOGO, timeout=15, allow_local=False)  # address from the M3U list
         if not image_type(data):
             raise LiveError("logo dans un format non pris en charge")
         with open(path + ".tmp", "wb") as f:
@@ -455,7 +455,7 @@ class LiveTV:
 
     @staticmethod
     def _input_opts(ch):
-        """Options d'entrée de ffmpeg : protocoles strictement limités à ceux de l'adresse, en-têtes HTTP."""
+        """ffmpeg input options: protocols strictly limited to those of the address, HTTP headers."""
         opts = ["-protocol_whitelist", PROTOCOLS.get(scheme_of(ch["url"]), "file")]
         if not re.match(r"^https?://", ch["url"], re.I):
             return opts
@@ -472,7 +472,7 @@ class LiveTV:
         transcode = cfg["video"] == "transcode" or (cfg["video"] == "auto" and video is not None and vcodec != "h264")
         cmd = [media.FFMPEG, "-hide_banner", "-nostdin", "-loglevel", "error"] + self._input_opts(ch)
         if not re.match(r"^https?://", ch["url"], re.I):
-            cmd += ["-re"]  # fichier ou périphérique local : lu au rythme du direct
+            cmd += ["-re"]  # local file or device: read at the live pace
         if re.match(r"^https?://", ch["url"], re.I) and not ch["url"].split("?")[0].lower().endswith(".m3u8"):
             cmd += ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"]
         cmd += ["-fflags", "+genpts+discardcorrupt", "-analyzeduration", "4000000", "-i", ch["url"],
@@ -491,7 +491,7 @@ class LiveTV:
         return cmd, ("transcode" if transcode else "copy"), vcodec
 
     def start(self, ch, user):
-        """Session de lecture de la chaîne (partagée si quelqu'un la regarde déjà)."""
+        """Playback session of the channel (shared when someone already watches it)."""
         src = self.ctx.db.one("SELECT m3u_url FROM live_sources WHERE id=?", (ch["source_id"],)) or {}
         if not stream_url_ok(ch["url"], (src.get("m3u_url") or "").startswith("/")):
             raise LiveError("Adresse de chaîne refusée")
@@ -635,7 +635,7 @@ def register(app, ctx, x):
     def visible_channels(where="", args=()):
         return db.all("SELECT c.* FROM live_channels c JOIN live_sources s ON s.id=c.source_id WHERE s.enabled=1 "
                       "AND NOT EXISTS (SELECT 1 FROM live_hidden_groups g WHERE g.source_id=c.source_id AND g.grp=c.grp)"
-                      " AND c.ok IS NOT 0"  # chaînes hors service (vérification) : masquées
+                      " AND c.ok IS NOT 0"  # channels out of service (check): hidden
                       f"{where} ORDER BY s.position, s.id, COALESCE(c.number, 100000), c.position", args)
 
     def channel_or_404(user, cid):
@@ -773,7 +773,7 @@ def register(app, ctx, x):
         except LiveGone as e:
             raise HTTPError(404, str(e))
         except LiveError as e:
-            live.record_check(s.channel["id"], False)  # la chaîne ne répond pas : comptée comme une vérification ratée
+            live.record_check(s.channel["id"], False)  # the channel does not answer: counted as a failed check
             raise HTTPError(502, str(e))
         return Response(data, 200, "application/vnd.apple.mpegurl", {"Cache-Control": "no-store"})
 
@@ -831,7 +831,7 @@ def register(app, ctx, x):
                 "settings": live.settings(), "sessions": live.overview()}
 
     def check_async(sid):
-        """Vérifie en fond les chaînes d'une source (après ajout ou actualisation par l'administrateur)."""
+        """Checks a source's channels in the background (after the administrator adds or refreshes it)."""
         def job():
             try:
                 live.check_channels(sid)

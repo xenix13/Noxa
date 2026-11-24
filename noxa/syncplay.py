@@ -1,19 +1,19 @@
-"""« Regarder ensemble » : lecture synchronisée à plusieurs.
+""""Watch together": synchronised playback for several people.
 
-Un groupe partage UNE position de lecture : « en lecture depuis tel instant à telle position », ou « en
-pause à telle position ». Chaque membre a son propre flux (sa qualité, ses sous-titres) et cale sa vidéo
-sur cette position ; un petit écart est rattrapé en accélérant ou ralentissant à peine la lecture, un
-grand écart par un saut.
+A group shares ONE playback position: "playing since this instant from this position", or "paused
+at this position". Each member has their own stream (their quality, their subtitles) and aligns their video
+on this position; a small gap is caught up by playing barely faster or slower, a
+big gap by a jump.
 
-Quand quelqu'un met en pause, avance, change d'épisode ou que sa connexion décroche, tout le groupe
-attend que chacun ait assez de vidéo en réserve, puis repart en même temps.
+When someone pauses, seeks, changes episode or loses their connection, the whole group
+waits until everyone has enough video buffered, then starts again at the same time.
 
-Les événements arrivent aux navigateurs par « Server-Sent Events » (une connexion HTTP ouverte), sans
-dépendance. Les groupes vivent en mémoire : un redémarrage du serveur les dissout.
+Events reach the browsers through "Server-Sent Events" (an open HTTP connection), with no
+dependency. Groups live in memory: a server restart dissolves them.
 
-Serveurs liés : un groupe vit sur le serveur de la personne qui l'a créé. Les autres serveurs liés le listent et
-y relaient les commandes et les événements de leurs utilisateurs, en traduisant le titre (chaque serveur a ses
-numéros), les comptes (répliqués, mais numérotés différemment) et l'horloge.
+Linked servers: a group lives on the server of the person who created it. The other linked servers list it and
+relay their users' commands and events to it, translating the title (each server has its own
+numbers), the accounts (replicated, but numbered differently) and the clock.
 """
 import json
 import logging
@@ -27,15 +27,15 @@ from .i18n import tr
 
 log = logging.getLogger("noxa.sync")
 
-WAIT_TIMEOUT = 12        # s : on repart sans le membre trop lent
-RELOAD_TIMEOUT = 60      # s : un membre qui change de langue ou de qualité (extraction, relance de ffmpeg)
-GONE_AFTER = 40          # s sans connexion : le membre a quitté
-EMPTY_AFTER = 120        # s : groupe vide supprimé
-REMOTE_PRESENT_FOR = 45  # s : « Noxa ouvert » annoncé par un serveur lié (renouvelé toutes les 15 s)
-PRESENT_FOR = 1800       # s : Noxa ouvert ailleurs garde membre d'un groupe, pas plus (salon oublié sur une TV)
-MAX_STREAMS_PER_USER = 6  # connexions d'événements ouvertes en même temps par une personne (onglets, appareils)
-FEED_PING = 10           # s : ping de la liste en direct (détecte aussi un onglet fermé ou une session finie)
-MAX_FEEDS_PER_USER = 8    # listes de groupes en direct ouvertes en même temps par une personne (onglets, appareils)
+WAIT_TIMEOUT = 12        # s: start again without the member that is too slow
+RELOAD_TIMEOUT = 60      # s: a member changing language or quality (extraction, ffmpeg restarted)
+GONE_AFTER = 40          # s without a connection: the member has left
+EMPTY_AFTER = 120        # s: empty group deleted
+REMOTE_PRESENT_FOR = 45  # s: "Noxa open" announced by a linked server (renewed every 15 s)
+PRESENT_FOR = 1800       # s: Noxa open elsewhere keeps someone a member of a group, no longer (room forgotten on a TV)
+MAX_STREAMS_PER_USER = 6  # event connections open at the same time by one person (tabs, devices)
+FEED_PING = 10           # s: ping of the live list (also detects a closed tab or an ended session)
+MAX_FEEDS_PER_USER = 8    # live group lists open at the same time by one person (tabs, devices)
 
 
 def now_ms():
@@ -43,7 +43,7 @@ def now_ms():
 
 
 def _translated(data):
-    """Événement déjà prêt à envoyer, avec ses messages dans la langue de la personne qui le reçoit."""
+    """Event ready to send, with its messages in the language of the person receiving it."""
     try:
         event = json.loads(data[len(b"data: "):].decode("utf-8"))
     except ValueError:
@@ -58,7 +58,7 @@ class Member:
     def __init__(self, user):
         self.uid = user["id"]
         try:
-            self.guid = user["uid"]  # identifiant du compte commun aux serveurs liés
+            self.guid = user["uid"]  # account id shared by the linked servers
         except (KeyError, IndexError):
             self.guid = None
         self.name = user["display_name"]
@@ -89,7 +89,7 @@ class Group:
         self.subscribers = []
         self.seq = 0
         self.empty_since = None
-        self.present = present  # personnes qui ont Noxa ouvert (liste des groupes en direct)
+        self.present = present  # people who have Noxa open (live group list)
 
     def position_now(self):
         if self.playing and not self.waiting:
@@ -115,10 +115,10 @@ class Groups:
         self.ctx = ctx
         self.lock = threading.RLock()
         self.groups = {}
-        self.watchers = {}  # file d'attente -> id de la personne (liste des groupes en direct)
-        self.remote_present = {}  # id de la personne -> échéance (Noxa ouvert sur un serveur lié)
+        self.watchers = {}  # queue -> id of the person (live group list)
+        self.remote_present = {}  # id of the person -> expiry (Noxa open on a linked server)
 
-    # ------------------------------------------------------------ liste en direct
+    # ------------------------------------------------------------ live list
     def present(self):
         now = time.time()
         return set(self.watchers.values()) | {u for u, t in list(self.remote_present.items()) if t > now}
@@ -144,14 +144,14 @@ class Groups:
         with self.lock:
             uid = self.watchers.pop(q, None)
             now = time.time()
-            for g in self.groups.values():  # le délai avant de quitter le groupe part de maintenant
+            for g in self.groups.values():  # the delay before leaving the group starts from now
                 m = g.members.get(uid)
                 if m:
                     m.seen = now
 
     def _changed(self):
-        """La liste des groupes a changé : on réveille les listes ouvertes (une notification suffit), ici et sur
-        les serveurs liés."""
+        """The group list changed: the open lists are woken up (one notification is enough), here and on
+        the linked servers."""
         self.wake()
         fed = getattr(self.ctx, "fed", None)
         if fed:
@@ -188,7 +188,7 @@ class Groups:
                 g.item_id = int(item_id)
                 g.position = max(0, int(position or 0))
                 g.playing = True
-                g.waiting = {user["id"]}  # on part dès que l'hôte a chargé la vidéo
+                g.waiting = {user["id"]}  # start as soon as the host has loaded the video
             self.groups[gid] = g
             self._join(g, user)
             self._changed()
@@ -314,11 +314,11 @@ class Groups:
                 g.position = pos if pos is not None else g.position_now()
                 g.ref = now_ms()
                 if g.playing:
-                    self._wait_for(g, others)  # chacun recharge à la nouvelle position, puis on repart ensemble
+                    self._wait_for(g, others)  # everyone reloads at the new position, then all start again together
                 self._broadcast_state(g, "seek", m.name)
             elif action == "item":
                 if g.item_id == int(item_id) and g.waiting:
-                    return g  # même changement demandé par plusieurs membres (fin d'épisode)
+                    return g  # same change asked for by several members (end of episode)
                 g.item_id = int(item_id)
                 g.position = pos or 0
                 g.playing = True
@@ -332,8 +332,8 @@ class Groups:
                     m.ready = False
                     self._send(g, g.members_event())
                 if reason == "reload" and g.playing:
-                    # changement de langue, de sous-titres incrustés ou de qualité : tout le groupe attend
-                    # ce membre, à l'endroit où il en était
+                    # change of language, burnt-in subtitles or quality: the whole group waits for
+                    # this member, where it was
                     g.position = g.position_now() if g.waiting or pos is None else pos
                     g.ref = now_ms()
                     self._wait_for(g, set(g.waiting) | {user["id"]}, RELOAD_TIMEOUT)
@@ -355,10 +355,10 @@ class Groups:
                 self._changed()
             return g
 
-    # ------------------------------------------------------------ événements
+    # ------------------------------------------------------------ events
     def subscribe(self, g, user):
-        """Ouvre un flux d'événements pour un MEMBRE du groupe (rejoindre passe par POST …/join :
-        une simple requête GET, qu'un autre site peut provoquer, ne fait entrer personne dans un groupe)."""
+        """Opens an event stream for a MEMBER of the group (joining goes through POST …/join:
+        a plain GET request, which another site can trigger, does not put anyone in a group)."""
         q = queue.Queue(maxsize=200)
         with self.lock:
             m = g.members.get(user["id"])
@@ -396,7 +396,7 @@ class Groups:
             present = self.present()
             for g in list(self.groups.values()):
                 for uid, m in list(g.members.items()):
-                    # on reste membre tant que Noxa est ouvert (on cherche un film pendant que les autres attendent)
+                    # someone stays a member while Noxa is open (looking for a movie while the others wait)
                     away = now - m.seen
                     if not m.connections and away > GONE_AFTER and (uid not in present or away > PRESENT_FOR):
                         self._remove(g, uid, f"{m.name} a quitté le groupe")
@@ -450,7 +450,7 @@ def register(app, ctx, x):
             g["member"] = user["id"] in g.pop("member_ids")
             g["is_host"] = g.pop("owner_id") == user["id"]
             out.append(g)
-        # groupes animés sur un serveur lié (chacun ses numéros de titres : traduits)
+        # groups hosted on a linked server (each with its own title numbers: translated)
         uid = user["uid"]
         for peer, remote in fed.remote_groups(max_age):
             for g in remote:
@@ -461,9 +461,9 @@ def register(app, ctx, x):
                             "member": uid in (g.get("member_uids") or []), "is_host": g.get("owner_uid") == uid})
         return out
 
-    # ------------------------------------------------------------ groupe animé par un serveur lié
+    # ------------------------------------------------------------ group hosted by a linked server
     def remote_peer(gid):
-        """Serveur lié qui anime ce groupe (None : groupe d'ici, ou inconnu -> 404 plus loin)."""
+        """Linked server that hosts this group (None: group from here, or unknown -> 404 further on)."""
         if groups.get(gid):
             return None
         return fed.group_peer(gid)
@@ -491,7 +491,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/together/feed")
     def together_feed(req):
-        """Liste des groupes en direct (Server-Sent Events) : accueil, page des groupes, barre du haut."""
+        """Live group list (Server-Sent Events): home, groups page, top bar."""
         user = dict(req.user)
         session = req.session_hash
         try:
@@ -505,7 +505,7 @@ def register(app, ctx, x):
                 return ("data: " + json.dumps({"type": "groups", "groups": listing_for(user)}, ensure_ascii=False,
                                               separators=(",", ":")) + "\n\n").encode()
             finally:
-                db.release()  # pas de connexion à la base gardée pendant toute la durée du flux
+                db.release()  # no database connection kept for the whole duration of the stream
 
         def signed_in():
             try:
@@ -521,13 +521,13 @@ def register(app, ctx, x):
                 try:
                     q.get(timeout=FEED_PING)
                 except queue.Empty:
-                    if not signed_in():  # déconnexion ou compte supprimé : on coupe (la reconnexion recevra 401)
+                    if not signed_in():  # signed out or account deleted: cut (the reconnection will get 401)
                         return
                     yield b": ping\n\n"
                     continue
                 if not signed_in():
                     return
-                closed.wait(0.25)  # plusieurs changements d'un coup : un seul envoi
+                closed.wait(0.25)  # several changes at once: a single send
                 data = snapshot()
                 if data != last:
                     last = data
@@ -670,7 +670,7 @@ def register(app, ctx, x):
                         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"}, on_close=close)
 
     def remote_events(peer, req):
-        """Événements d'un groupe animé par un serveur lié, relayés et traduits (titre, comptes, horloge)."""
+        """Events of a group hosted by a linked server, relayed and translated (title, accounts, clock)."""
         db.release()
         try:
             resp, close = fed.request(peer, "GET", f"/fed/together/{req.params['gid']}/events", user=req.user, timeout=60)
@@ -710,7 +710,7 @@ def register(app, ctx, x):
         return Response(stream=gen(), content_type="text/event-stream; charset=utf-8",
                         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"}, on_close=close)
 
-    # ------------------------------------------------------------ pour les serveurs liés (port des serveurs liés)
+    # ------------------------------------------------------------ for the linked servers (linked-servers port)
     def peer_user(req):
         u = fed.user_for(req)
         if not u:
@@ -721,7 +721,7 @@ def register(app, ctx, x):
         return db.scalar("SELECT uid FROM users WHERE id=?", (user_id,))
 
     def raw_state(g, ev):
-        """État ou événement d'un de nos groupes, tel qu'un serveur lié peut le traduire chez lui."""
+        """State or event of one of our groups, in a form a linked server can translate on its side."""
         if "item_id" in ev:
             ev["item_ref"] = fed.ref_of(g.item_id) if g.item_id else None
             ev.pop("item_id")

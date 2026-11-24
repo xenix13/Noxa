@@ -1,20 +1,20 @@
-"""Libérer de la place : les titres que personne n'a regardés depuis N jours passent sur le stockage froid, puis leur
-fichier quitte la bibliothèque. Le titre reste dans Noxa (affiche, résumé, historique) et se lit depuis la copie.
+"""Freeing space: titles nobody has watched for N days move to cold storage, then their
+file leaves the library. The title stays in Noxa (poster, overview, history) and plays from the copy.
 
-Étapes d'un fichier (table cold_free, une ligne par film ou épisode) :
-  proposed  -> proposé, en attente de la validation d'un administrateur (mode « à valider ») ;
-  approved  -> à archiver : copie demandée sur le stockage froid ;
-  pending   -> copie vérifiée ; l'original sera supprimé à delete_after (délai pour changer d'avis) ;
-  manual    -> à supprimer à la main (bibliothèque sans moyen de suppression) ;
-  freed     -> original supprimé : le titre n'est plus lu que depuis le stockage froid.
-Un titre regardé de nouveau pendant le délai n'est pas supprimé. « Garder sur le disque » (cold_keep) protège un
-film ou une série pour de bon.
+Stages of a file (table cold_free, one row per movie or episode):
+  proposed  -> proposed, waiting for an administrator's approval ("to approve" mode);
+  approved  -> to archive: copy requested on the cold storage;
+  pending   -> copy checked; the original will be deleted at delete_after (time to change one's mind);
+  manual    -> to delete by hand (library with no way to delete);
+  freed     -> original deleted: the title is only played from the cold storage.
+A title watched again during the delay is not deleted. "Keep on the disk" (cold_keep) protects a
+movie or a show for good.
 
-Suppression de l'original, au choix par bibliothèque :
-  - arr    : par Radarr (films) ou Sonarr (séries) — Noxa garde ses droits de lecture seule ; le titre n'est plus
-             surveillé, sinon ils le retéléchargeraient aussitôt ;
-  - write  : Noxa efface lui-même le fichier (bibliothèque montée en écriture) ;
-  - manual : Noxa donne la liste des fichiers à effacer.
+Deleting the original, chosen per library:
+  - arr    : through Radarr (movies) or Sonarr (shows) — Noxa keeps its read-only rights; the title is no longer
+             monitored, otherwise they would download it again right away;
+  - write  : Noxa erases the file itself (library mounted read-write);
+  - manual : Noxa gives the list of files to erase.
 """
 import json
 import logging
@@ -42,7 +42,7 @@ class FreeError(Exception):
 
 # ====================================================================== Radarr / Sonarr
 class Arr:
-    """API v3 de Radarr / Sonarr (clé dans X-Api-Key)."""
+    """Radarr / Sonarr API v3 (key in X-Api-Key)."""
 
     def __init__(self, url, key, what):
         self.url, self.key, self.what = (url or "").rstrip("/"), key or "", what
@@ -74,7 +74,7 @@ class Arr:
 
 
 def _same_file(ours, theirs, our_size, their_size):
-    """Le fichier connu de Radarr / Sonarr est-il bien le nôtre ? (même nom ; même taille si connue)"""
+    """Is the file known to Radarr / Sonarr really ours? (same name; same size when known)"""
     if os.path.basename(ours or "") != os.path.basename((theirs or "").replace("\\", "/")):
         return False
     return not (our_size and their_size and int(our_size) != int(their_size))
@@ -90,7 +90,7 @@ def radarr_delete(arr, row):
         raise FreeError(i18n.tr("Radarr ne connaît pas de fichier pour ce film"))
     if not _same_file(row["key"], mf.get("path") or mf.get("relativePath"), row.get("file_size"), mf.get("size")):
         raise FreeError(i18n.tr("Le fichier connu de Radarr n'est pas celui de Noxa : rien n'est supprimé"))
-    # ne plus surveiller d'abord : sinon Radarr relancerait aussitôt un téléchargement
+    # stop monitoring first: otherwise Radarr would start a download again right away
     arr.call("PUT", "/api/v3/movie/editor", {"movieIds": [movie["id"]], "monitored": False})
     arr.call("DELETE", f"/api/v3/moviefile/{int(mf['id'])}")
 
@@ -111,17 +111,17 @@ def sonarr_delete(arr, row, show, season):
     ef = arr.call("GET", f"/api/v3/episodefile/{int(ep['episodeFileId'])}") or {}
     if not _same_file(row["key"], ef.get("path") or ef.get("relativePath"), row.get("file_size"), ef.get("size")):
         raise FreeError(i18n.tr("Le fichier connu de Sonarr n'est pas celui de Noxa : rien n'est supprimé"))
-    same = [e["id"] for e in eps if e.get("episodeFileId") == ep["episodeFileId"]]  # fichier à plusieurs épisodes
+    same = [e["id"] for e in eps if e.get("episodeFileId") == ep["episodeFileId"]]  # file with several episodes
     arr.call("PUT", "/api/v3/episode/monitor", {"episodeIds": same, "monitored": False})
     arr.call("DELETE", f"/api/v3/episodefile/{int(ep['episodeFileId'])}")
 
 
-# ====================================================================== le service
+# ====================================================================== the service
 class ColdFree:
     def __init__(self, ctx):
         self.ctx = ctx
 
-    # ---------------------------------------------------------------- réglages
+    # ---------------------------------------------------------------- settings
     def conf(self):
         try:
             c = json.loads(self.ctx.db.setting("cold_free", "{}") or "{}")
@@ -189,13 +189,13 @@ class ColdFree:
         how = c["methods"].get(str(lib["id"]))
         if how:
             return how
-        # par défaut : Radarr / Sonarr s'ils sont configurés pour ce type de bibliothèque, sinon à la main
+        # by default: Radarr / Sonarr when set up for this library type, otherwise by hand
         url, key = (c["radarr_url"], c["radarr_key"]) if lib["kind"] == "movie" else (c["sonarr_url"], c["sonarr_key"])
         return "arr" if url and key else "manual"
 
-    # ---------------------------------------------------------------- activité
+    # ---------------------------------------------------------------- activity
     def last_activity(self):
-        """Dernière activité (lecture, progression, « vu ») par film et par série (épisodes compris)."""
+        """Last activity (playback, progress, "watched") per movie and per show (episodes included)."""
         db = self.ctx.db
         per_rk = {}
         for r in db.all("SELECT rk, MAX(t) AS t FROM (SELECT rating_key AS rk, updated_at AS t FROM progress "
@@ -211,7 +211,7 @@ class ColdFree:
         return out
 
     def protected(self, c=None):
-        """Films et séries à garder sur le disque : protégés à la main, et selon les réglages (listes, notes, en cours)."""
+        """Movies and shows to keep on the disk: protected by hand, and per the settings (lists, ratings, in progress)."""
         c = c or self.conf()
         db = self.ctx.db
         keep = {r["item_id"] for r in db.all("SELECT item_id FROM cold_keep")}
@@ -228,8 +228,8 @@ class ColdFree:
 
     # ---------------------------------------------------------------- candidats
     def candidates(self, c=None):
-        """Films et séries que personne n'a regardés depuis `days` jours (ajoutés avant), avec leurs fichiers encore
-        dans la bibliothèque. -> [{root, title, type, library, size, last, files: [ids]}], les plus gros d'abord."""
+        """Movies and shows nobody has watched for `days` days (added before), with their files still
+        in the library. -> [{root, title, type, library, size, last, files: [ids]}], biggest first."""
         c = c or self.conf()
         db = self.ctx.db
         now = int(time.time())
@@ -277,7 +277,7 @@ class ColdFree:
 
     # ---------------------------------------------------------------- passage quotidien
     def run(self, job=None):
-        """Tâche planifiée : nouveaux candidats (proposés ou validés d'office), puis avancement de chaque fichier."""
+        """Scheduled task: new candidates (proposed or approved automatically), then progress of each file."""
         c = self.conf()
         found = 0
         if c["enabled"]:
@@ -305,7 +305,7 @@ class ColdFree:
                                      n=n, size=round(size / 1e9, 1)), "#/admin/cold", tag="cold-free")
 
     def approve(self, item_ids=None, roots=None):
-        """Validation d'un administrateur (fichiers, ou films / séries entiers)."""
+        """Approval by an administrator (files, or whole movies / shows)."""
         db = self.ctx.db
         ids = set(int(i) for i in item_ids or [])
         for r in roots or []:
@@ -317,7 +317,7 @@ class ColdFree:
         return len(ids)
 
     def keep(self, root_id, user_id=None):
-        """« Garder sur le disque » : protégé pour de bon ; ce qui était prévu pour ce titre est annulé."""
+        """"Keep on the disk": protected for good; what was planned for this title is cancelled."""
         db = self.ctx.db
         db.run("INSERT OR IGNORE INTO cold_keep(item_id, created_at, user_id) VALUES(?,?,?)", (int(root_id), int(time.time()), user_id))
         db.run("DELETE FROM cold_free WHERE root_id=? AND state IN ('proposed','approved','pending','manual')", (int(root_id),))
@@ -326,7 +326,7 @@ class ColdFree:
         self.ctx.db.run("DELETE FROM cold_keep WHERE item_id=?", (int(root_id),))
 
     def on_archived(self, item_id):
-        """Copie froide terminée : le fichier passe en suppression différée s'il était prévu."""
+        """Cold copy finished: the file moves to delayed deletion if it was planned."""
         if self.ctx.db.scalar("SELECT 1 FROM cold_free WHERE item_id=? AND state='approved'", (item_id,)):
             self.advance()
 
@@ -337,7 +337,7 @@ class ColdFree:
         now = int(time.time())
         stats = {"queued": 0, "pending": 0, "freed": 0, "errors": 0}
         activity = None
-        # 1. validés : copie froide, puis suppression différée
+        # 1. approved: cold copy, then delayed deletion
         for r in db.all("SELECT f.*, i.key FROM cold_free f JOIN items i ON i.id=f.item_id WHERE f.state='approved'"):
             if db.scalar("SELECT 1 FROM cold_copies c JOIN cold_stores s ON s.id=c.store_id WHERE c.item_id=? "
                          "AND c.verified_at IS NOT NULL AND s.enabled=1", (r["item_id"],)):
@@ -361,7 +361,7 @@ class ColdFree:
                     stats["queued"] += 1
                 except Exception as e:
                     db.run("UPDATE cold_free SET error=? WHERE item_id=?", (str(e)[:300], r["item_id"]))
-        # 2. délai écoulé : suppression de l'original (sauf si le titre a été regardé entre-temps)
+        # 2. delay over: the original is deleted (unless the title was watched meanwhile)
         for r in db.all("SELECT * FROM cold_free WHERE state IN ('pending','manual')"):
             row = db.one("SELECT i.*, l.kind AS lib_kind, l.id AS lib_id, l.paths AS lib_paths FROM items i "
                          "JOIN libraries l ON l.id=i.library_id WHERE i.id=?", (r["item_id"],))
@@ -370,7 +370,7 @@ class ColdFree:
             if activity is None:
                 activity = self.last_activity()
             if activity.get(r["root_id"], 0) >= r["created_at"]:
-                db.run("DELETE FROM cold_free WHERE item_id=?", (r["item_id"],))  # regardé de nouveau : on garde
+                db.run("DELETE FROM cold_free WHERE item_id=?", (r["item_id"],))  # watched again: kept
                 continue
             if not os.path.isfile(row["key"]):
                 db.run("UPDATE cold_free SET state='freed', freed_at=?, error=NULL WHERE item_id=?", (now, r["item_id"]))
@@ -392,14 +392,14 @@ class ColdFree:
             except (FreeError, OSError) as e:
                 db.run("UPDATE cold_free SET error=?, method=? WHERE item_id=?", (str(e)[:300], how, r["item_id"]))
                 stats["errors"] += 1
-        # 3. fichier revenu dans la bibliothèque (retéléchargé) : la ligne n'a plus de raison d'être
+        # 3. file back in the library (downloaded again): the row has no reason to exist anymore
         for r in db.all("SELECT f.item_id, i.key FROM cold_free f JOIN items i ON i.id=f.item_id WHERE f.state='freed'"):
             if r["key"] and os.path.isfile(r["key"]):
                 db.run("DELETE FROM cold_free WHERE item_id=?", (r["item_id"],))
         return stats
 
     def _prepare_caches(self, row):
-        """Avant que le fichier parte : sous-titres intégrés extraits (ils ne pourraient plus l'être qu'à distance)."""
+        """Before the file leaves: internal subtitles extracted (they could only be extracted remotely afterwards)."""
         subs = self.ctx.subtitles
         try:
             job = subs.ensure_now(row)
@@ -409,14 +409,14 @@ class ColdFree:
             log.info("Sous-titres de %s : %s", row["key"], e)
         if subs.missing(row):
             raise FreeError(i18n.tr("Sous-titres intégrés pas encore extraits : nouvel essai au prochain passage"))
-        # sous-titres posés à côté du fichier (.srt, .ass…) : copiés dans les données de Noxa, la fiche pointe dessus
+        # subtitles placed next to the file (.srt, .ass…): copied into Noxa's data, the record points to them
         probe = json.loads(row["probe"] or "{}")
         lib_roots = [os.path.realpath(p) for p in json.loads(row["lib_paths"] or "[]") if p]
         changed = False
         for e in probe.get("external", []):
             path = e.get("path") or ""
             if not path or not any(os.path.realpath(path).startswith(r + os.sep) for r in lib_roots) or not os.path.isfile(path):
-                continue  # déjà hors de la bibliothèque (OpenSubtitles, Whisper…)
+                continue  # already outside the library (OpenSubtitles, Whisper…)
             dest_dir = os.path.join(self.ctx.data_dir, "subtitles", "kept", str(row["id"]))
             os.makedirs(dest_dir, exist_ok=True)
             dest = os.path.join(dest_dir, os.path.basename(path))
@@ -430,7 +430,7 @@ class ColdFree:
     def delete_original(self, row, how, c=None):
         c = c or self.conf()
         if how == "write":
-            # Noxa efface lui-même : seulement dans un dossier de la bibliothèque
+            # Noxa erases by itself: only in a library folder
             roots = [os.path.realpath(p) for p in json.loads(row["lib_paths"] or "[]") if p]
             real = os.path.realpath(row["key"])
             if not any(real.startswith(r + os.sep) for r in roots):
@@ -457,7 +457,7 @@ class ColdFree:
             return
         raise FreeError("Méthode inconnue")
 
-    # ---------------------------------------------------------------- état pour l'administration
+    # ---------------------------------------------------------------- status for the administration
     def status(self):
         db = self.ctx.db
         rows = db.all("SELECT f.*, i.title, i.type, i.key, i.idx, s.title AS show_title, p.idx AS season, r.title AS root_title, "
@@ -502,7 +502,7 @@ def register(app, ctx, x):
 
     @app.route("POST", "/api/admin/cold/free/check", auth="admin")
     def free_check(req):
-        """Essai de Radarr ou Sonarr avec l'adresse et la clé données (ou enregistrées)."""
+        """Test of Radarr or Sonarr with the given (or saved) address and key."""
         b = req.json()
         which = b.get("which")
         if which not in ("radarr", "sonarr"):
@@ -517,7 +517,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/admin/cold/free/preview", auth="admin")
     def free_preview(req):
-        """Ce que la règle libérerait maintenant (sans rien changer)."""
+        """What the rule would free now (without changing anything)."""
         c = {**free.conf(), "enabled": True}
         cands = free.candidates(c)
         return {"count": len(cands), "size": sum(x["size"] for x in cands), "items": cands[:200]}
@@ -548,7 +548,7 @@ def register(app, ctx, x):
 
     @app.route("POST", "/api/admin/cold/free/cancel", auth="admin")
     def free_cancel(req):
-        """Ne pas libérer ce titre cette fois (il pourra être proposé de nouveau plus tard)."""
+        """Do not free this title this time (it may be proposed again later)."""
         b = req.json()
         db.run("DELETE FROM cold_free WHERE root_id=? AND state IN ('proposed','approved','pending','manual')", (int(b.get("root") or 0),))
         return {"ok": True}
