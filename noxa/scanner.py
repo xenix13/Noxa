@@ -1,4 +1,4 @@
-"""Scan des bibliothèques : fichiers -> films / séries / saisons / épisodes."""
+"""Library scan: files -> movies / shows / seasons / episodes."""
 import json
 import re
 import logging
@@ -36,7 +36,7 @@ def _videos_in(dirpath, filenames, videos):
 
 
 def walk_videos(root):
-    """-> liste de (chemin, taille, mtime) et dict dossier -> fichiers (pour sous-titres/images)."""
+    """-> list of (path, size, mtime) and dict folder -> files (for subtitles / pictures)."""
     videos, dir_files = [], {}
     for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d.lower() not in SKIP_DIRS)
@@ -46,8 +46,8 @@ def walk_videos(root):
 
 
 def list_dirs(dirs):
-    """Scan partiel : seulement les fichiers DIRECTEMENT dans ces dossiers (les sous-dossiers nouveaux
-    font eux-mêmes partie de la liste)."""
+    """Partial scan: only the files DIRECTLY in these folders (new sub-folders
+    are themselves part of the list)."""
     videos, dir_files = [], {}
     for d in sorted(dirs):
         try:
@@ -69,7 +69,7 @@ def external_subs(video, dir_files):
         if ext not in SUB_EXT or ext == ".sub":
             continue
         if not f.startswith(vbase):
-            # sous-titres dans un sous-dossier « Subs » ou nom différent : seulement si un seul film dans le dossier
+            # subtitles in a "Subs" sub-folder or with another name: only when the folder holds a single movie
             continue
         lang, forced, sdh = sub_language(f, video)
         codec = {".srt": "subrip", ".ass": "ass", ".ssa": "ass", ".vtt": "webvtt"}[ext]
@@ -87,7 +87,7 @@ def external_subs(video, dir_files):
 
 
 def local_image(folder, kind, files, prefix=None):
-    """Cherche poster.jpg / fanart.jpg (ou <prefix>-poster.jpg) dans un dossier."""
+    """Looks for poster.jpg / fanart.jpg (or <prefix>-poster.jpg) in a folder."""
     names = IMAGE_NAMES[kind]
     lower = {f.lower(): f for f in files}
     cands = []
@@ -166,7 +166,7 @@ class Scanner:
             self.state.update(kw)
 
     def start(self, library_ids=None, refresh_metadata=False, scope=None, queue=False):
-        """scope : {id de bibliothèque: dossiers à revoir} pour un scan partiel (nouveautés détectées).
+        """scope: {library id: folders to check again} for a partial scan (new content detected).
         queue: when a scan is already running, these libraries are scanned right after it (a library added
         while the first one is still being scanned used to stay empty)."""
         with self.lock:
@@ -219,7 +219,7 @@ class Scanner:
 
     # ------------------------------------------------------------------
     def scan_library(self, lib, scope=None):
-        """Scan complet, ou partiel si `scope` (dossiers modifiés, ajoutés ou supprimés) est donné."""
+        """Full scan, or partial when `scope` (folders changed, added or removed) is given."""
         if lib["kind"] == "photo":
             return photos.scan(self, lib)
         if lib["kind"] == "audiobook":
@@ -235,7 +235,7 @@ class Scanner:
                 continue
             reachable.append(root)
             if scope is not None:
-                # chemins normalisés : « /mnt/series/../../etc » ne passe pas pour un dossier de la bibliothèque
+                # normalised paths: "/mnt/series/../../etc" does not pass for a library folder
                 mine = [d for d in map(os.path.normpath, scope) if d == root or d.startswith(os.path.join(root, ""))]
                 v, d = list_dirs(mine)
             else:
@@ -243,16 +243,16 @@ class Scanner:
             files += [(root, *x) for x in v]
             dir_files.update(d)
         if paths and not reachable:
-            # partage non monté : surtout ne rien supprimer
+            # share not mounted: above all, delete nothing
             return
         existing = {r["key"]: r for r in db.all(
             "SELECT id, key, file_size, file_mtime, probe, type FROM items WHERE library_id=? "
             "AND type IN ('movie','episode','extra') AND peer_id IS NULL",
             (lib["id"],))}
         if scope is not None:
-            # seuls les fichiers DIRECTEMENT dans les dossiers revus, ou sous un dossier disparu, peuvent avoir
-            # changé. Surtout pas « tout ce qui est sous un dossier revu » : le dossier racine fait partie des
-            # dossiers modifiés dès qu'une série y arrive, et tout le reste de la bibliothèque serait supprimé.
+            # only the files DIRECTLY in the folders checked again, or under a folder that vanished, can have
+            # changed. Above all not "everything under a folder checked again": the root folder is among the
+            # changed folders as soon as a show arrives in it, and the rest of the library would be deleted.
             scoped = set(scope)
             vanished = tuple(os.path.join(d, "") for d in scope if not os.path.isdir(d))
             existing = {k: r for k, r in existing.items()
@@ -267,14 +267,14 @@ class Scanner:
             self._set(done=n)
             seen.add(path)
             if time.time() - mtime < RECENT_SECONDS:
-                # fichier probablement en cours de copie (Radarr, Sonarr…) : on le reprendra au prochain passage
+                # file probably still being copied (Radarr, Sonarr…): it will be picked up on the next pass
                 deferred += 1
                 deferred_dirs.add(os.path.dirname(path))
                 continue
             kind = extra_kind(path, root)
             if kind:
                 old = existing.get(path)
-                if old and old["type"] != "extra":  # indexé à tort comme film/épisode par une version précédente
+                if old and old["type"] != "extra":  # wrongly indexed as a movie / episode by an earlier version
                     db.run("DELETE FROM items WHERE id=?", (old["id"],))
                 extras.append((root, path, size, mtime, kind))
                 continue
@@ -288,7 +288,7 @@ class Scanner:
             except Exception as e:
                 log.exception("Fichier %s", path)
                 self._err(f"{os.path.basename(path)} : {e}")
-        # fichier disparu mais copié sur un stockage froid : le titre reste (lu depuis la copie), avec tout ce qui le décrit
+        # file gone but copied to cold storage: the title stays (played from the copy), with everything that describes it
         archived = {r["item_id"] for r in db.all(
             "SELECT DISTINCT c.item_id FROM cold_copies c JOIN items i ON i.id=c.item_id WHERE i.library_id=? "
             "AND c.verified_at IS NOT NULL", (lib["id"],))}
@@ -309,8 +309,8 @@ class Scanner:
             except Exception as e:
                 log.warning("Bonus %s : %s", path, e)
                 self._err(f"{os.path.basename(path)} : {e}")
-        # saisons et séries vides
-        # (pas les éléments d'un serveur lié rangés ici par une fusion : c'est lui qui les gère)
+        # empty seasons and shows
+        # (not the items of a linked server placed here by a merge: that server manages them)
         db.run("DELETE FROM items WHERE library_id=? AND type='season' AND peer_id IS NULL AND NOT EXISTS "
                "(SELECT 1 FROM items e WHERE e.parent_id=items.id)", (lib["id"],))
         db.run("DELETE FROM items WHERE library_id=? AND type='show' AND peer_id IS NULL AND NOT EXISTS "
@@ -325,7 +325,7 @@ class Scanner:
                 watcher.defer(lib["id"], deferred_dirs)
 
     def _extra(self, lib, root, path, size, mtime, kind, dir_files):
-        """Bonus (bande-annonce, making-of…) rattaché au film ou à la série du même dossier."""
+        """Extra (trailer, making-of…) attached to the movie or the show of the same folder."""
         db = self.ctx.db
         parent = None
         folder = extra_owner_dir(path, root)
@@ -370,10 +370,10 @@ class Scanner:
         info = json.loads(row["probe"]) if row and row["probe"] else None
         current = info and "attachments" in info and (not info.get("video") or "fps" in info["video"])
         if info and row["file_size"] == size and row["file_mtime"] == mtime and current:
-            pass  # inchangé (les analyses d'anciennes versions sont refaites une fois)
+            pass  # unchanged (analyses made by older versions are done again once)
         else:
             info = media.probe(path)
-        # sous-titres du dossier, puis ceux téléchargés (OpenSubtitles) qui sont toujours là
+        # subtitles of the folder, then the downloaded ones (OpenSubtitles) that are still there
         info["external"] = keep_downloaded(row["probe"] if row else None, external_subs(path, dir_files))
         return info
 
@@ -391,7 +391,7 @@ class Scanner:
 
     @staticmethod
     def _added_at(lib, mtime):
-        # premier scan : date du fichier (pour un « ajoutés récemment » utile) ; ensuite : maintenant
+        # first scan: the file's date (for a useful "recently added"); afterwards: now
         now = int(time.time())
         if lib["scanned_at"] is None and 0 < mtime < now:
             return mtime
@@ -466,14 +466,14 @@ class Scanner:
         info = self._probe(path, row, size, mtime, dir_files)
         dur = int(info["duration"] * 1000)
         if row and self._unchanged(row, size, mtime, info):
-            return  # rien à écrire : fichier, analyse et sous-titres externes identiques
+            return  # nothing to write: file, analysis and external subtitles unchanged
         if row:
             db.run("UPDATE items SET file_size=?, file_mtime=?, probe=?, duration_ms=? WHERE id=?",
                    (size, mtime, json.dumps(info), dur, row["id"]))
             if row["file_mtime"] != mtime:
                 self._new_media(row["id"], info)
             return
-        # série
+        # show
         show_key = os.path.join(root, parsed["show_dir"]) if parsed["show_dir"] else "name:" + fold(parsed["show"])
         show = db.one("SELECT id FROM items WHERE library_id=? AND type='show' AND key=?", (lib["id"], show_key))
         if show:

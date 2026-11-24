@@ -1,4 +1,4 @@
-"""Point d'entrée : python3 -m noxa"""
+"""Entry point: python3 -m noxa"""
 import argparse
 import logging
 import os
@@ -17,10 +17,10 @@ def env_bool(name, default=False):
 
 
 def admin_command(argv):
-    """Commandes de secours, sur le serveur (accès console) :
-    reset-2fa <identifiant>  désactive la double authentification d'un compte (téléphone et codes de secours perdus)
-    list-users               liste les comptes et l'état de leur double authentification
-    restore <archive>        prépare la restauration d'une sauvegarde (appliquée au prochain démarrage)"""
+    """Emergency commands, on the server (console access):
+    reset-2fa <username>   turns off two-factor authentication for an account (phone and recovery codes lost)
+    list-users             lists the accounts and their two-factor authentication state
+    restore <archive>      prepares the restore of a backup (applied at the next start)"""
     from .db import DB
     from . import twofa
     ap = argparse.ArgumentParser(prog="noxa", description="Commandes d'administration de Noxa (en console)")
@@ -112,7 +112,7 @@ def main(argv=None):
     ctx.dlna.start(args.port)
     ctx.http_port = args.port
     if ctx.db.scalar("SELECT 1 FROM cold_jobs WHERE state IN ('queued','running') LIMIT 1"):
-        ctx.cold.start()  # archivages interrompus par l'arrêt de Noxa
+        ctx.cold.start()  # archiving jobs interrupted when Noxa stopped
     threading.Timer(60, ctx.prefetch_missing_subtitles).start()
 
     exit_code = [0]
@@ -128,7 +128,7 @@ def main(argv=None):
         ctx.live.stop_all()
         threading.Thread(target=server.shutdown, daemon=True).start()
     def restart():
-        # code non nul : systemd (Restart=on-failure) et Docker (restart: unless-stopped) relancent Noxa
+        # non-zero exit code: systemd (Restart=on-failure) and Docker (restart: unless-stopped) start Noxa again
         logging.getLogger("noxa").warning("Redémarrage de Noxa (restauration d'une sauvegarde)")
         exit_code[0] = 75
         shutdown()

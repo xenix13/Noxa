@@ -212,7 +212,7 @@ MIGRATIONS = [
     ALTER TABLE items ADD COLUMN trailer TEXT;
     ALTER TABLE items ADD COLUMN extra_kind TEXT;
     """,
-    # 6 : identifiants externes, envies hors bibliothèque (et une ancienne compatibilité retirée en 10)
+    # 6: external ids, wishes outside the library (and an old compatibility removed in 10)
     """
     ALTER TABLE items ADD COLUMN imdb_id TEXT;
     ALTER TABLE items ADD COLUMN tvdb_id INTEGER;
@@ -240,7 +240,7 @@ MIGRATIONS = [
         PRIMARY KEY(user_id, media_type, tmdb_id)
     );
     """,
-    # 7 : tâches planifiées (analyses des fichiers), TV en direct (IPTV)
+    # 7: scheduled tasks (file analyses), live TV (IPTV)
     """
     CREATE TABLE media_analysis(
         item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
@@ -304,12 +304,12 @@ MIGRATIONS = [
         PRIMARY KEY(user_id, channel_id)
     );
     """,
-    # 8 : index pour le guide TV (programmes d'une période) et l'historique « vu » des séries
+    # 8: indexes for the TV guide (programmes of a period) and the "watched" history of shows
     """
     CREATE INDEX live_programmes_time ON live_programmes(stop, start);
     CREATE INDEX progress_watched ON progress(user_id, watched, last_watched_at);
     """,
-    # 9 : anciens clients externes (retirés en 10)
+    # 9: former external clients (removed in 10)
     """
     DELETE FROM jf_tokens;
     ALTER TABLE jf_tokens ADD COLUMN device_id TEXT NOT NULL DEFAULT '';
@@ -323,23 +323,23 @@ MIGRATIONS = [
         PRIMARY KEY(user_id, client, pref_id)
     );
     """,
-    # 10 : ancienne compatibilité avec des clients externes retirée (remplacée par les applications Noxa)
+    # 10: old compatibility with external clients removed (replaced by the Noxa apps)
     """
     DROP TABLE IF EXISTS jf_prefs;
     DROP TABLE IF EXISTS jf_tokens;
     DELETE FROM settings WHERE key IN ('jellyfin_api', 'jf_server_id', 'jf_secret');
     """,
-    # 11 : TV en direct, chaînes vérifiées (ok : NULL = pas encore vérifiée, 0 = hors service, 1 = répond)
+    # 11: live TV, checked channels (ok: NULL = not checked yet, 0 = down, 1 = answers)
     """
     ALTER TABLE live_channels ADD COLUMN ok INTEGER;
     ALTER TABLE live_channels ADD COLUMN fails INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE live_channels ADD COLUMN checked_at INTEGER;
     """,
-    # 12 : avatar en image (numéro de version de l'image, NULL = initiale sur fond de couleur)
+    # 12: avatar picture (version number of the picture, NULL = initial on a coloured background)
     """
     ALTER TABLE users ADD COLUMN avatar_ver INTEGER;
     """,
-    # 13 : avis par utilisateur sur un film ou une série (1 = j'aime, -1 = je n'aime pas, 0 = ne plus suggérer)
+    # 13: opinion of each user on a movie or a show (1 = like, -1 = dislike, 0 = stop suggesting)
     """
     CREATE TABLE ratings(
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -349,12 +349,12 @@ MIGRATIONS = [
         PRIMARY KEY(user_id, item_id)
     );
     """,
-    # 14 : interface enfant (choisie par l'administrateur) ; date de la dernière lecture des notifications
+    # 14: kids interface (chosen by the administrator); date the notifications were last read
     """
     ALTER TABLE users ADD COLUMN kids INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN notif_seen INTEGER NOT NULL DEFAULT 0;
     """,
-    # 15 : double authentification (secret TOTP, secret en attente de confirmation, codes de secours hachés)
+    # 15: two-factor authentication (TOTP secret, secret waiting for confirmation, hashed recovery codes)
     """
     ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN totp_secret TEXT;
@@ -362,13 +362,13 @@ MIGRATIONS = [
     ALTER TABLE users ADD COLUMN totp_last_step INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN totp_recovery TEXT;
     """,
-    # 16 : langue de l'interface choisie par chaque utilisateur (NULL : langue par défaut du serveur)
+    # 16: interface language chosen by each user (NULL: the server's default language)
     """
     ALTER TABLE users ADD COLUMN language TEXT;
     """,
-    # 17 : fédération (serveurs liés). Chaque compte et chaque bibliothèque a un identifiant commun à tous les
-    # serveurs (uid). Les bibliothèques et éléments venus d'un serveur lié gardent son identifiant (remote_id).
-    # fseq : numéro de changement, pour n'envoyer aux serveurs liés que ce qui a changé depuis leur dernier passage.
+    # 17: federation (linked servers). Each account and each library has an id shared by all the
+    # servers (uid). Libraries and items coming from a linked server keep its id (remote_id).
+    # fseq: change number, so that linked servers are only sent what changed since their last visit.
     """
     ALTER TABLE users ADD COLUMN uid TEXT;
     ALTER TABLE users ADD COLUMN rev INTEGER;
@@ -459,11 +459,11 @@ MIGRATIONS = [
         UPDATE progress SET fseq=(SELECT n FROM fed_clock) WHERE user_id=NEW.user_id AND rating_key=NEW.rating_key;
     END;
     """,
-    # 18 : bibliothèques d'un serveur lié fusionnées avec une bibliothèque de ce serveur. src_* : place d'origine
-    # d'un élément reçu (sa bibliothèque et ses parents chez lui) ; library_id/parent_id/show_id : place affichée
-    # (dans la bibliothèque fusionnée, sous la série locale). alias_of : même titre que cet élément local (masqué,
-    # sert de seconde copie à la lecture). Un élément local supprimé rend leur place d'origine aux éléments reçus
-    # qui en dépendaient, au lieu de les emporter avec lui.
+    # 18: libraries of a linked server merged with a library of this server. src_*: original place
+    # of a received item (its library and its parents there); library_id/parent_id/show_id: place shown
+    # (in the merged library, under the local show). alias_of: same title as this local item (hidden,
+    # used as a second copy for playback). A local item that is deleted gives the received items that
+    # depended on it their original place back, instead of taking them along.
     """
     ALTER TABLE libraries ADD COLUMN merge_into INTEGER REFERENCES libraries(id) ON DELETE SET NULL;
     ALTER TABLE peers ADD COLUMN online INTEGER NOT NULL DEFAULT 1;
@@ -483,7 +483,7 @@ MIGRATIONS = [
             WHERE peer_id IS NOT NULL AND library_id=OLD.id;
     END;
     """,
-    # 19 : notes personnelles (1 à 5 étoiles), titres masqués pour soi, playlists partagées avec tout le foyer
+    # 19: personal ratings (1 to 5 stars), titles hidden for oneself, playlists shared with the whole household
     """
     CREATE TABLE stars(
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -500,7 +500,7 @@ MIGRATIONS = [
     );
     ALTER TABLE playlists ADD COLUMN shared INTEGER NOT NULL DEFAULT 0;
     """,
-    # 20 : notifications push (appareils inscrits, épisodes déjà signalés) ; photothèque : favoris, albums partagés par lien
+    # 20: push notifications (registered devices, episodes already announced); photo library: favourites, albums shared by link
     """
     CREATE TABLE push_subs(
         id INTEGER PRIMARY KEY,
@@ -525,7 +525,7 @@ MIGRATIONS = [
         expires_at INTEGER NOT NULL
     );
     """,
-    # 21 : sous-titres OpenSubtitles (recherches automatiques sans résultat, ou sous-titre retiré à la main)
+    # 21: OpenSubtitles subtitles (automatic searches without a result, or subtitle removed by hand)
     """
     CREATE TABLE subs_attempts(
         item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
@@ -535,8 +535,8 @@ MIGRATIONS = [
         PRIMARY KEY(item_id, lang)
     );
     """,
-    # 22 : alertes pour les administrateurs ; limites par compte (lectures simultanées, débit hors du réseau local) ;
-    # temps d'écran des profils (minutes par jour, heure du coucher) et temps regardé par jour
+    # 22: alerts for administrators; per-account limits (simultaneous streams, bandwidth outside the local network);
+    # screen time of profiles (minutes per day, bedtime) and time watched per day
     """
     CREATE TABLE alerts(
         key TEXT PRIMARY KEY,
@@ -569,7 +569,7 @@ MIGRATIONS = [
             WHERE id=NEW.id;
     END;
     """,
-    # 23 : comptes Trakt reliés
+    # 23: linked Trakt accounts
     """
     CREATE TABLE trakt_links(
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -583,7 +583,7 @@ MIGRATIONS = [
         last_result TEXT
     );
     """,
-    # 24 : podcasts (flux, épisodes, abonnements et écoute de chacun)
+    # 24: podcasts (feeds, episodes, subscriptions and listening of each one)
     """
     CREATE TABLE podcasts(
         id INTEGER PRIMARY KEY,
@@ -630,7 +630,7 @@ MIGRATIONS = [
         PRIMARY KEY(user_id, episode_id)
     );
     """,
-    # 25 : préférences répliquées avec les comptes (une modification relance l'envoi du compte aux serveurs liés)
+    # 25: preferences replicated with the accounts (a change sends the account to the linked servers again)
     """
     CREATE TRIGGER prefs_fed_ins AFTER INSERT ON prefs WHEN (SELECT applying FROM fed_clock)=0 BEGIN
         UPDATE users SET rev=CAST((julianday('now')-2440587.5)*86400000 AS INTEGER) WHERE id=NEW.user_id;
@@ -642,7 +642,7 @@ MIGRATIONS = [
         UPDATE users SET rev=CAST((julianday('now')-2440587.5)*86400000 AS INTEGER) WHERE id=OLD.user_id;
     END;
     """,
-    # 26 : podcasts retirés (tables, et leur trace dans les préférences : menu, accueil, notifications)
+    # 26: podcasts removed (tables, and their trace in the preferences: menu, home, notifications)
     """
     DROP TABLE IF EXISTS podcast_progress;
     DROP TABLE IF EXISTS podcast_subs;
@@ -658,8 +658,8 @@ MIGRATIONS = [
     UPDATE prefs SET data=json_set(data, '$.start_page', 'home') WHERE json_valid(data) AND json_extract(data, '$.start_page')='podcasts';
     UPDATE fed_clock SET applying=0;
     """,
-    # 27 : journal des lectures (statistiques de l'administration) : une ligne à la fin de chaque lecture de plus
-    # de 30 s, quelle qu'en soit la raison (arrêt, abandon, lecture remplacée), avec le débit estimé
+    # 27: playback log (admin statistics): one row at the end of each playback longer
+    # than 30 s, whatever the reason (stop, abandon, playback replaced), with the estimated bandwidth
     """
     CREATE TABLE play_log(
         id INTEGER PRIMARY KEY,
@@ -687,7 +687,7 @@ MIGRATIONS = [
             OLD.created_at, OLD.last_seen, OLD.last_seen - OLD.created_at, json_extract(OLD.params, '$.peer') IS NOT NULL);
     END;
     """,
-    # 28 : stockage froid (copies des fichiers sur d'autres stockages, file d'archivage)
+    # 28: cold storage (copies of the files on other stores, archiving queue)
     """
     CREATE TABLE cold_stores(
         id INTEGER PRIMARY KEY,
@@ -722,7 +722,7 @@ MIGRATIONS = [
         UNIQUE(item_id, store_id)
     );
     """,
-    # 29 : libérer de la place (fichiers archivés puis supprimés de la bibliothèque), titres à garder, cache local
+    # 29: freeing up space (files archived then deleted from the library), titles to keep, local cache
     """
     CREATE TABLE cold_free(
         item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
@@ -750,7 +750,7 @@ MIGRATIONS = [
         last_used INTEGER NOT NULL
     );
     """,
-    # 30 : archives compressées (HEVC) : leur description propre ; tâches « compresser »
+    # 30: compressed archives (HEVC): their own description; "compress" jobs
     """
     ALTER TABLE cold_copies ADD COLUMN compressed INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE cold_copies ADD COLUMN orig_size INTEGER;
@@ -771,10 +771,10 @@ MIGRATIONS = [
 
 
 class DB:
-    """Une connexion par fil d'exécution, rendue à une réserve à la fin de chaque requête.
+    """One connection per thread, given back to a pool at the end of each request.
 
-    Le serveur crée un fil par requête : sans réserve, chaque requête ouvrirait (et configurerait) une
-    nouvelle connexion SQLite. Une connexion n'est remise en réserve que hors transaction."""
+    The server creates one thread per request: without a pool, each request would open (and set up) a
+    new SQLite connection. A connection only goes back to the pool outside a transaction."""
     POOL_SIZE = 16
 
     def __init__(self, path):
@@ -788,7 +788,7 @@ class DB:
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA foreign_keys=ON")
         c.execute("PRAGMA busy_timeout=5000")
-        c.execute("PRAGMA synchronous=NORMAL")  # sûr en mode WAL, beaucoup moins d'écritures disque
+        c.execute("PRAGMA synchronous=NORMAL")  # safe in WAL mode, far fewer disk writes
         return c
 
     def conn(self):

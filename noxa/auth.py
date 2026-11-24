@@ -43,12 +43,12 @@ USERNAME_RULE = "Identifiant : 2 à 32 caractères (lettres, accents compris, ch
 
 
 def normalize_username(name):
-    """Forme unique d'un identifiant (« é » saisi en un ou deux caractères selon le clavier)."""
+    """Single form of a username (« é » typed as one or two characters depending on the keyboard)."""
     return unicodedata.normalize("NFC", str(name or "")).strip()
 
 
 def find_user(db, username):
-    """Compte par identifiant, sans tenir compte des majuscules, accents compris (« Léa » = « LÉA »)."""
+    """Account by username, ignoring case, accents included (« Léa » = « LÉA »)."""
     username = normalize_username(username)
     if not username:
         return None
@@ -116,7 +116,7 @@ def load_user(db, req):
         db.run("UPDATE sessions SET last_seen=? WHERE token_hash=?", (now, h))
     req.session_hash = h
     for k in ("password_hash", "s_last_seen", "totp_secret", "totp_pending", "totp_recovery"):
-        row.pop(k, None)  # secrets : jamais gardés dans la requête
+        row.pop(k, None)  # secrets: never kept in the request
     return row
 
 

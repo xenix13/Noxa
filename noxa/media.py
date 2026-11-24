@@ -1,4 +1,4 @@
-"""Appels à ffprobe / ffmpeg : analyse des fichiers, images, sous-titres."""
+"""Calls to ffprobe / ffmpeg: file analysis, pictures, subtitles."""
 import json
 import logging
 import os
@@ -13,13 +13,13 @@ FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE = shutil.which("ffprobe") or "ffprobe"
 TEXT_SUB_CODECS = {"subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "text"}
 IMAGE_SUB_CODECS = {"hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub", "pgssub"}
-_image_slots = threading.BoundedSemaphore(3)  # limite les ffmpeg d'images simultanés
-# Fichiers des bibliothèques : ffmpeg ne doit lire que des fichiers locaux. Un fichier piégé (une playlist HLS ou
-# une liste « concat » déguisée en .mkv) pourrait sinon lui faire ouvrir des adresses réseau ou d'autres fichiers.
+_image_slots = threading.BoundedSemaphore(3)  # limits the number of picture ffmpegs at the same time
+# Library files: ffmpeg must only read local files. A booby-trapped file (an HLS playlist or
+# a "concat" list disguised as .mkv) could otherwise make it open network addresses or other files.
 LOCAL_ONLY = ["-protocol_whitelist", "file,pipe"]
 REFUSED_FORMATS = {"hls", "applehttp", "concat", "ffconcat", "tee"}
-# Fichiers .strm : une adresse http(s) vers la vidéo (VOD IPTV, autre serveur…). ffmpeg n'y ouvre que du réseau
-# (jamais de fichier local, même si une playlist distante en désigne un) et se reconnecte en cas de coupure.
+# .strm files: an http(s) address of the video (IPTV VOD, another server…). ffmpeg only opens the network there
+# (never a local file, even if a remote playlist points to one) and reconnects when the connection drops.
 STRM_EXT = ".strm"
 REMOTE_ONLY = ["-protocol_whitelist", "http,https,tcp,tls,crypto", "-reconnect", "1", "-reconnect_streamed", "1",
                "-reconnect_delay_max", "10", "-rw_timeout", "20000000"]
@@ -30,7 +30,7 @@ def is_strm(path):
 
 
 def strm_url(path):
-    """Adresse contenue dans un .strm (première ligne utile), http(s) seulement."""
+    """Address held by a .strm file (first useful line), http(s) only."""
     try:
         with open(path, encoding="utf-8-sig", errors="replace") as f:
             lines = f.read(8192).splitlines()
@@ -42,16 +42,16 @@ def strm_url(path):
     return url
 
 
-COLD = "cold:"  # copie froide lue par l'adresse locale de Noxa (voir cold.py) : « cold:http://127.0.0.1:…/cold/<jeton> »
+COLD = "cold:"  # cold copy read through Noxa's local address (see cold/): "cold:http://127.0.0.1:…/cold/<token>"
 
 
 def is_remote(path):
-    """Source lue par le réseau (.strm, copie froide distante) : pas de lecture directe du fichier."""
+    """Source read over the network (.strm, remote cold copy): no direct play of the file."""
     return bool(path) and (path.startswith(COLD) or is_strm(path))
 
 
 def input_args(path):
-    """Arguments d'entrée de ffmpeg / ffprobe pour un fichier de bibliothèque (local, .strm ou copie froide)."""
+    """ffmpeg / ffprobe input arguments for a library file (local, .strm or cold copy)."""
     if path.startswith(COLD):
         return [*REMOTE_ONLY, "-i", path[len(COLD):]]
     if is_strm(path):
@@ -67,7 +67,7 @@ _options = {}
 
 
 def has_option(name):
-    """ffmpeg connaît-il cette option ? (-readrate n'existe que depuis ffmpeg 5)"""
+    """Does ffmpeg know this option? (-readrate only exists since ffmpeg 5)"""
     if name not in _options:
         try:
             out = subprocess.run([FFMPEG, "-hide_banner", "-h", "full"], capture_output=True, timeout=20).stdout
@@ -81,7 +81,7 @@ _filters = {}
 
 
 def has_filter(name):
-    """ffmpeg a-t-il ce filtre ? (zscale, pour convertir le HDR, dépend de la compilation)"""
+    """Does ffmpeg have this filter? (zscale, to convert HDR, depends on how it was built)"""
     if name not in _filters:
         try:
             out = subprocess.run([FFMPEG, "-hide_banner", "-filters"], capture_output=True, timeout=20).stdout
@@ -95,7 +95,7 @@ _version = []
 
 
 def ffmpeg_major():
-    """Version majeure d'ffmpeg (6, 7, 8…), 0 si inconnue (version de développement « N-… »)."""
+    """Major ffmpeg version (6, 7, 8…), 0 when unknown (development version "N-…")."""
     if not _version:
         try:
             out = subprocess.run([FFMPEG, "-hide_banner", "-version"], capture_output=True, timeout=20).stdout
@@ -107,9 +107,9 @@ def ffmpeg_major():
 
 
 def readrate_ok():
-    """-readrate utilisable pour ménager le partage réseau. Depuis ffmpeg 7, la lecture limitée se fige en cours
-    de route sur certains fichiers (constaté avec ffmpeg 8.0 : préparation bloquée à mi-fichier) : on s'en passe,
-    la priorité basse (nice, ionice) suffit à laisser la place aux lectures."""
+    """-readrate usable to spare the network share. Since ffmpeg 7, rate-limited reading freezes half-way
+    on some files (seen with ffmpeg 8.0: preparation stuck in the middle of the file): it is left out,
+    the low priority (nice, ionice) is enough to leave room for playback."""
     major = ffmpeg_major()
     return has_option("readrate") and 0 < major < 7
 
@@ -152,7 +152,7 @@ def _fps(rate):
 
 
 def attachment_info(s, tags=None):
-    """Polices jointes au MKV (utilisées par les sous-titres ASS des animes)."""
+    """Fonts attached to the MKV (used by the ASS subtitles of anime)."""
     tags = tags if tags is not None else {k.lower(): v for k, v in (s.get("tags") or {}).items()}
     name = (tags.get("filename") or "").strip()
     mime = (tags.get("mimetype") or "").lower()
@@ -200,7 +200,7 @@ def probe(path):
                 "index": s["index"], "codec": s.get("codec_name"), "profile": s.get("profile") or "",
                 "pix_fmt": s.get("pix_fmt") or "", "width": s.get("width") or 0, "height": s.get("height") or 0,
                 "bitrate": int(s.get("bit_rate") or 0), "fps": _fps(s.get("avg_frame_rate") or s.get("r_frame_rate")),
-                # profil de l'appareil : niveau, HDR, images de référence
+                # device profile: level, HDR, reference frames
                 "level": s.get("level") if isinstance(s.get("level"), int) and s.get("level") > 0 else None,
                 "transfer": s.get("color_transfer") or "", "refs": s.get("refs") or None,
                 "interlaced": (s.get("field_order") or "progressive") not in ("progressive", "unknown"),
@@ -216,8 +216,8 @@ def probe(path):
             if att:
                 info["attachments"].append(att)
         elif kind == "subtitle" and not remote:
-            # shortcut: sous-titres internes d'un .strm ignorés (les extraire relirait tout le flux distant,
-            # et un fournisseur IPTV coupe souvent la 2e connexion) ; les .srt posés à côté restent proposés
+            # shortcut: internal subtitles of a .strm are ignored (extracting them would read the whole remote stream again,
+            # and an IPTV provider often cuts the 2nd connection); .srt files placed next to it are still offered
             info["subs"].append({
                 "index": s["index"], "codec": s.get("codec_name") or "", "lang": _lang(tags),
                 "title": tags.get("title") or "", "forced": bool(disp.get("forced")),
@@ -229,8 +229,8 @@ def probe(path):
 
 
 def resize_image(src, dest, w, h, crop=True, orient=None):
-    """Redimensionne (et recadre) une image avec ffmpeg -> JPEG. orient : filtres qui la remettent à l'endroit
-    (orientation EXIF d'une photo, appliquée ici plutôt que devinée par ffmpeg selon sa version)."""
+    """Resizes (and crops) a picture with ffmpeg -> JPEG. orient: filters that turn it the right way up
+    (EXIF orientation of a photo, applied here rather than guessed by ffmpeg depending on its version)."""
     vf = (f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}" if crop
           else f"scale='min({w},iw)':'min({h},ih)':force_original_aspect_ratio=decrease")
     if orient:
@@ -252,7 +252,7 @@ def grab_frame(video, dest, at_seconds, w, h):
 
 
 def _keep_image(tmp, dest):
-    """ffmpeg peut réussir sans rien écrire (instant après la dernière image, piste vidéo vide)."""
+    """ffmpeg can succeed without writing anything (time after the last frame, empty video track)."""
     if not os.path.isfile(tmp) or os.path.getsize(tmp) == 0:
         try:
             os.remove(tmp)
@@ -263,7 +263,7 @@ def _keep_image(tmp, dest):
 
 
 def extract_subtitle(source, stream_index=None):
-    """Convertit une piste (interne) ou un fichier (externe) de sous-titres texte en SRT."""
+    """Converts a text subtitle track (internal) or file (external) to SRT."""
     cmd = [FFMPEG, "-v", "error", *LOCAL_ONLY, "-i", source]
     if stream_index is not None:
         cmd += ["-map", f"0:{stream_index}"]

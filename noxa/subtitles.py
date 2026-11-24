@@ -4,7 +4,7 @@ import re
 _TIME = re.compile(r"(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{1,3})")
 _TAGS = re.compile(r"<[^>]{0,200}>|\{\\[^}]{0,200}\}")
 _TOP = re.compile(r"\{\\an[789]\}|\{\\a(?:5|6|7|9|10|11)\}")
-# dessins vectoriels ASS ({\p1}m 0 0 l 100 0…) : illisibles en texte, on les écarte
+# ASS vector drawings ({\p1}m 0 0 l 100 0…): unreadable as text, left out
 _DRAWING = re.compile(r"^[\s\d.\-mlbspcn]+$")
 
 
@@ -47,7 +47,7 @@ def parse_subtitles(raw, limit=20000):
         if len(cues) >= limit:
             break
     cues.sort(key=lambda c: c["s"])
-    # doublons exacts (même texte, mêmes instants : effets de style empilés)
+    # exact duplicates (same text, same times: stacked style effects)
     out, seen = [], set()
     for c in cues:
         k = (c["s"], c["e"], c["t"])

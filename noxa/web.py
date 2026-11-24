@@ -16,7 +16,7 @@ import urllib.parse
 log = logging.getLogger("noxa.web")
 
 MAX_BODY = 1024 * 1024
-IDLE_TIMEOUT = 120   # s sans rien recevoir ni pouvoir envoyer : connexion fermée (clients lents, « slowloris »)
+IDLE_TIMEOUT = 120   # s without receiving or being able to send anything: connection closed (slow clients, "slowloris")
 
 
 class HTTPError(Exception):
@@ -37,7 +37,7 @@ class Request:
         self.client_ip = client_ip
         self.user = None
         self.session_hash = None
-        self.fed_peer = None       # serveur lié qui envoie la requête (port des serveurs liés)
+        self.fed_peer = None       # linked server sending the request (linked-servers port)
         self.fed_listener = False
         self.params = {}
         self._body = None
@@ -93,7 +93,7 @@ class Request:
         return out
 
 
-# requêtes plus longues que ce délai notées dans le journal (hors flux vidéo, attentes volontaires, événements)
+# requests longer than this are logged (except video streams, deliberate waits, events)
 SLOW_REQUEST = 5.0
 SLOW_EXEMPT = re.compile(r"^/(api/(stream/|live/|together/|remote/|share/|photos/\d+/stream|items/\d+/prepare|admin/update)|fed/|dlna/)")
 
@@ -111,7 +111,7 @@ class Response:
         self.stream = stream
         self.length = length
         self.on_close = on_close
-        self.hijacked = False  # la connexion a été reprise par la route (tunnel d'un serveur lié) : rien à écrire
+        self.hijacked = False  # the route took over the connection (tunnel of a linked server): nothing to write
 
 
 def json_response(data, status=200):
@@ -122,14 +122,14 @@ def json_response(data, status=200):
 class App:
     def __init__(self):
         self.routes = []
-        self.plain_paths = set()  # routes hors /api/ (adresses fixes, ex. /tv), le reste est l'interface
+        self.plain_paths = set()  # routes outside /api/ (fixed addresses, e.g. /tv); everything else is the interface
         self.before = []  # callables(req, route_opts)
         self.static_dir = None
         self.teardown = []
-        self.begin = None        # callable(req) au début de chaque requête (langue des messages)
-        self.translate = None    # callable(message) -> message dans la langue de la requête
-        self.default_lang = lambda: "en"  # langue de l'interface avant la connexion (page d'accueil)
-        self.lang_auto = lambda: True  # aucune langue choisie pour le serveur : celle du navigateur
+        self.begin = None        # callable(req) at the start of each request (language of the messages)
+        self.translate = None    # callable(message) -> message in the request's language
+        self.default_lang = lambda: "en"  # interface language before signing in (start page)
+        self.lang_auto = lambda: True  # no language chosen for the server: the browser's
 
     def route(self, method, pattern, **opts):
         regex = re.compile("^" + pattern + "$")
@@ -155,7 +155,7 @@ class App:
                 for hook in self.before:
                     early = hook(req, opts)
                     if isinstance(early, Response):
-                        return early  # réponse donnée d'avance (élément d'un serveur lié : relayée)
+                        return early  # answer given in advance (item of a linked server: relayed)
                 result = fn(req)
                 if isinstance(result, Response):
                     return result
@@ -170,7 +170,7 @@ class App:
     def serve_static(self, path, req=None):
         root = os.path.realpath(self.static_dir)
         rel = urllib.parse.unquote(path).lstrip("/") or "index.html"
-        # /v/<empreinte>/js/… : le code de l'interface, à une adresse qui change avec chaque version (voir ui_version)
+        # /v/<hash>/js/…: the interface code, at an address that changes with each version (see ui_version)
         stamped = None
         m = STAMPED.match(rel)
         if m:
@@ -188,21 +188,21 @@ class App:
         if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
             ctype += "; charset=utf-8"
         st = os.stat(full)
-        # empreinte du fichier : après le délai de cache, le navigateur demande « inchangé ? » (304, rien à renvoyer)
+        # file fingerprint: after the cache delay, the browser asks "unchanged?" (304, nothing to send again)
         etag = f'W/"{st.st_size:x}-{st.st_mtime_ns:x}"'
-        # interface (HTML, JS, CSS) : toujours revérifiée (réponse 304 légère si rien n'a changé), sinon le
-        # navigateur garde l'ancienne version après une mise à jour du serveur. Images : 5 min sans redemander.
+        # interface (HTML, JS, CSS): always checked again (light 304 answer when nothing changed), otherwise the
+        # browser keeps the old version after a server update. Images: 5 min without asking again.
         cache = "no-cache" if full.endswith((".html", ".js", ".css", ".webmanifest")) else "public, max-age=300"
         headers = {"Cache-Control": cache, "ETag": etag}
         if "/vendor/" in full:
             headers["Cache-Control"] = "public, max-age=604800"
         if stamped and stamped == ui_version(root):
-            # adresse propre à cette version : gardée telle quelle par le navigateur (et par un proxy qui
-            # mettrait les .js en cache) ; la version suivante aura d'autres adresses
+            # address specific to this version: kept as is by the browser (and by a proxy that would
+            # cache the .js files); the next version gets other addresses
             headers["Cache-Control"] = "public, max-age=31536000, immutable"
         if "/vendor/jassub/" in full:
-            # le moteur de sous-titres (libass compilé en WebAssembly) tourne dans un worker qui a besoin
-            # de compiler du WebAssembly ; cette politique ne vaut que pour ses propres fichiers
+            # the subtitle engine (libass compiled to WebAssembly) runs in a worker that needs to
+            # compile WebAssembly; this policy only applies to its own files
             headers["Content-Security-Policy"] = JASSUB_CSP
         compressible = ctype.startswith(COMPRESSIBLE)
         if compressible:
@@ -220,9 +220,9 @@ class App:
 
     @staticmethod
     def index_page(root, full, req, lang="en", auto=False):
-        """index.html qui charge le code et le style de l'interface à des adresses propres à cette version.
-        Sans cela, un proxy (Nginx Proxy Manager « Cache Assets » : expires 30d) ou un cache trop zélé garde
-        l'ancien code après une mise à jour, jusqu'à un Ctrl+F5."""
+        """index.html that loads the interface code and style from addresses specific to this version.
+        Without it, a proxy (Nginx Proxy Manager "Cache Assets": expires 30d) or an over-eager cache keeps
+        the old code after an update, until a Ctrl+F5."""
         version = ui_version(root)
         st = os.stat(full)
         etag = f'W/"ix-{version}-{lang}{"-auto" if auto else ""}-{st.st_mtime_ns:x}"'
@@ -233,11 +233,11 @@ class App:
         with open(full, encoding="utf-8") as f:
             html = f.read()
         html = html.replace('href="/css/', f'href="/v/{version}/css/').replace('src="/js/', f'src="/v/{version}/js/')
-        # requêtes de démarrage lancées tout de suite, et tout le code chargé en parallèle (pas import après import)
+        # start-up requests sent right away, and all the code loaded in parallel (not one import after the other)
         modules = ",".join(module_graph(root, version))
         html = html.replace('  <link rel="stylesheet"', f'  <meta name="noxa-modules" data-base="/v/{version}/js/" content="{modules}">\n'
                             f'  <script>{BOOT_JS}</script>\n  <link rel="stylesheet"', 1)
-        # langue par défaut du serveur : celle de l'interface tant que personne n'est connecté sur cet appareil
+        # server's default language: the interface's, as long as nobody is signed in on this device
         auto_attr = ' data-auto-lang="1"' if auto else ""  # no server language yet: the browser's one
         html = html.replace('<html lang="fr"', f'<html lang="{lang}" data-default-lang="{lang}"{auto_attr}', 1)
         if lang == "en":
@@ -251,8 +251,8 @@ class App:
 
     @staticmethod
     def service_worker(root, full, req):
-        """sw.js avec la liste des fichiers de l'interface et une version qui change dès que l'un d'eux change
-        (le navigateur installe alors le nouveau service worker et recharge son cache)."""
+        """sw.js with the list of the interface files and a version that changes as soon as one of them changes
+        (the browser then installs the new service worker and reloads its cache)."""
         shell = ["/", "/manifest.webmanifest", "/css/app.css", "/favicon.png", "/img/noxa-logo.webp"]
         for sub, ext in (("js", ".js"), ("fonts", ".woff"), ("icons", ".png")):
             for dirpath, _, files in os.walk(os.path.join(root, sub)):
@@ -264,7 +264,7 @@ class App:
             st = os.stat(os.path.join(root, "index.html" if u == "/" else u.lstrip("/")))
             stamp.append(f"{u}:{st.st_size}:{st.st_mtime_ns}")
         version = hashlib.sha1("|".join(stamp).encode()).hexdigest()[:12]
-        ui = ui_version(root)  # le code et le style sont chargés depuis /v/<empreinte>/ (voir index_page)
+        ui = ui_version(root)  # code and style are loaded from /v/<hash>/ (see index_page)
         shell = [f"/v/{ui}{u}" if u.startswith(("/js/", "/css/")) else u for u in shell]
         etag = f'"sw-{version}"'
         headers = {"Cache-Control": "no-cache", "ETag": etag}
@@ -282,7 +282,7 @@ _ui = {"at": 0.0, "version": None}
 
 
 def ui_version(root):
-    """Empreinte du code et du style de l'interface (taille et date de chaque fichier), revue toutes les 2 s."""
+    """Fingerprint of the interface code and style (size and date of each file), checked every 2 s."""
     now = time.monotonic()
     if _ui["version"] and now - _ui["at"] < 2:
         return _ui["version"]
@@ -301,7 +301,7 @@ _IMPORT = re.compile(r"""^\s*(?:import|export)\s[^;'"]*?from\s*['"](\./[^'"]+|\.
 
 
 def module_graph(root, version):
-    """Modules importés (directement ou non) par app.js, sans les pages chargées à la demande (import())."""
+    """Modules imported (directly or not) by app.js, without the pages loaded on demand (import())."""
     if version in _graph:
         return _graph[version]
     base = os.path.join(root, "js")
@@ -329,7 +329,7 @@ def module_graph(root, version):
 COMPRESSIBLE = ("text/", "application/javascript", "application/json", "application/wasm", "image/svg+xml",
                 "application/manifest+json")
 _gz_lock = threading.Lock()
-_gz_cache = {}  # (chemin, empreinte) -> fichier compressé : on ne recompresse pas hls.js à chaque visite
+_gz_cache = {}  # (path, fingerprint) -> compressed file: hls.js is not compressed again on every visit
 
 
 def _gzipped(full, etag):
@@ -344,14 +344,14 @@ def _gzipped(full, etag):
         data = gzip.compress(raw, 6)
         with _gz_lock:
             if sum(len(v) for v in _gz_cache.values()) > 32 * 1024 * 1024:
-                _gz_cache.clear()  # shortcut: vidé en bloc ; une LRU si l'interface grossit beaucoup
+                _gz_cache.clear()  # shortcut: emptied all at once; an LRU if the interface grows a lot
             _gz_cache[key] = data
     return data
 
 
-# Démarrage de l'interface : les premières requêtes partent dès la réception de la page, pendant que le code se
-# charge (sinon /api/status, puis /api/me, puis /api/home attendent chacune la précédente, et tout le code avant :
-# autant d'allers-retours, longs quand le serveur est loin). api.js reprend ces réponses au lieu de redemander.
+# Interface start-up: the first requests leave as soon as the page arrives, while the code loads
+# (otherwise /api/status, then /api/me, then /api/home each wait for the previous one, and all the code before:
+# as many round trips, long when the server is far). api.js reuses these answers instead of asking again.
 BOOT_JS = (
     # app bridges: NoxaAndroid / noxaNative since 4.5, NexisAndroid / nexisNative in older apps
     "window.NoxaAndroid=window.NoxaAndroid||window.NexisAndroid;window.noxaNative=window.noxaNative||window.nexisNative;"
@@ -364,7 +364,7 @@ BOOT_JS = (
     "['catch'](function(){return null})}"
     "g('/api/status');g('/api/me');var k=location.hash;if(!k||k==='#'||k==='#/')g('/api/home');"
     "window.__nexisBoot={at:Date.now(),req:b};"
-    # tout le code demandé en parallèle, au premier chargement seulement (ensuite il vient du service worker)
+    # all the code requested in parallel, on the first load only (afterwards it comes from the service worker)
     "var m=document.querySelector('meta[name=noxa-modules]');"
     "if(m&&!(navigator.serviceWorker&&navigator.serviceWorker.controller))m.content.split(',').forEach(function(f){"
     "var x=document.createElement('link');x.rel='modulepreload';x.href=m.getAttribute('data-base')+f;document.head.appendChild(x)})"
@@ -397,7 +397,7 @@ mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 def make_handler(app, trust_proxy=False, hsts=False, fed=None):
-    """fed : la fédération, pour le port réservé aux serveurs liés (TLS, chaque requête signée par le serveur)."""
+    """fed: the federation, for the port reserved to linked servers (TLS, each request signed by the server)."""
     class Handler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         server_version = "Seance"
@@ -407,7 +407,7 @@ def make_handler(app, trust_proxy=False, hsts=False, fed=None):
         def setup(self):
             if fed is not None and hasattr(self.request, "do_handshake"):
                 self.request.settimeout(30)
-                self.request.do_handshake()  # ici plutôt qu'à l'acceptation : un client lent ne bloque pas les autres
+                self.request.do_handshake()  # here rather than when accepting: a slow client does not block the others
             super().setup()
 
         def log_message(self, fmt, *args):
@@ -416,8 +416,8 @@ def make_handler(app, trust_proxy=False, hsts=False, fed=None):
         def _client_ip(self):
             ip = self.client_address[0]
             if trust_proxy:
-                # la DERNIÈRE adresse est celle ajoutée par notre reverse proxy ; les précédentes viennent du
-                # client et peuvent être inventées (contournement du blocage après mots de passe erronés)
+                # the LAST address is the one added by our reverse proxy; the earlier ones come from the
+                # client and can be made up (to get around the block after wrong passwords)
                 fwd = self.headers.get("X-Forwarded-For")
                 if fwd:
                     ip = fwd.split(",")[-1].strip() or ip
@@ -432,8 +432,8 @@ def make_handler(app, trust_proxy=False, hsts=False, fed=None):
                 if app.begin:
                     app.begin(req)
                 if fed is not None:
-                    # port des serveurs liés : l'API seulement, et uniquement pour un serveur jumelé
-                    # (sauf la demande d'adhésion, qui présente le jeton de l'invitation)
+                    # linked-servers port: the API only, and only for a paired server
+                    # (except the join request, which presents the invitation token)
                     req.fed_listener = True
                     if not parsed.path.startswith(("/api/", "/fed/")):
                         raise HTTPError(404, "Introuvable")
@@ -487,7 +487,7 @@ def make_handler(app, trust_proxy=False, hsts=False, fed=None):
             for k, v in SECURITY_HEADERS.items():
                 if k not in resp.headers:
                     self.send_header(k, v)
-            if hsts:  # derrière un reverse proxy HTTPS (SEANCE_COOKIE_SECURE=1)
+            if hsts:  # behind an HTTPS reverse proxy (NOXA_COOKIE_SECURE=1)
                 self.send_header("Strict-Transport-Security", "max-age=31536000")
             for k, v in resp.headers.items():
                 self.send_header(k, v)
@@ -530,7 +530,7 @@ def make_handler(app, trust_proxy=False, hsts=False, fed=None):
         def do_DELETE(self):
             self._handle("DELETE")
 
-        def do_SUBSCRIBE(self):  # événements UPnP (serveur DLNA)
+        def do_SUBSCRIBE(self):  # UPnP events (DLNA server)
             self._handle("SUBSCRIBE")
 
         def do_UNSUBSCRIBE(self):
@@ -543,7 +543,7 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
     request_queue_size = 64
-    max_connections = 256   # au-delà, les nouvelles connexions sont refusées au lieu d'épuiser la mémoire
+    max_connections = 256   # beyond this, new connections are refused instead of exhausting the memory
 
     def __init__(self, *args, **kwargs):
         self._slots = threading.BoundedSemaphore(self.max_connections)
@@ -568,12 +568,12 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     def handle_error(self, request, client_address):
         import sys
         if isinstance(sys.exc_info()[1], (ConnectionResetError, BrokenPipeError, TimeoutError)):
-            return  # le navigateur a coupé la connexion (saut, changement de page) : normal
+            return  # the browser closed the connection (seek, page change): normal
         super().handle_error(request, client_address)
 
 
 class TLSServer(Server):
-    """Port des serveurs liés : TLS avec le certificat de ce serveur (épinglé par les serveurs jumelés)."""
+    """Linked-servers port: TLS with this server's certificate (pinned by the paired servers)."""
     max_connections = 128
 
     def __init__(self, address, handler, ssl_context):

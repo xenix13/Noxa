@@ -1,18 +1,18 @@
-"""Lecture : décision direct / remux / transcodage et flux HLS « dynamiques ».
+"""Playback: direct / remux / transcode decision, and "dynamic" HLS streams.
 
-Principes :
-- une playlist VOD complète est annoncée d'emblée (segments de 6 s ; en remux, calés sur les images clés
-  lues dans l'index du MKV) : le lecteur connaît toute la chronologie et avance/recule sans relancer le flux ;
-- les segments sont fabriqués à la demande en fMP4 (pas de conversion TS -> MP4 dans le navigateur) avec les
-  horodatages d'origine (-copyts) ; si le lecteur demande un segment loin de ce que ffmpeg prépare,
-  ffmpeg est relancé à cet endroit (-ss + -start_number) ;
-- en remux, on vise 0,25 s après l'image clé (sinon ffmpeg retombe sur la précédente) ;
-- options d'entrée tolérantes (analyzeduration / probesize élevés, +genpts), mixages stéréo normalisés.
+Principles:
+- a complete VOD playlist is announced from the start (6 s segments; in remux, aligned on the keyframes
+  read from the MKV index): the player knows the whole timeline and seeks without restarting the stream;
+- segments are made on demand in fMP4 (no TS -> MP4 conversion in the browser) with the original
+  timestamps (-copyts); when the player asks for a segment far from what ffmpeg is preparing,
+  ffmpeg is started again there (-ss + -start_number);
+- in remux, the target is 0.25 s after the keyframe (otherwise ffmpeg falls back to the previous one);
+- tolerant input options (high analyzeduration / probesize, +genpts), normalised stereo mixes.
 
-Sans GPU, tout l'enjeu reste de ne transcoder la vidéo que lorsque c'est indispensable :
-- direct    : le navigateur lit le fichier tel quel                                  -> 0 % CPU
-- copy      : vidéo recopiée (H.264, et HEVC/AV1 si le navigateur sait les lire)     -> très peu de CPU
-- transcode : codec illisible par le navigateur, sous-titres image incrustés, qualité réduite -> libx264
+Without a GPU, the whole point is to transcode the video only when there is no other choice:
+- direct    : the browser plays the file as is                                        -> 0 % CPU
+- copy      : video copied (H.264, and HEVC/AV1 when the browser can play them)       -> very little CPU
+- transcode : codec the browser cannot play, burnt-in picture subtitles, lower quality -> libx264
 """
 import glob
 import logging
@@ -31,23 +31,23 @@ from .keyframes import equal_segments, segments_from_keyframes
 log = logging.getLogger("noxa.transcode")
 
 QUALITY = {"original": None, "1080p": (1080, 8000), "720p": (720, 4000), "480p": (480, 1500)}
-QUALITIES = ("auto", *QUALITY)  # « auto » : choisie selon le débit mesuré de l'appareil (auto_quality)
+QUALITIES = ("auto", *QUALITY)  # "auto": chosen from the device's measured bandwidth (auto_quality)
 AUDIO_KBPS = 192
-HEADROOM = 1.3  # marge sur le débit : pointes du fichier, variations de la connexion
+HEADROOM = 1.3  # bandwidth margin: peaks in the file, changes in the connection
 SEGMENT = 6            # secondes
-COPY_SEEK_PAD = 0.25   # remux : viser juste après l'image clé
+COPY_SEEK_PAD = 0.25   # remux: aim just after the keyframe
 SEG_RE = re.compile(r"^(\d{1,6})\.m4s$")
 INIT = "init.mp4"
-AHEAD_PAUSE = 30       # segments d'avance (~3 min) avant de mettre ffmpeg en pause
+AHEAD_PAUSE = 30       # segments ahead (~3 min) before pausing ffmpeg
 AHEAD_RESUME = 15
-KEEP_BEHIND = 20       # segments gardés derrière la position (~2 min)
-RESTART_GAP = 4        # segments (24 s) : au-delà, on relance ffmpeg là où le lecteur demande
+KEEP_BEHIND = 20       # segments kept behind the position (~2 min)
+RESTART_GAP = 4        # segments (24 s): beyond this, ffmpeg is started again where the player asks
 INPUT_OPTS = ["-analyzeduration", "200M", "-probesize", "1G"]
 
-# Navigateur sans profil déclaré : ce que tous savent lire
+# Browser with no declared profile: what they can all play
 DEFAULT_CAPS = {"video": {"h264"}, "audio": {"aac", "mp3"}, "containers": {"mp4", "mov"}}
 
-# Réductions en stéréo : (algorithme, disposition) -> filtre
+# Stereo downmixes: (algorithm, layout) -> filter
 DOWNMIX_FILTERS = {
     ("dave750", "5.1"): "pan=stereo|c0=0.5*c2+0.707*c0+0.707*c4+0.5*c3|c1=0.5*c2+0.707*c1+0.707*c5+0.5*c3",
     ("dave750", "7.1"): "pan=5.1(side)|c0=c0|c1=c1|c2=c2|c3=c3|c4=0.707*c4+0.707*c6|c5=0.707*c5+0.707*c7,"
@@ -75,22 +75,22 @@ DOWNMIX_FILTERS = {
                     "pan=stereo|c0=c0+0.707*c2+0.707*c4|c1=c1+0.707*c2+0.707*c5",
 }
 DOWNMIX_ALGOS = ("none", "dave750", "nightmode", "rfc7845", "ac4")
-# HDR (PQ : HDR10, HDR10+, Dolby Vision avec base HDR10 ; HLG) converti en SDR quand la vidéo est transcodée :
-# sans cela, le H.264 produit a des couleurs délavées et grises. « off » : rien n'est converti.
+# HDR (PQ: HDR10, HDR10+, Dolby Vision with an HDR10 base; HLG) converted to SDR when the video is transcoded:
+# without it, the H.264 output has washed-out, grey colours. "off": nothing is converted.
 HDR_TRANSFERS = ("smpte2084", "arib-std-b67")
 TONEMAPS = ("hable", "mobius", "reinhard", "off")
 
 
 def tonemap_filter(p):
-    """Chaîne de filtres HDR -> SDR (BT.709), ou "" (source SDR, réglage « off », ou ffmpeg sans zscale)."""
+    """HDR -> SDR (BT.709) filter chain, or "" (SDR source, "off" setting, or ffmpeg without zscale)."""
     algo = p.get("tonemap")
     if not p.get("hdr") or algo in (None, "off") or not media.has_filter("zscale") or not media.has_filter("tonemap"):
         return ""
     return (f"zscale=tin={p['hdr']}:min=bt2020nc:pin=bt2020:t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,"
             f"tonemap=tonemap={algo}:desat=0,zscale=t=bt709:m=bt709:r=tv,")
-# notre touche : un limiteur APRÈS le mixage et le gain, pour qu'aucun réglage ne puisse saturer
+# our touch: a limiter AFTER the mix and the gain, so that no setting can clip
 LIMITER = "alimiter=limit=0.8:attack=5:release=80:level=disabled"
-# compat : ancien nom utilisé par les tests
+# compat: former name used by the tests
 DOWNMIX = "aformat=channel_layouts=stereo,volume=2," + LIMITER
 
 
@@ -110,7 +110,7 @@ def infer_layout(a):
 
 
 def audio_filter(a, algo="none", boost=2.0):
-    """Chaîne -af pour réduire une piste multicanal en stéréo (vide si déjà stéréo)."""
+    """-af chain that downmixes a multichannel track to stereo (empty when already stereo)."""
     if not a or (a.get("channels") or 2) <= 2:
         return ""
     parts = []
@@ -129,7 +129,7 @@ def _bit_depth(v):
 
 
 def video_ok(v, caps=None):
-    """La piste vidéo peut-elle être recopiée telle quelle pour cet appareil (navigateur ou lecteur natif) ?"""
+    """Can the video track be copied as is for this device (browser or native player)?"""
     caps = caps or DEFAULT_CAPS
     if not v:
         return False
@@ -139,7 +139,7 @@ def video_ok(v, caps=None):
         return False
     if codec == "h264":
         return depth == 8 and "h264" in caps["video"]
-    if codec in ("mpeg2video", "vc1"):  # décodés par la plupart des TV et boîtiers, jamais par un navigateur
+    if codec in ("mpeg2video", "vc1"):  # decoded by most TVs and boxes, never by a browser
         return codec in caps["video"]
     if codec == "hevc":
         return ("hevc10" if depth == 10 else "hevc") in caps["video"] and depth <= 10
@@ -151,7 +151,7 @@ def video_ok(v, caps=None):
 
 
 def source_kbps(probe, file_size=0, duration_ms=0):
-    """Débit moyen du fichier (kbit/s), d'après l'analyse, sinon d'après sa taille et sa durée."""
+    """Average bitrate of the file (kbit/s), from the analysis, otherwise from its size and duration."""
     rate = int((probe.get("bitrate") or 0) / 1000)
     if not rate and file_size and duration_ms:
         rate = int(file_size * 8 / (duration_ms / 1000) / 1000)
@@ -159,8 +159,8 @@ def source_kbps(probe, file_size=0, duration_ms=0):
 
 
 def auto_quality(probe, kbps, file_size=0, duration_ms=0):
-    """Qualité pour un débit mesuré (kbit/s) : l'original s'il passe avec de la marge, sinon la meilleure
-    qualité convertie qui tient dans le débit, au plus 480p. Sans mesure : l'original."""
+    """Quality for a measured bandwidth (kbit/s): the original when it fits with a margin, otherwise the best
+    converted quality that fits, 480p at the lowest. Without a measurement: the original."""
     if not kbps:
         return "original"
     src = source_kbps(probe, file_size, duration_ms)
@@ -170,7 +170,7 @@ def auto_quality(probe, kbps, file_size=0, duration_ms=0):
     for q in ("1080p", "720p", "480p"):
         height, rate = QUALITY[q]
         if src_h and height > src_h and (not src or rate * HEADROOM >= src):
-            continue  # au-dessus de la définition et du débit du fichier : rien à y gagner
+            continue  # above the file's resolution and bitrate: nothing to gain
         if kbps >= (rate + AUDIO_KBPS) * HEADROOM:
             return q
     return "480p"
@@ -190,17 +190,17 @@ def plan(probe, audio_index=None, burn_index=None, quality="original", caps=None
     vcopy = video_ok(v, caps) and burn_index is None and not need_scale and not over_rate
     native = bool(caps.get("native"))
     channels = (a or {}).get("channels") or 2
-    # multicanal : réduit en stéréo par nous (le mixage par défaut du navigateur sature), sauf pour un lecteur
-    # natif qui le transmet à la TV ou à l'ampli. En HLS (fMP4), seuls AC3 / E-AC3 / AAC / FLAC / Opus multicanal
-    # sont recopiés ; DTS et TrueHD ne passent qu'en lecture directe.
+    # multichannel: downmixed to stereo by us (the browser's default mix clips), except for a native
+    # player that passes it to the TV or the amplifier. In HLS (fMP4), only multichannel AC3 / E-AC3 / AAC / FLAC / Opus
+    # are copied; DTS and TrueHD only work in direct play.
     multi_ok = bool(caps.get("multichannel")) and (a or {}).get("codec") in ("ac3", "eac3", "aac", "flac", "opus")
     acopy = bool(a and a["codec"] in caps["audio"] and (channels <= 2 or multi_ok))
     audio_direct = a is None or (a["codec"] in caps["audio"] and (channels <= 2 or caps.get("multichannel")))
     container = (probe.get("container") or "").split(",")
-    # navigateur : MP4 seulement en direct (le MKV passe par le remux) ; lecteur natif : tout conteneur qu'il lit
+    # browser: MP4 only in direct play (MKV goes through remux); native player: any container it can read
     direct_container = bool(set(container) & set(caps.get("containers") or ()) & ({"mp4", "mov", "matroska", "webm", "mpegts"} if native else {"mp4", "mov"}))
     first_audio = audios[0]["index"] if audios else None
-    # le lecteur natif choisit lui-même sa piste audio dans le fichier ; le navigateur ne lit que la première
+    # the native player picks its audio track in the file itself; the browser only plays the first one
     if vcopy and direct_container and (audio_direct if native else (a is None or (acopy and a["index"] == first_audio))):
         mode = "direct"
     elif vcopy:
@@ -210,7 +210,7 @@ def plan(probe, audio_index=None, burn_index=None, quality="original", caps=None
     if target:
         height, kbps = min(src_h or target[0], target[0]), target[1]
     else:
-        height = min(src_h or 1080, 1080)  # sans GPU, pas de 4K transcodé
+        height = min(src_h or 1080, 1080)  # without a GPU, no transcoded 4K
         kbps = 10000 if height >= 1080 else 6000 if height >= 720 else 3000
     reasons = []
     if mode == "transcode":
@@ -233,7 +233,7 @@ def plan(probe, audio_index=None, burn_index=None, quality="original", caps=None
     fps = (v or {}).get("fps") or 0
     seglen = float(SEGMENT)
     if mode == "transcode" and fps and abs(fps - math.floor(fps + 0.001)) > 0.001:
-        # 23,976 i/s : le GOP forcé dure 6,006 s, la playlist doit l'annoncer
+        # 23.976 fps: the forced GOP lasts 6.006 s, the playlist must say so
         seglen = math.ceil(SEGMENT * 1000 * math.ceil(fps) / fps) / 1000
     return {"mode": mode, "video_index": (v or {}).get("index"), "video_codec": (v or {}).get("codec"),
             "audio_index": a["index"] if a else None, "acopy": acopy, "audio_codec": (a or {}).get("codec"),
@@ -243,10 +243,10 @@ def plan(probe, audio_index=None, burn_index=None, quality="original", caps=None
             "hdr": hdr, "tonemap": tonemap if tonemap in TONEMAPS else "hable"}
 
 
-# Transcodage matériel, choisi par l'administrateur. Décodage par la carte (repli logiciel automatique si
-# elle ne connaît pas le codec), filtres sur le processeur (échelle, sous-titres incrustés), encodage par la
-# carte. shortcut: images ramenées en mémoire entre décodage et encodage ; pipeline 100 % carte graphique
-# (scale_cuda / scale_vaapi) à faire si le processeur reste le goulot.
+# Hardware transcoding, chosen by the administrator. Decoding by the card (automatic software fallback if
+# it does not know the codec), filters on the processor (scale, burnt-in subtitles), encoding by the
+# card. shortcut: frames brought back to memory between decoding and encoding; an all-GPU pipeline
+# (scale_cuda / scale_vaapi) to do if the processor stays the bottleneck.
 HW_ENGINES = ("none", "nvenc", "vaapi")
 
 
@@ -270,13 +270,13 @@ def video_encoder(hw, k, gop, seglen):
 
 
 def hw_devices():
-    """Cartes vues par le conteneur : NVIDIA (pilote chargé) et périphériques VAAPI (Intel, AMD)."""
+    """Cards seen by the container: NVIDIA (driver loaded) and VAAPI devices (Intel, AMD)."""
     return {"nvidia": os.path.exists("/dev/nvidia0") and os.path.exists("/dev/nvidiactl"),
             "dri": sorted(glob.glob("/dev/dri/renderD*"))}
 
 
 def hw_test(hw, tmp_dir):
-    """Encode 2 s d'image de test avec la carte, comme pour une vraie lecture. Lève MediaError sinon."""
+    """Encodes 2 s of test picture with the card, like a real playback. Raises MediaError otherwise."""
     out = os.path.join(tmp_dir, f"hwtest-{os.getpid()}.mp4")
     fmt = "format=nv12,hwupload" if hw["engine"] == "vaapi" else "format=yuv420p"
     try:
@@ -295,8 +295,8 @@ def hw_test(hw, tmp_dir):
 
 
 def media_args(p, hw=None, seglen=SEGMENT):
-    """Vidéo et son d'un plan (copie ou conversion, échelle, sous-titres incrustés, carte graphique) :
-    communs au flux de lecture (HLS) et aux téléchargements (MP4)."""
+    """Video and audio of a plan (copy or conversion, scale, burnt-in subtitles, graphics card):
+    shared by the playback stream (HLS) and downloads (MP4)."""
     vi = p["video_index"]
     if p["mode"] == "copy":
         out = ["-map", f"0:{vi}", "-codec:v:0", "copy"]
@@ -305,9 +305,9 @@ def media_args(p, hw=None, seglen=SEGMENT):
     else:
         scale = f"scale=-2:{p['height']}:flags=bicubic," if p["src_height"] > p["height"] else ""
         fmt = "format=nv12,hwupload" if hw and hw["engine"] == "vaapi" else "format=yuv420p"
-        tm = tonemap_filter(p)  # après la réduction de taille : moins de pixels à convertir
+        tm = tonemap_filter(p)  # after downscaling: fewer pixels to convert
         if p["burn_index"] is not None:
-            # HDR : converti avant d'y poser les sous-titres (sinon ils seraient convertis avec la vidéo)
+            # HDR: converted before the subtitles are laid on top (otherwise they would be converted with the video)
             base = f"[0:{vi}]{tm.rstrip(',')}[b];[b]" if tm else f"[0:{vi}]"
             out = ["-filter_complex",
                    f"[0:{p['burn_index']}]format=yuva420p[s];"
@@ -333,24 +333,24 @@ def media_args(p, hw=None, seglen=SEGMENT):
 
 
 def build_command(path, p, start, out_dir, start_number=0, threads=0, hw=None):
-    """Commande ffmpeg d'un flux HLS fMP4 démarrant à `start` (secondes) au segment `start_number`.
+    """ffmpeg command of an fMP4 HLS stream starting at `start` (seconds) at segment `start_number`.
 
-    threads : fils du décodage et de l'encodage (0 = autant que de cœurs). Plusieurs transcodages en même
-    temps se partagent les cœurs : chacun en prend moins, ce qui réduit aussi beaucoup sa mémoire."""
+    threads: decoding and encoding threads (0 = as many as cores). Several transcodes at the same
+    time share the cores: each takes fewer, which also greatly reduces its memory."""
     cmd = [media.FFMPEG, "-hide_banner", "-nostdin", "-loglevel", "warning", "-y", *INPUT_OPTS]
     if threads and p["mode"] == "transcode":
-        cmd += ["-threads", str(threads)]  # décodage
+        cmd += ["-threads", str(threads)]  # decoding
     hw = hw if p["mode"] == "transcode" else None
     if hw:
         cmd += hw_input(hw)
     if p["mode"] == "copy":
         cmd += ["-fflags", "+genpts"]
     if p["burn_index"] is not None and p.get("src_width") and p.get("src_height"):
-        # sous-titres image (PGS…) : taille du canevas connue d'avance (« unspecified size » sinon)
+        # picture subtitles (PGS…): canvas size known in advance ("unspecified size" otherwise)
         cmd += ["-canvas_size", f"{p['src_width']}x{p['src_height']}"]
     if start > 0:
-        # En copie, ffmpeg recule de ~0,13 s avant de chercher et retombait sur l'image clé PRÉCÉDENTE
-        # (marge de 0,5 s pour la même raison) : on vise juste après l'image clé voulue.
+        # In copy mode, ffmpeg steps back ~0.13 s before seeking and landed on the PREVIOUS keyframe
+        # (0.5 s margin for the same reason): the target is just after the wanted keyframe.
         ss = start + COPY_SEEK_PAD if p["mode"] == "copy" else start
         cmd += ["-ss", f"{ss:.3f}"]
     cmd += [*media.input_args(path), "-map_metadata", "-1", "-map_chapters", "-1",
@@ -368,7 +368,7 @@ def build_command(path, p, start, out_dir, start_number=0, threads=0, hw=None):
 
 
 def rss_mb(proc):
-    """Mémoire réellement occupée par un ffmpeg (Linux), en Mo."""
+    """Memory really used by an ffmpeg (Linux), in MB."""
     if not proc or proc.poll() is not None:
         return None
     try:
@@ -382,7 +382,7 @@ def rss_mb(proc):
 
 
 def system_memory():
-    """Mémoire et swap de la machine (Linux), en Mo."""
+    """Memory and swap of the machine (Linux), in MB."""
     info = {}
     try:
         with open("/proc/meminfo") as f:
@@ -398,16 +398,16 @@ def system_memory():
 class Session:
     def __init__(self, sid, path, p, segments, out_dir, hw=None):
         self.sid = sid
-        self.hw = hw                # transcodage matériel ({engine, device}) ou None
+        self.hw = hw                # hardware transcoding ({engine, device}) or None
         self.path = path
         self.plan = p
-        self.segments = segments    # [(début, durée)] en secondes
+        self.segments = segments    # [(start, duration)] in seconds
         self.dir = out_dir
         self.proc = None
-        self.run_start = 0          # premier segment de l'ffmpeg en cours
+        self.run_start = 0          # first segment of the running ffmpeg
         self.paused = False
-        self.active = 0.0           # secondes de travail réel de ffmpeg (hors pauses)
-        self.speed = None           # vitesse de production (x temps réel)
+        self.active = 0.0           # seconds of real ffmpeg work (pauses left out)
+        self.speed = None           # production speed (× real time)
         self.last_req = 0
         self.last_access = time.time()
         self.log_file = None
@@ -426,7 +426,7 @@ class Transcoder:
     def __init__(self, work_dir, limits, hw=lambda: None):
         self.work_dir = work_dir
         self.limits = limits  # callable -> (max_streams, max_transcodes)
-        self.hw = hw          # callable -> transcodage matériel choisi ({engine, device}) ou None
+        self.hw = hw          # callable -> chosen hardware transcoding ({engine, device}) or None
         self.sessions = {}
         self.lock = threading.Lock()
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -435,7 +435,7 @@ class Transcoder:
         threading.Thread(target=self._throttle_loop, daemon=True).start()
 
     def threads_per_transcode(self):
-        """Cœurs partagés entre les transcodages autorisés en même temps (au moins 2 chacun)."""
+        """Cores shared between the transcodes allowed at the same time (at least 2 each)."""
         cpus = os.cpu_count() or 2
         _, max_transcodes = self.limits()
         return max(2, cpus // max(1, max_transcodes)) if max_transcodes > 1 else 0
@@ -446,7 +446,7 @@ class Transcoder:
             return len(live), sum(1 for s in live if s.plan["mode"] == "transcode")
 
     def start(self, sid, path, p, offset_ms, duration_ms=0, keyframes=None):
-        """Prépare un flux et lance ffmpeg au segment de `offset_ms`. -> position de départ (ms)."""
+        """Prepares a stream and starts ffmpeg at the segment of `offset_ms`. -> start position (ms)."""
         if p["mode"] == "direct":
             return offset_ms
         max_streams, max_transcodes = self.limits()
@@ -499,10 +499,10 @@ class Transcoder:
         s.paused = False
 
     def _spawn(self, s, index):
-        """(Re)lance ffmpeg pour produire à partir du segment `index` (verrou de session tenu)."""
+        """(Re)starts ffmpeg to produce from segment `index` (session lock held)."""
         self._kill(s)
         for i in s.produced():
-            if i >= index:  # segments d'une autre passe : on ne mélange pas deux découpages
+            if i >= index:  # segments of another pass: two cuttings are not mixed
                 try:
                     os.remove(os.path.join(s.dir, f"{i}.m4s"))
                 except OSError:
@@ -533,7 +533,7 @@ class Transcoder:
             return "ffmpeg s'est arrêté"
 
     def playlist(self, sid):
-        """Playlist VOD complète."""
+        """Complete VOD playlist."""
         s = self.get(sid)
         if not s:
             raise StreamError("Flux expiré")
@@ -553,11 +553,11 @@ class Transcoder:
                 return path
             proc = s.proc
             if proc and proc.poll() is not None and proc is s.proc:
-                time.sleep(0.2)  # dernier renommage du fichier temporaire
+                time.sleep(0.2)  # last rename of the temporary file
                 if os.path.isfile(path):
                     return path
                 if proc is s.proc and s.hw:
-                    # la carte graphique a refusé (pilote, codec, mémoire) : on repart sur le processeur
+                    # the graphics card refused (driver, codec, memory): back to the processor
                     log.warning("Transcodage matériel (%s) en échec, repli sur le processeur : %s",
                                 s.hw["engine"], self._log_tail(s))
                     with s.lock:
@@ -581,8 +581,8 @@ class Transcoder:
             if not s.proc:
                 self._spawn(s, s.start_index)
             first = s.run_start
-        # l'en-tête est écrit d'un bloc mais sans fichier temporaire : on attend le premier segment
-        # de la passe (l'en-tête est alors forcément complet)
+        # the header is written in one go but without a temporary file: wait for the first segment
+        # of the pass (the header is then complete)
         deadline = time.time() + timeout
         while time.time() < deadline:
             if any(i >= first for i in s.produced()) or (s.proc and s.proc.poll() is not None):
@@ -607,7 +607,7 @@ class Transcoder:
                 current = produced[-1] if produced else s.run_start - 1
                 running = s.proc and s.proc.poll() is None
                 if not running or idx < s.run_start or idx > current + RESTART_GAP:
-                    # le lecteur a sauté : on relance ffmpeg là où il demande
+                    # the player jumped: ffmpeg is started again where it asks
                     self._spawn(s, idx)
             if s.paused:
                 self._resume(s)
@@ -656,7 +656,7 @@ class Transcoder:
                 "hw": s.hw["engine"] if s.hw else None}
 
     def processes(self):
-        """ffmpeg en cours : nombre et mémoire totale (Mo)."""
+        """Running ffmpegs: count and total memory (MB)."""
         with self.lock:
             procs = [s.proc for s in self.sessions.values() if s.proc and s.proc.poll() is None]
         return {"ffmpeg": len(procs), "ffmpeg_mb": sum(rss_mb(p) or 0 for p in procs)}

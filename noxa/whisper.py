@@ -1,16 +1,16 @@
-"""Sous-titres générés à partir de la voix (Whisper), pour les vidéos qui n'en ont pas.
+"""Subtitles generated from the voice (Whisper), for videos that have none.
 
-Trois façons de faire, choisies d'elles-mêmes dans cet ordre :
-- un service de transcription compatible avec l'API d'OpenAI (/v1/audio/transcriptions), indiqué par
-  l'administrateur : par exemple Speaches (faster-whisper) dans un conteneur à côté de Noxa, ou OpenAI
-  lui-même (l'audio quitte alors la maison) ;
-- le filtre « whisper » d'ffmpeg 8 (compilé avec whisper.cpp) ;
-- le programme whisper-cli de whisper.cpp.
-Pour les deux derniers, Noxa télécharge le modèle choisi (fichier ggml de whisper.cpp) dans data/whisper.
+Three ways, picked automatically in this order:
+- a transcription service compatible with OpenAI's API (/v1/audio/transcriptions), given by the
+  administrator: for example Speaches (faster-whisper) in a container next to Noxa, or OpenAI
+  itself (the audio then leaves the house);
+- ffmpeg 8's "whisper" filter (built with whisper.cpp);
+- whisper.cpp's whisper-cli program.
+For the last two, Noxa downloads the chosen model (a whisper.cpp ggml file) into data/whisper.
 
-La transcription est dans la langue parlée (celle de la piste audio) : Whisper ne traduit que vers l'anglais.
-C'est long : de quelques minutes à plus d'une heure de calcul pour un film selon le modèle et le processeur ;
-une seule à la fois, mise en pause pendant les lectures.
+The transcription is in the spoken language (that of the audio track): Whisper only translates to English.
+It is slow: from a few minutes to more than an hour of computing for a movie, depending on the model and the
+processor; one at a time, paused during playback.
 """
 import json
 import logging
@@ -34,7 +34,7 @@ log = logging.getLogger("noxa.whisper")
 
 MODELS = {"tiny": 75, "base": 142, "small": 466, "medium": 1500}  # Mo
 MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin"
-CHUNK = 600            # service distant : morceaux de 10 min (taille de fichier limitée par les API)
+CHUNK = 600            # remote service: 10 min chunks (file size limited by the APIs)
 USER_AGENT = "Noxa"
 
 
@@ -52,7 +52,7 @@ def to_srt(cues):
 
 
 def segments_to_cues(data, offset_ms=0):
-    """Réponse « verbose_json » (segments start/end en secondes) -> repères."""
+    """"verbose_json" answer (segments start/end in seconds) -> cues."""
     out = []
     for seg in (data or {}).get("segments") or []:
         try:
@@ -68,13 +68,13 @@ class Whisper:
     def __init__(self, ctx):
         self.ctx = ctx
         self.lock = threading.Lock()
-        self.queue = []          # identifiants des titres demandés à la main
+        self.queue = []          # ids of the titles asked for by hand
         self.current = None      # {"id", "title", "progress", "started"}
         self.wake = threading.Event()
-        self.model_job = None    # téléchargement d'un modèle en cours {"model", "done", "total", "error"}
+        self.model_job = None    # model download in progress {"model", "done", "total", "error"}
         self.thread = None
 
-    # ------------------------------------------------------------ réglages
+    # ------------------------------------------------------------ settings
     def conf(self):
         db = self.ctx.db
         return {"url": db.setting("whisper_url") or "", "key": db.setting("whisper_key") or "",
@@ -110,7 +110,7 @@ class Whisper:
             return False, "Indiquez un service de transcription (Paramètres → Sous-titres et son → Whisper)"
         return False, "Téléchargez un modèle Whisper (Paramètres → Sous-titres et son → Whisper)"
 
-    # ------------------------------------------------------------ modèles (whisper.cpp)
+    # ------------------------------------------------------------ models (whisper.cpp)
     def download_model(self, name):
         if name not in MODELS:
             raise WhisperError("Modèle inconnu")
@@ -149,7 +149,7 @@ class Whisper:
             job["finished"] = True
             self.ctx.db.release()
 
-    # ------------------------------------------------------------ choix de la piste
+    # ------------------------------------------------------------ choice of the track
     @staticmethod
     def audio_track(probe):
         audios = probe.get("audio") or []
@@ -157,7 +157,7 @@ class Whisper:
 
     @staticmethod
     def needs(probe):
-        """Langue à transcrire si le titre n'a aucun sous-titre complet dans la langue parlée, sinon None."""
+        """Language to transcribe when the title has no complete subtitle in the spoken language, otherwise None."""
         a = Whisper.audio_track(probe)
         if not a:
             return None
@@ -167,12 +167,12 @@ class Whisper:
         if lang and lang in have:
             return None
         if not lang and (probe.get("subs") or probe.get("external")):
-            return None  # langue parlée inconnue, mais déjà des sous-titres : on ne devine pas
+            return None  # spoken language unknown, but already some subtitles: no guessing
         return lang or "und"
 
-    # ------------------------------------------------------------ génération
+    # ------------------------------------------------------------ generation
     def generate(self, row, progress=lambda p: None, check=lambda: None):
-        """Transcrit la piste audio principale d'un film ou d'un épisode -> entrée de sous-titres ajoutée."""
+        """Transcribes the main audio track of a movie or an episode -> subtitle entry added."""
         if not row.get("key") or not os.path.isfile(row["key"]):
             raise WhisperError("Fichier introuvable")
         probe = json.loads(row["probe"] or "{}")
@@ -268,7 +268,7 @@ class Whisper:
                        *media.input_args(path), "-map", f"0:{index}", "-vn", "-ac", "1", "-ar", "16000",
                        "-c:a", "libmp3lame", "-b:a", "48k", chunk], timeout=600)
             if os.path.getsize(chunk) < 2048:
-                continue  # fin du fichier (durée annoncée approximative)
+                continue  # end of the file (announced duration is approximate)
             with open(chunk, "rb") as f:
                 audio = f.read()
             cues += self._post(url, c, audio, iso1, start * 1000)
@@ -299,19 +299,19 @@ class Whisper:
                 raise WhisperError("Le service de transcription refuse la clé d'API")
             if e.code not in (400, 422):
                 raise WhisperError(f"Service de transcription : erreur {e.code}")
-            try:  # format srt non proposé : segments en JSON
+            try:  # srt format not offered: segments in JSON
                 cues = segments_to_cues(json.loads(send("verbose_json") or b"{}"))
             except (urllib.error.URLError, OSError, ValueError) as e2:
                 raise WhisperError(f"Service de transcription : {getattr(e2, 'reason', e2)}")
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise WhisperError(f"Service de transcription injoignable : {getattr(e, 'reason', e)}")
-        if offset_ms:  # repères relatifs au morceau
+        if offset_ms:  # cues relative to the chunk
             for cue in cues:
                 cue["s"] += offset_ms
                 cue["e"] += offset_ms
         return cues
 
-    # ------------------------------------------------------------ demandes faites à la main
+    # ------------------------------------------------------------ requests made by hand
     def enqueue(self, item_id):
         with self.lock:
             if item_id not in self.queue and not (self.current and self.current["id"] == item_id):
@@ -356,7 +356,7 @@ class Whisper:
                         self.current = None
 
     def _pause(self):
-        """Pendant une lecture, le calcul attend (le processeur et le partage réseau servent d'abord à regarder)."""
+        """During a playback, the computing waits (the processor and the network share are for watching first)."""
         if self.backend() == "http":
             return
         while self.ctx.subtitles._streaming():

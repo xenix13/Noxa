@@ -1,7 +1,7 @@
-"""Noxa — assemblage du serveur : contexte partagé (base, scanner, lecture…) et application HTTP.
+"""Noxa: assembles the server, with its shared context (database, scanner, playback…) and its HTTP application.
 
-Les routes sont rangées par thème dans noxa/routes/ (comptes, bibliothèque, lecture, administration) et
-dans les modules des fonctions (collections_api, discover, tasks, livetv, syncplay).
+The routes are grouped by topic in noxa/routes/ (accounts, library, playback, administration) and in the feature
+modules (collections_api, discover, tasks, livetv, syncplay).
 """
 import hmac
 import logging
@@ -39,8 +39,8 @@ class Ctx:
         self.trust_proxy = trust_proxy
         for d in ("cache/img", "cache/orig", "cache/subs"):
             os.makedirs(os.path.join(data_dir, d), exist_ok=True)
-        self.restored = backup.apply_pending(data_dir)  # restauration préparée avant l'arrêt : avant d'ouvrir la base
-        self.restart = None  # fourni par __main__ : arrêt avec un code qui fait relancer Noxa par son superviseur
+        self.restored = backup.apply_pending(data_dir)  # restore prepared before the shutdown: before opening the database
+        self.restart = None  # provided by __main__: stop with an exit code that makes the supervisor start Noxa again
         self.db = DB(os.path.join(data_dir, "seance.db"))
         self.throttle = Throttle()
         self.lock = threading.Lock()
@@ -69,7 +69,7 @@ class Ctx:
         self.apps = apps.Apps(self)
         self.cold = cold.Cold(self)
         self.coldfree = coldfree.ColdFree(self)
-        self.http_port = None  # port de l'interface (fixé par __main__) : adresse locale des copies froides
+        self.http_port = None  # web port (set by __main__): local address of the cold copies
         for r in self.db.all("SELECT id, content_rating FROM items WHERE content_rating IS NOT NULL AND age IS NULL"):
             age = age_of(r["content_rating"])
             if age is not None:
@@ -78,7 +78,7 @@ class Ctx:
         if not self.db.setting("webhook_token"):
             self.db.set_setting("webhook_token", secrets.token_urlsafe(24))
         self.sub_locks = {}
-        self.update_latest = None  # version plus récente trouvée sur GitHub (indicateur pour les administrateurs)
+        self.update_latest = None  # newer version found on GitHub (indicator for administrators)
         self.update_checked = 0
         self.setup_code = None
         if not self.db.scalar("SELECT COUNT(*) FROM users"):
@@ -95,7 +95,7 @@ class Ctx:
         self.update_latest = latest if latest and update.newer(latest, __version__) else None
 
     def check_update(self):
-        """Vérification en arrière-plan (toutes les 6 h) : l'indicateur de la barre du haut."""
+        """Background check (every 6 h): the indicator in the top bar."""
         try:
             self.note_latest(update.check_latest()["latest"])
         except update.UpdateError as e:
@@ -113,14 +113,14 @@ class Ctx:
                 self.setting_int("max_transcodes", 1 if cpus <= 2 else 2))
 
     def viewing(self):
-        """Quelqu'un regarde-t-il en ce moment (lecture signalée il y a moins de 40 s) ?"""
+        """Is anyone watching right now (playback reported less than 40 s ago)?"""
         try:
             return bool(self.db.scalar("SELECT 1 FROM streams WHERE last_seen > ? LIMIT 1", (int(time.time()) - 40,)))
         finally:
             self.db.release()
 
     def hw(self):
-        """Transcodage matériel choisi par l'administrateur, ou None (processeur)."""
+        """Hardware transcoding chosen by the administrator, or None (processor)."""
         engine = self.db.setting("hw_engine", "none")
         if engine not in ("nvenc", "vaapi"):
             return None
@@ -128,7 +128,7 @@ class Ctx:
 
     def on_library_changed(self):
         try:
-            self.fed.relink_all()  # nouveaux titres : fusion avec ceux des serveurs liés
+            self.fed.relink_all()  # new titles: merged with those of the linked servers
         except Exception:
             log.exception("Fusion avec les serveurs liés")
         try:
@@ -137,12 +137,12 @@ class Ctx:
             log.exception("Tâches après le scan")
         try:
             if self.scanner.status().get("added", 0):
-                self.push.after_scan(self.x)  # nouveaux épisodes des séries suivies : notification push
+                self.push.after_scan(self.x)  # new episodes of followed shows: push notification
         except Exception:
             log.exception("Notifications push après le scan")
 
     def prefetch_missing_subtitles(self):
-        """Au démarrage : met en file les fichiers dont les sous-titres internes ne sont pas encore prêts."""
+        """At start-up: queues the files whose internal subtitles are not ready yet."""
         if self.db.setting("subs_prefetch", "1") != "1" and self.db.setting("trickplay", "1") != "1":
             return
         n = 0
@@ -156,20 +156,20 @@ class Ctx:
         self.db.release()
 
     def on_new_media(self, item_id, info):
-        """Nouveau fichier (ou fichier remplacé) : ses sous-titres sont exportés dès le scan, en tâche de fond."""
+        """New file (or replaced file): its subtitles are exported right after the scan, in the background."""
         if (self.db.setting("subs_prefetch", "1") == "1" and (text_tracks(info) or pgs_tracks(info))) or \
                 (self.db.setting("trickplay", "1") == "1" and info.get("video")):
             self.subtitles.enqueue(item_id)
 
 
 def build_app(ctx):
-    """Assemble l'application : contrôles d'accès communs, catalogue partagé, puis les routes par thème."""
-    x = ctx.x = types.SimpleNamespace()  # outils partagés entre les modules de routes (ctx.x : pour les tâches de fond)
+    """Assembles the application: common access checks, shared catalogue, then the routes by topic."""
+    x = ctx.x = types.SimpleNamespace()  # tools shared by the route modules (ctx.x: for background tasks)
     app = App()
     app.static_dir = ctx.static_dir
     db = ctx.db
     app.teardown.append(db.release)
-    # langue des messages : d'abord celle de l'interface (en-tête), précisée par le compte une fois connu
+    # language of the messages: first the interface's (header), refined by the account once known
     app.begin = lambda req: i18n.set_lang((req.headers.get("X-Lang") or "").strip())
     app.translate = i18n.tr
     app.default_lang = lambda: i18n.default_language(db)
@@ -184,8 +184,8 @@ def build_app(ctx):
     def before(req, opts):
         auth = opts.get("auth", "user")
         if auth == "dlna":
-            # serveur DLNA : pas de compte (les téléviseurs n'en ont pas), seulement s'il est activé et depuis le
-            # réseau local
+            # DLNA server: no account (TVs have none), only when it is turned on and from the
+            # local network
             if not ctx.dlna.enabled():
                 raise HTTPError(404, "Introuvable")
             if not dlna.is_local(req.client_ip):
@@ -196,14 +196,14 @@ def build_app(ctx):
             if not hmac.compare_digest(token, db.setting("webhook_token") or "\0"):
                 raise HTTPError(403, "Jeton invalide")
             return
-        # routes entre serveurs liés : uniquement sur leur port, par un serveur jumelé (ou avec une invitation)
+        # routes between linked servers: only on their port, by a paired server (or with an invitation)
         if auth == "peer" and not req.fed_peer or auth == "join" and not req.fed_listener:
             raise HTTPError(404, "Introuvable")
         if auth in ("peer", "join"):
             return
         if req.fed_peer:
-            # requête d'un serveur lié au nom d'un compte (le même, répliqué) : la lecture d'un élément de ce
-            # serveur depuis l'autre. Pas de cookie ni d'en-tête anti-CSRF : la requête est signée par le serveur.
+            # request from a linked server on behalf of an account (the same one, replicated): playing an item of this
+            # server from the other one. No cookie or anti-CSRF header: the request is signed by the server.
             remote_admin = federation.PEER_ADMIN_PATHS.match(req.path)
             if not (federation.PEER_USER_PATHS.match(req.path) or remote_admin):
                 raise HTTPError(403, "Non autorisé entre serveurs liés")
@@ -214,7 +214,7 @@ def build_app(ctx):
                 log.info("Administration depuis %s par %s : %s %s", req.fed_peer["name"], req.user["username"],
                          req.method, req.path)
         else:
-            # protection CSRF : un autre site ne peut pas ajouter cet en-tête sans l'accord du serveur (CORS)
+            # CSRF protection: another site cannot add this header without the server's consent (CORS)
             # (X-Seance: the same header under Noxa's former internal name, still sent by apps older than 4.5)
             if req.method != "GET" and "1" not in (req.headers.get("X-Noxa"), req.headers.get("X-Seance")):
                 raise HTTPError(403, "En-tête de requête manquant")
@@ -230,14 +230,14 @@ def build_app(ctx):
                 ctx.throttle.fail("setup:" + req.client_ip)
                 raise HTTPError(403, "Code d'installation invalide")
         if not req.fed_peer:
-            # paramètres d'un serveur lié choisi dans le sélecteur : la requête d'administration lui est transmise
+            # settings of a linked server picked in the server selector: the admin request is forwarded to it
             # X-Nexis-Server: the same header from pages cached before 4.5
             target = req.headers.get("X-Noxa-Server") or req.headers.get("X-Nexis-Server") or req.arg("_server")
             if target and req.path.startswith("/api/admin/") and not federation.LOCAL_ADMIN_ONLY.match(req.path):
                 if not (req.user and req.user["is_admin"]):
                     raise HTTPError(403, "Réservé aux administrateurs")
                 return ctx.fed.admin_relay(req, target)
-            # élément d'un serveur lié : la requête lui est relayée (ou il est prévenu)
+            # item of a linked server: the request is relayed to it (or it is told)
             return ctx.fed.intercept(req)
     app.before.append(before)
 
@@ -249,7 +249,7 @@ def build_app(ctx):
 
 
 def janitor(ctx, stop_event):
-    """Arrête les lectures abandonnées et purge les sessions (le reste est dans les tâches planifiées)."""
+    """Stops abandoned playback and purges sessions (the rest is in the scheduled tasks)."""
     while not stop_event.wait(30):
         db = ctx.db
         try:
@@ -261,7 +261,7 @@ def janitor(ctx, stop_event):
             ctx.live.reap()
             ctx.together.reap()
             ctx.downloads.reap()
-            ctx.health.tick()  # alertes pour les administrateurs (toutes les 5 min, en tâche de fond)
+            ctx.health.tick()  # alerts for administrators (every 5 min, in the background)
             if time.time() - ctx.update_checked > 6 * 3600:
                 ctx.update_checked = time.time()
                 threading.Thread(target=ctx.check_update, daemon=True).start()

@@ -1,12 +1,12 @@
-"""Sous-titres téléchargés depuis OpenSubtitles.com, sans outil à installer à côté (Bazarr…).
+"""Subtitles downloaded from OpenSubtitles.com, with no tool to install next to Noxa (Bazarr…).
 
-- Recherche : par l'empreinte du fichier (« moviehash » : taille + 64 Ko du début et de la fin, qui retrouve
-  les sous-titres faits pour cette sortie précise), et par l'identifiant TMDB du film ou de la série (saison
-  et épisode). Les résultats calés sur le fichier passent en premier.
-- Téléchargement : un compte OpenSubtitles (gratuit : 20 sous-titres par jour) et une clé d'API (« consumer »,
-  créée sur opensubtitles.com, rubrique API). Le compteur du jour est gardé pour ne pas dépasser le quota.
-- Les fichiers sont écrits dans data/subtitles/<titre>/ (jamais dans les dossiers de médias, montés en
-  lecture seule) et s'ajoutent aux sous-titres externes du titre ; un nouveau scan les garde.
+- Search: by the file's fingerprint ("moviehash": size + 64 KB from the start and the end, which finds
+  the subtitles made for this exact release), and by the TMDB id of the movie or the show (season
+  and episode). Results matched to the file come first.
+- Download: an OpenSubtitles account (free: 20 subtitles a day) and an API key ("consumer",
+  created on opensubtitles.com, API section). The day's counter is kept so as not to go over the quota.
+- Files are written in data/subtitles/<title>/ (never in the media folders, mounted
+  read-only) and added to the title's external subtitles; a new scan keeps them.
 """
 import json
 import logging
@@ -26,7 +26,7 @@ log = logging.getLogger("noxa.opensubs")
 
 API = env("OPENSUBTITLES_API", "https://api.opensubtitles.com/api/v1")
 USER_AGENT = f"Noxa v{VERSION}"
-# Noxa (ISO 639-2) -> OpenSubtitles (ISO 639-1, avec variantes pour le portugais et le chinois)
+# Noxa (ISO 639-2) -> OpenSubtitles (ISO 639-1, with variants for Portuguese and Chinese)
 TO_OS = {"fra": "fr", "eng": "en", "spa": "es", "deu": "de", "ita": "it", "por": "pt-PT", "jpn": "ja", "kor": "ko",
          "zho": "zh-CN", "rus": "ru", "ara": "ar", "nld": "nl", "pol": "pl", "tur": "tr", "swe": "sv", "dan": "da",
          "nor": "no", "fin": "fi", "hin": "hi", "tha": "th", "ces": "cs", "ell": "el", "heb": "he", "hun": "hu",
@@ -36,7 +36,7 @@ FROM_OS.update({"pt-BR": "por", "pb": "por", "pt": "por", "zh-TW": "zho", "zh": 
 LANGS = tuple(TO_OS)
 DOWNLOAD_HOST = re.compile(r"^(?:[a-z0-9-]+\.)*opensubtitles\.(?:com|org)$")
 MAX_FILE = 4 * 1024 * 1024
-FAIL_RETRY = 7 * 86400   # un titre sans résultat est recherché de nouveau au bout d'une semaine
+FAIL_RETRY = 7 * 86400   # a title without results is searched again after a week
 
 
 class SubsError(Exception):
@@ -44,7 +44,7 @@ class SubsError(Exception):
 
 
 def moviehash(path):
-    """Empreinte OpenSubtitles d'un fichier vidéo (16 chiffres hexadécimaux), ou None."""
+    """OpenSubtitles fingerprint of a video file (16 hexadecimal digits), or None."""
     try:
         size = os.path.getsize(path)
         if size < 131072:
@@ -67,7 +67,7 @@ class OpenSubtitles:
         self.lock = threading.Lock()
         self.token = None          # (jeton, serveur, expiration)
 
-    # ------------------------------------------------------------ réglages
+    # ------------------------------------------------------------ settings
     def conf(self):
         db = self.ctx.db
         try:
@@ -83,7 +83,7 @@ class OpenSubtitles:
         return bool(c["key"] and c["user"] and c["password"])
 
     def quota_left(self):
-        """Téléchargements restants aujourd'hui (None : inconnu)."""
+        """Downloads left today (None: unknown)."""
         c = self.conf()
         if c["remaining"] < 0 or (c["reset"] and time.time() > c["reset"]):
             return None
@@ -103,10 +103,10 @@ class OpenSubtitles:
             token, host = self.login()
             headers["Authorization"] = f"Bearer {token}"
             if host and base is None and urllib.parse.urlsplit(API).hostname == "api.opensubtitles.com":
-                base = f"https://{host}/api/v1"  # compte VIP : serveur dédié indiqué à la connexion
+                base = f"https://{host}/api/v1"  # VIP account: dedicated server given at sign-in
         url = (base or API) + path
         if params:
-            url += "?" + urllib.parse.urlencode(sorted(params.items()))  # ordre fixe : demandé par l'API (cache)
+            url += "?" + urllib.parse.urlencode(sorted(params.items()))  # fixed order: required by the API (cache)
         data = None
         if body is not None:
             data = json.dumps(body).encode()
@@ -153,7 +153,7 @@ class OpenSubtitles:
         return token, host
 
     def check(self):
-        """Essai des réglages (connexion au compte) -> {downloads restants, niveau}."""
+        """Tries the settings (signs in to the account) -> {downloads left, level}."""
         self.forget_login()
         self.login()
         r = self._request("GET", "/infos/user", auth=True)
@@ -165,7 +165,7 @@ class OpenSubtitles:
 
     # ------------------------------------------------------------ recherche
     def query_for(self, row):
-        """Paramètres de recherche d'un film ou d'un épisode."""
+        """Search parameters of a movie or an episode."""
         db = self.ctx.db
         q = {}
         if row["type"] == "episode":
@@ -219,16 +219,16 @@ class OpenSubtitles:
         return out
 
     def best(self, results, lang, hi=False):
-        """Le sous-titre à prendre automatiquement pour une langue : complet (pas seulement les passages en langue
-        étrangère), écrit par une personne, sans indications pour sourds et malentendants sauf si demandé."""
+        """The subtitle to take automatically for a language: complete (not only the parts in a foreign
+        language), written by a person, without hearing-impaired cues unless asked for."""
         cands = [s for s in results if s["lang"] == lang and not s["forced"] and not s["machine"]]
         if not hi:
             cands = [s for s in cands if not s["hi"]] or cands
         return cands[0] if cands else None
 
-    # ------------------------------------------------------------ téléchargement
+    # ------------------------------------------------------------ download
     def download(self, file_id):
-        """-> contenu SRT (octets). Compte un téléchargement sur le quota du jour."""
+        """-> SRT content (bytes). Counts one download against the day's quota."""
         left = self.quota_left()
         if left is not None and left <= 0:
             raise SubsError("Quota OpenSubtitles du jour atteint : nouvel essai demain")
@@ -258,7 +258,7 @@ class OpenSubtitles:
 
     # ------------------------------------------------------------ enregistrement
     def save(self, row, result, data):
-        """Écrit le sous-titre et l'ajoute aux sous-titres externes du titre -> entrée ajoutée."""
+        """Writes the subtitle and adds it to the title's external subtitles -> entry added."""
         return attach(self.ctx, row, f"{result['lang']}-{int(result['file_id'])}.srt", data, result["lang"],
                       {"sdh": bool(result.get("hi")), "dl": "opensubtitles", "file_id": int(result["file_id"]),
                        "release": result.get("release") or ""})
@@ -274,7 +274,7 @@ class OpenSubtitles:
                 return False
             probe["external"] = keep
             db.run("UPDATE items SET probe=? WHERE id=?", (json.dumps(probe), row["id"]))
-            # pas de nouvelle recherche automatique pour cette langue : la personne n'en voulait pas
+            # no new automatic search for this language: the person did not want it
             lang = mark or next((e["lang"] for e in ext if e.get("path") == path), "")
             db.run("INSERT INTO subs_attempts(item_id, lang, at, result) VALUES(?,?,?, 'removed') ON CONFLICT(item_id, lang) "
                    "DO UPDATE SET at=excluded.at, result='removed'", (row["id"], lang, int(time.time())))
@@ -287,13 +287,13 @@ class OpenSubtitles:
     # ------------------------------------------------------------ automatique
     @staticmethod
     def missing_langs(probe, langs):
-        """Langues voulues pour lesquelles le titre n'a aucun sous-titre complet (intégré ou externe)."""
+        """Wanted languages for which the title has no complete subtitle (embedded or external)."""
         have = {s.get("lang") for s in probe.get("subs", []) if not s.get("forced")}
         have |= {e.get("lang") for e in probe.get("external", []) if not e.get("forced")}
         return [l for l in langs if l not in have]
 
     def fetch_missing(self, row, langs, hi=False):
-        """Cherche et télécharge les langues manquantes d'un titre -> (téléchargés, essayés)."""
+        """Searches and downloads a title's missing languages -> (downloaded, tried)."""
         db = self.ctx.db
         probe = json.loads(row["probe"] or "{}")
         want = self.missing_langs(probe, langs)
@@ -313,8 +313,8 @@ class OpenSubtitles:
 
 
 def attach(ctx, row, name, data, lang, extra):
-    """Sous-titre obtenu par Noxa (OpenSubtitles, Whisper) : écrit dans data/subtitles/<titre>/ et ajouté aux
-    sous-titres externes du titre -> entrée ajoutée."""
+    """Subtitle obtained by Noxa (OpenSubtitles, Whisper): written in data/subtitles/<title>/ and added to the
+    title's external subtitles -> entry added."""
     db = ctx.db
     folder = os.path.join(ctx.data_dir, "subtitles", str(int(row["id"])))
     os.makedirs(folder, exist_ok=True)
@@ -335,7 +335,7 @@ def attach(ctx, row, name, data, lang, extra):
 
 
 def keep_downloaded(old_probe, new_external):
-    """Nouveau scan : les sous-titres téléchargés (encore présents) restent à la suite de ceux du dossier."""
+    """New scan: the downloaded subtitles (still there) stay after those of the folder."""
     try:
         old = json.loads(old_probe or "{}").get("external", []) if isinstance(old_probe, str) else (old_probe or {}).get("external", [])
     except ValueError:
@@ -377,7 +377,7 @@ def register(app, ctx, x):
                 v = str(b[field] or "").strip() if field != "password" else str(b[field] or "")
                 if len(v) > limit or (field == "key" and v and not re.match(r"^[A-Za-z0-9_-]+$", v)):
                     raise HTTPError(400, "Réglage OpenSubtitles invalide")
-                if v or field != "password":  # mot de passe vide : on garde celui enregistré
+                if v or field != "password":  # empty password: the saved one is kept
                     db.set_setting(key, v or None)
         if "langs" in b:
             langs = b["langs"]
@@ -409,7 +409,7 @@ def register(app, ctx, x):
 
     @app.route("GET", f"/api/items/{RK}/opensubtitles")
     def search(req):
-        """Sous-titres proposés pour ce fichier (les langues demandées, ou celles du réglage et du compte)."""
+        """Subtitles offered for this file (the languages asked for, or those of the settings and the account)."""
         r = local_item(req)
         langs = [l for l in (req.arg("langs") or "").split(",") if l in TO_OS][:6]
         if not langs:

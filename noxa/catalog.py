@@ -1,4 +1,4 @@
-"""Catalogue partagé par les routes : droits d'accès, cartes des éléments, état de lecture, préférences."""
+"""Catalogue shared by the routes: access rights, item cards, playback state, preferences."""
 import json
 import re
 import threading
@@ -42,11 +42,11 @@ def sort_order(sort, direction, uid):
             "i.sort_title COLLATE NOCASE", args + args)
 WATCHED_RATIO = 0.90
 MIN_RESUME_MS = 30_000
-PREPARE_WINDOW_MS = 4 * 60 * 1000  # au départ : sous-titres prêts sur les 4 minutes qui suivent
-EXTERNAL_BASE = 1000  # identifiants des sous-titres externes
+PREPARE_WINDOW_MS = 4 * 60 * 1000  # at the start: subtitles ready for the next 4 minutes
+EXTERNAL_BASE = 1000  # ids of the external subtitles
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 LANG = re.compile(r"^[a-z]{2,3}$")
-# rangées de l'accueil et liens de la barre du haut : ordre et masquage propres à chaque utilisateur
+# home rows and top bar links: order and hiding specific to each user
 LAYOUT_KEY = re.compile(r"^(together|continue|watchlist|suggest|because|short|unfinished|home|discover|live|lib:\d{1,9}|pin:\d{1,6})$")
 IMG_PATH = re.compile(r"^/library/metadata/(\d{1,12})/(thumb|art)/\d{1,14}$")
 LANG_NAMES = {"fra": "Français", "eng": "Anglais", "jpn": "Japonais", "deu": "Allemand", "spa": "Espagnol",
@@ -74,13 +74,13 @@ DEFAULT_PREFS = {
     "auto_skip_recap": False,
     "next_delay": 5,
     "accent": "#ffa43a",
-    "theme": "dark",  # un des THEMES, ou "t:<id>" : un thème installé (my_themes)
-    "my_themes": [],  # thèmes installés depuis le magasin, importés ou créés (décrits en entier : valables hors ligne)
-    "ui_style": "classic",  # mise en page : classique, verre, barre latérale, épuré, cinéma, arrondi
+    "theme": "dark",  # one of the THEMES, or "t:<id>": an installed theme (my_themes)
+    "my_themes": [],  # themes installed from the store, imported or created (fully described: they work offline)
+    "ui_style": "classic",  # layout: classic, glass, sidebar, minimal, cinema, rounded
     "poster_size": "m",
     "text_size": "m",
     "density": "normal",
-    # cartes des films et séries : l'essentiel affiché, la note en option
+    # movie and show cards: the essentials shown, the rating as an option
     "card_titles": True,
     "card_progress": True,
     "card_watched": True,
@@ -88,15 +88,15 @@ DEFAULT_PREFS = {
     "card_new": True,
     "card_rating": False,
     "wallpaper": "",
-    "wallpaper_mode": "title",  # title (image d'un titre), color, gradient, daily (un de vos titres chaque jour), upload
+    "wallpaper_mode": "title",  # title (picture of a title), color, gradient, daily (one of your titles each day), upload
     "wallpaper_color": "#1d2a44",
     "wallpaper_gradient": "aurora",
     "hidden_libraries": [],
     "show_continue": True,
     "hide_spoilers": False,
     "home_pins": [],
-    "home_hero": "auto",  # auto (reprise, sinon ajout récent), recent, resume, random, watchlist, none
-    # langues par bibliothèque : {id : {audio_lang, sub_mode, sub_lang}} (sinon les langues générales)
+    "home_hero": "auto",  # auto (resume, otherwise a recent addition), recent, resume, random, watchlist, none
+    # languages per library: {id: {audio_lang, sub_mode, sub_lang}} (otherwise the general languages)
     "lib_langs": {},
     "lib_sorts": {},  # library id -> {"sort": one of SORTS, "dir": "asc" | "desc"}: last sort picked there
     # lecteur
@@ -105,10 +105,10 @@ DEFAULT_PREFS = {
     "default_speed": 1,
     "remember_volume": True,
     "night_audio": False,
-    # contenu et vie privée
+    # content and privacy
     "hidden_genres": [],
     "private_mode": False,
-    # notifications : nouveaux épisodes ; séries dont on ne veut plus être prévenu ; heures calmes
+    # notifications: new episodes; shows you no longer want to hear about; quiet hours
     "notify_episodes": True,
     "muted_shows": [],
     "quiet_hours": "",
@@ -122,7 +122,7 @@ DEFAULT_PREFS = {
 
 THEMES = ("dark", "oled", "midnight", "light", "sepia", "contrast", "auto")
 MAX_MY_THEMES = 20
-# styles d'interface : changent la mise en page (barre de navigation, cartes, panneaux, bannière), pas seulement les couleurs
+# interface styles: they change the layout (navigation bar, cards, panels, banner), not only the colours
 UI_STYLES = ("classic", "glass", "sidebar", "minimal", "cinema", "rounded")
 GRADIENTS = ("aurora", "sunset", "ocean", "forest", "berry", "ember", "steel", "mint")
 PIN_TYPES = ("collection", "playlist", "genre", "filter")
@@ -130,7 +130,7 @@ FILTER_KEYS = {"genre", "watched", "decade", "duration", "res", "hdr", "audio", 
 
 
 def valid_filter_ref(ref):
-    """Filtres d'une bibliothèque épinglés sur l'accueil : « watched=unwatched&decade=1990 »."""
+    """Library filters pinned on the home screen: "watched=unwatched&decade=1990"."""
     import urllib.parse
     if not isinstance(ref, str) or not 1 <= len(ref) <= 300:
         return False
@@ -142,7 +142,7 @@ def valid_filter_ref(ref):
 
 
 def valid_pins(v):
-    """Rangées épinglées sur l'accueil : [{id, type, ref, lib?, title}] (20 au plus)."""
+    """Rows pinned on the home screen: [{id, type, ref, lib?, title}] (20 at most)."""
     if not isinstance(v, list) or len(v) > 20:
         return False
     ids = set()
@@ -247,7 +247,7 @@ def validate_prefs(data):
             ok = v in UI_STYLES
         elif k == "poster_size":
             ok = v in ("s", "m", "l")
-        elif k == "wallpaper":  # image de fond du profil : l'arrière-plan d'un film ou d'une série
+        elif k == "wallpaper":  # profile background picture: the backdrop of a movie or a show
             ok = v == "" or isinstance(v, str) and bool(IMG_PATH.match(v)) and IMG_PATH.match(v).group(2) == "art"
         elif k == "hidden_libraries":
             ok = isinstance(v, list) and len(v) <= 100 and all(isinstance(x, str) and x.isdigit() for x in v)
@@ -264,16 +264,16 @@ def validate_prefs(data):
     return out
 
 
-# Les compteurs d'épisodes et de saisons ne sont calculés que pour les séries et les saisons (CASE est évalué
-# paresseusement par SQLite) : une liste de films n'exécute aucune sous-requête.
+# Episode and season counts are only computed for shows and seasons (CASE is evaluated
+# lazily by SQLite): a list of movies runs no sub-query.
 _COUNTS = ("CASE i.type WHEN 'show' THEN (SELECT COUNT(*) FROM items x WHERE x.show_id=i.id AND x.type='episode') "
            "WHEN 'season' THEN (SELECT COUNT(*) FROM items x WHERE x.parent_id=i.id AND x.type='episode') ELSE 0 END AS leaves, "
            "CASE WHEN i.type='show' THEN (SELECT COUNT(*) FROM items y WHERE y.parent_id=i.id AND y.type='season') "
            "ELSE 0 END AS child_count ")
 _JOINS = "FROM items i LEFT JOIN items p ON p.id=i.parent_id LEFT JOIN items sh ON sh.id=i.show_id "
 ITEM_SQL = "SELECT i.*, p.idx AS parent_idx, COALESCE(sh.age, i.age) AS eff_age, " + _COUNTS + _JOINS
-# Pour les grilles (bibliothèque, recherche, ajouts récents) : seulement ce qu'affiche une carte, sans
-# l'analyse ffprobe ni la distribution, qui pèsent plusieurs Ko par élément.
+# For grids (library, search, recent additions): only what a card shows, without
+# the ffprobe analysis or the cast, which weigh several KB per item.
 CARD_SQL = ("SELECT i.id, i.type, i.title, i.year, i.idx, i.img_version, i.duration_ms, i.library_id, i.rating, "
             "i.content_rating, i.added_at, i.show_id, i.parent_id, i.released, i.extra_kind, i.age, i.summary, "
             "p.idx AS parent_idx, COALESCE(sh.age, i.age) AS eff_age, json_extract(i.probe, '$.video.height') AS vh, "
@@ -337,13 +337,13 @@ def stream_lists(probe):
 
 
 def install(ctx, x):
-    """Ajoute à x les outils de lecture du catalogue (fermetures sur la base de données)."""
+    """Adds the catalogue reading tools to x (closures over the database)."""
     db = ctx.db
 
     # -------------------------------------------------------------- catalog
     def libraries_all():
-        # bibliothèque d'un serveur lié : comme les autres (server : son nom, pour un badge discret) ; absente si elle
-        # est fusionnée avec l'une des nôtres ou si le serveur est injoignable
+        # library of a linked server: like the others (server: its name, for a discreet badge); left out when it
+        # is merged with one of ours or when the server cannot be reached
         return [{"id": str(r["id"]), "title": r["name"], "type": r["kind"], "server": r["server"]}
                 for r in db.all("SELECT l.id, l.name, l.kind, p.name AS server FROM libraries l "
                                 "LEFT JOIN peers p ON p.id=l.peer_id LEFT JOIN libraries t ON t.id=l.merge_into "
@@ -372,8 +372,8 @@ def install(ctx, x):
         return row
 
     def age_filter(user, hidden=True):
-        """Clause SQL des listes : contrôle parental (profil limité à un âge) et titres que la personne a masqués
-        pour elle (hidden=False : on les garde, ex. pour savoir qu'un titre est déjà sur le serveur)."""
+        """SQL clause of the lists: parental control (profile limited to an age) and titles the person hid
+        for themselves (hidden=False: they are kept, e.g. to know that a title is already on the server)."""
         sql, args = "", []
         if user.get("max_age") is not None:
             sql, args = (f" AND ({AGE_EXPR} <= ? OR ({AGE_EXPR} IS NULL AND ?=1))",
@@ -383,14 +383,14 @@ def install(ctx, x):
             args = [*args, user["id"]]
         genres = get_prefs(user["id"]).get("hidden_genres") if hidden else None
         if genres:
-            # genres masqués pour soi (ceux de la série pour un épisode)
+            # genres hidden for oneself (the show's for an episode)
             sql += (" AND NOT EXISTS (SELECT 1 FROM json_each((SELECT g0.genres FROM items g0 WHERE g0.id=COALESCE(i.show_id, i.id))) gg "
                     f"WHERE gg.value IN ({','.join('?' * len(genres))}))")
             args = [*args, *genres]
         return sql, args
 
     def hidden_ids(user):
-        """Films et séries masqués par cette personne (dans les listes ; leur fiche reste accessible)."""
+        """Movies and shows hidden by this person (in the lists; their page stays reachable)."""
         return {r["item_id"] for r in db.all("SELECT item_id FROM hidden_items WHERE user_id=?", (user["id"],))}
 
     def visible(user, row):
@@ -430,7 +430,7 @@ def install(ctx, x):
              "section": str(r["library_id"]), "rating": r["rating"], "content_rating": r["content_rating"],
              "added": r["added_at"]}
         if t in ("movie", "episode"):
-            # définition et HDR pour les badges des cartes (colonnes légères des grilles, sinon l'analyse du fichier)
+            # resolution and HDR for the card badges (light columns of the grids, otherwise the file analysis)
             vh, vt = r.get("vh"), r.get("vt")
             if vh is None and r.get("probe"):
                 try:
@@ -443,7 +443,7 @@ def install(ctx, x):
             if vt in ("smpte2084", "arib-std-b67"):
                 c["hdr"] = True
         if t in ("season", "episode"):
-            c["title"] = tr(r["title"])  # titres créés par le scan : « Saison 2 », « Spéciaux », « Épisode 3 »
+            c["title"] = tr(r["title"])  # titles created by the scan: "Saison 2", "Spéciaux", "Épisode 3"
         if t == "episode":
             s = show_of(r["show_id"]) or {"id": r["show_id"], "title": "?", "img_version": 1}
             c.update(show=s["title"], show_id=str(r["show_id"]), season_id=str(r["parent_id"]),
@@ -535,7 +535,7 @@ def install(ctx, x):
                     db.run("DELETE FROM watchlist WHERE user_id=? AND item_id=?", (uid, int(c["show_id"])))
             recent = db.scalar("SELECT MAX(watched_at) FROM history WHERE user_id=? AND rating_key=?",
                                (uid, c["id"]))
-            if (not recent or now - recent > 3 * 3600) and not get_prefs(uid).get("private_mode"):  # mode privé : pas d'historique
+            if (not recent or now - recent > 3 * 3600) and not get_prefs(uid).get("private_mode"):  # private mode: no history
                 db.run("INSERT INTO history(user_id,rating_key,watched_at,section_id,meta) VALUES(?,?,?,?,?)",
                        (uid, c["id"], now, c.get("section"), json.dumps(c, ensure_ascii=False)))
         else:
@@ -545,7 +545,7 @@ def install(ctx, x):
     def undo_watched(uid, c, position_ms=None):
         now = int(time.time())
         try:
-            pos = max(0, int(position_ms or 0))  # la reprise d'avant, renvoyée par la page
+            pos = max(0, int(position_ms or 0))  # the previous resume point, sent back by the page
         except (TypeError, ValueError):
             pos = 0
         with db.tx():
@@ -554,8 +554,8 @@ def install(ctx, x):
             db.run("DELETE FROM history WHERE user_id=? AND rating_key=? AND watched_at>?", (uid, c["id"], now - 600))
 
     def markers_for(row):
-        """Repères d'intro / de générique : posés à la main, sinon chapitres nommés, sinon empreinte audio,
-        sinon chapitres de la durée d'une chanson (estimation)."""
+        """Intro / credits markers: set by hand, otherwise named chapters, otherwise audio fingerprint,
+        otherwise chapters as long as a song (estimate)."""
         probe = json.loads(row["probe"] or "{}")
         out = chapter_markers(probe.get("chapters") or [], probe.get("duration") or (row["duration_ms"] or 0) / 1000)
         for r in db.all("SELECT kind,start_ms,end_ms,source FROM markers WHERE rating_key=?", (str(row["id"]),)):

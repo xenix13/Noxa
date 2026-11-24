@@ -1,4 +1,4 @@
-"""Reconnaissance des noms de fichiers : films, séries, animes."""
+"""File name recognition: movies, shows, anime."""
 import os
 import re
 import unicodedata
@@ -32,7 +32,7 @@ LANG_WORDS = {
 
 
 def fold(text):
-    """Minuscules sans accents, pour la recherche et les tris."""
+    """Lower case without accents, for search and sorting."""
     text = unicodedata.normalize("NFKD", text or "")
     return "".join(c for c in text if not unicodedata.combining(c)).lower().strip()
 
@@ -46,7 +46,7 @@ def sort_title(title):
 
 
 def clean_title(raw):
-    """« The.Matrix.1999.1080p.BluRay » -> (« The Matrix », 1999)."""
+    """"The.Matrix.1999.1080p.BluRay" -> ("The Matrix", 1999)."""
     s = _BRACKETS.sub(" ", raw)
     year = None
     m = re.search(rf"[\s._(\[-]({_YEAR})(?:[\s._)\]-]|$)", " " + s)
@@ -63,7 +63,7 @@ def clean_title(raw):
 
 
 def parse_movie(path, root):
-    """Titre et année d'un film à partir du fichier et/ou de son dossier."""
+    """Title and year of a movie, from the file and / or its folder."""
     base = os.path.splitext(os.path.basename(path))[0]
     parent = os.path.basename(os.path.dirname(path))
     if os.path.normpath(os.path.dirname(path)) != os.path.normpath(root):
@@ -86,7 +86,7 @@ _SXE = [
 ]
 _EP_ONLY = [
     re.compile(r"(?<![a-z0-9])(?:e|ep|episode|épisode)[\s._-]*(\d{1,4})(?![0-9p])", re.I),
-    # anime : « [Groupe] Titre - 12 [1080p] » ou « Titre - 012v2 »
+    # anime: "[Group] Title - 12 [1080p]" or "Title - 012v2"
     re.compile(r"\s-\s(\d{1,4})(?:v\d)?(?=\s|$|\[|\()"),
     re.compile(r"^(\d{1,4})(?:v\d)?(?:[\s._-]|$)"),
 ]
@@ -102,7 +102,7 @@ def season_from_dir(name):
 
 
 def parse_episode(path, root):
-    """-> dict(show, season, episode) ou None si aucun numéro d'épisode n'est trouvé."""
+    """-> dict(show, season, episode), or None when no episode number is found."""
     rel = os.path.relpath(path, root)
     parts = rel.split(os.sep)
     base = os.path.splitext(parts[-1])[0]
@@ -143,7 +143,7 @@ def parse_episode(path, root):
 
 
 def sub_language(sub_path, video_path):
-    """« Film.fr.forced.srt » -> ('fra', forced=True)."""
+    """"Movie.fr.forced.srt" -> ('fra', forced=True)."""
     vbase = os.path.splitext(os.path.basename(video_path))[0]
     sbase = os.path.splitext(os.path.basename(sub_path))[0]
     rest = sbase[len(vbase):] if sbase.startswith(vbase) else sbase
