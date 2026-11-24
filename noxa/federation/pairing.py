@@ -46,8 +46,8 @@ class PairingMixin:
         return r
 
     def join_preview(self, text):
-        """Avant de lier : les identifiants présents sur les deux serveurs, pour que l'administrateur dise s'il
-        s'agit de la même personne (fusion) ou de deux personnes (le compte d'ici est renommé)."""
+        """Before linking: the usernames present on both servers, so that the administrator says whether
+        they are the same person (merge) or two people (the account here is renamed)."""
         data, target = self._invite_target(text)
         r = self._call_target(data, target, "/fed/join/preview", {"token": data["t"]})
         remote = {str(u.get("username") or "").casefold(): u for u in r.get("users") or [] if isinstance(u, dict)}
@@ -55,7 +55,7 @@ class PairingMixin:
         conflicts = []
         for u in self.ctx.db.all("SELECT username, display_name, uid FROM users ORDER BY username COLLATE NOCASE"):
             other = remote.get(u["username"].casefold())
-            if other and other.get("uid") != u["uid"]:  # même uid : déjà le même compte (serveurs déjà liés avant)
+            if other and other.get("uid") != u["uid"]:  # same uid: already the same account (servers already linked before)
                 base = f"{u['username'][:31 - len(suffix)]}-{suffix}"
                 conflicts.append({"username": u["username"], "display_name": u["display_name"],
                                   "remote_display_name": str(other.get("display_name") or "")[:50],
@@ -64,8 +64,8 @@ class PairingMixin:
         return {"server": str(r.get("name") or "Noxa")[:40], "conflicts": conflicts, "remote": list(remote)}
 
     def join(self, text, address=None, accounts=None):
-        """Ce serveur rejoint celui qui a créé l'invitation. accounts : {identifiant: {"merge": bool, "rename": nom}}
-        pour les identifiants présents des deux côtés ; sans choix, ils restent séparés (le nôtre est renommé)."""
+        """This server joins the one that created the invitation. accounts: {username: {"merge": bool, "rename": name}}
+        for the usernames present on both sides; without a choice they stay separate (ours is renamed)."""
         address = valid_address(address)
         db = self.ctx.db
         preview = self.join_preview(text)
@@ -114,8 +114,8 @@ class PairingMixin:
         return peer
 
     def _save_peer(self, uid, name, address, fingerprint, secret, version):
-        """Nouveau serveur lié, ou nouveau jumelage d'un serveur déjà connu (délié de son côté seulement, ou
-        réinstallé) : son ancien secret et son ancien certificat sont remplacés."""
+        """New linked server, or new pairing of a server already known (unlinked on its side only, or
+        reinstalled): its old secret and old certificate are replaced."""
         db = self.ctx.db
         name, version = str(name or "Noxa")[:40], str(version or "")[:20]
         pid = db.scalar("SELECT id FROM peers WHERE uid=?", (uid,))
@@ -125,7 +125,7 @@ class PairingMixin:
         else:
             pid = db.run("INSERT INTO peers(uid,name,address,fingerprint,secret,created_at,version) VALUES(?,?,?,?,?,?,?)",
                          (uid, name, address, fingerprint, secret, int(time.time()), version)).lastrowid
-        self.reset_link(pid)  # (un identifiant de serveur supprimé peut être réattribué)
+        self.reset_link(pid)  # (a deleted server id can be given again)
         return pid
 
     def _invite_row(self, req):
@@ -140,13 +140,13 @@ class PairingMixin:
         return row
 
     def accept_preview(self, req):
-        """Avec une invitation valide : nos identifiants, pour repérer ceux qui existent aussi chez l'autre."""
+        """With a valid invitation: our usernames, to spot those that also exist on the other one."""
         self._invite_row(req)
         return {"name": self.name(), "users": [{"username": u["username"], "display_name": u["display_name"], "uid": u["uid"]}
                                                for u in self.ctx.db.all("SELECT username, display_name, uid FROM users")]}
 
     def accept_join(self, req):
-        """Demande d'adhésion d'un autre serveur, avec le jeton d'une invitation de ce serveur."""
+        """Join request of another server, with the token of an invitation of this server."""
         db = self.ctx.db
         row = self._invite_row(req)
         b = req.json()
@@ -178,8 +178,8 @@ class PairingMixin:
             except (FedError, OSError):
                 pass
         db = self.ctx.db
-        db.run("DELETE FROM items WHERE peer_id=?", (pid,))  # y compris ceux rangés dans nos bibliothèques (fusion)
-        db.run("DELETE FROM peers WHERE id=?", (pid,))  # et ses bibliothèques recopiées
+        db.run("DELETE FROM items WHERE peer_id=?", (pid,))  # including those placed in our libraries (merge)
+        db.run("DELETE FROM peers WHERE id=?", (pid,))  # and its copied libraries
         self._has_peers = None
         self.reset_link(pid)
         log.warning("Serveur lié retiré : %s", peer["name"])

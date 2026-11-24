@@ -14,7 +14,7 @@ def register(app, ctx, x):
     fed = ctx.fed
     fed.attach(app, x)
 
-    # ------------------------------------------------------------ entre serveurs (port des serveurs liés)
+    # ------------------------------------------------------------ between servers (linked-servers port)
     @app.route("POST", "/fed/join", auth="join")
     def fed_join(req):
         return fed.accept_join(req)
@@ -31,7 +31,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/fed/reverse", auth="peer")
     def fed_reverse(req):
-        """Tunnel : le serveur lié nous laisse cette connexion pour que nous lui envoyions nos requêtes."""
+        """Tunnel: the linked server leaves us this connection so that we send it our requests."""
         hd = req.handler
         hd.wfile.write(b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: nexis-tunnel\r\nConnection: Upgrade\r\n\r\n")
         hd.wfile.flush()
@@ -77,7 +77,7 @@ def register(app, ctx, x):
 
     @app.route("POST", "/fed/tmdb", auth="peer")
     def fed_tmdb(req):
-        """Clé TMDB prêtée à un serveur lié : il nous fait chercher ses métadonnées (lecture seule)."""
+        """TMDB key lent to a linked server: it has us look up its metadata (read only)."""
         b = req.json()
         path, params = str(b.get("path") or ""), b.get("params") or {}
         if not TMDB_PATH.match(path) or not isinstance(params, dict) or len(params) > 20 or not all(
@@ -97,7 +97,7 @@ def register(app, ctx, x):
 
     @app.route("POST", "/fed/seerr", auth="peer")
     def fed_seerr(req):
-        """Seerr prêté à un serveur lié : statuts, comptes Seerr et nouvelles demandes, rien d'autre."""
+        """Seerr lent to a linked server: statuses, Seerr accounts and new requests, nothing else."""
         b = req.json()
         method, path = b.get("method"), str(b.get("path") or "")
         if not any(method == m and rx.match(path) for m, rx in SEERR_ALLOWED):
@@ -126,10 +126,10 @@ def register(app, ctx, x):
         except FedError as e:
             raise HTTPError(404 if "introuvable" in str(e) else 502, str(e))
 
-    # ------------------------------------------------------------ administration des serveurs liés depuis celui-ci
+    # ------------------------------------------------------------ administration of the linked servers from this one
     @app.route("GET", "/api/admin/servers", auth="admin")
     def admin_servers(req):
-        """Serveurs que cet administrateur peut régler depuis ici : celui-ci, et les serveurs liés."""
+        """Servers this administrator can set up from here: this one, and the linked servers."""
         return {"local": {"id": "", "name": fed.name(), "version": __version__},
                 "peers": [{"id": str(p["id"]), "name": p["name"], "online": bool(p["online"]), "version": p["version"]}
                           for p in fed.peers()],
@@ -137,7 +137,7 @@ def register(app, ctx, x):
 
     @app.route("PUT", "/api/admin/servers", auth="admin")
     def admin_servers_put(req):
-        """Accepter ou non d'être administré depuis un serveur lié (réglage propre à chaque serveur, fait sur place)."""
+        """Accept or not to be administered from a linked server (setting specific to each server, made on site)."""
         if "remote_admin" in req.json():
             db.set_setting("fed_remote_admin", "1" if req.json()["remote_admin"] else "0")
         return admin_servers(req)
@@ -202,7 +202,7 @@ def register(app, ctx, x):
 
     @app.route("PUT", r"/api/admin/federation/libraries/(?P<lid>\d{1,6})", auth="admin")
     def admin_federation_library(req):
-        """Bibliothèque reçue d'un serveur lié : nouvelle bibliothèque, ou fusionnée avec l'une des nôtres."""
+        """Library received from a linked server: new library, or merged with one of ours."""
         lib = db.one("SELECT * FROM libraries WHERE id=? AND peer_id IS NOT NULL", (int(req.params["lid"]),))
         if not lib:
             raise HTTPError(404, "Bibliothèque introuvable")
@@ -214,7 +214,7 @@ def register(app, ctx, x):
             if t["kind"] != lib["kind"]:
                 raise HTTPError(400, "Fusion impossible entre une bibliothèque de films et une de séries")
             target = t["id"]
-            # qui a accès à notre bibliothèque a accès à ce qui y est fusionné (et le serveur lié l'apprend)
+            # who has access to our library has access to what is merged into it (and the linked server learns it)
             db.run("INSERT OR IGNORE INTO user_libraries(user_id, section_id) SELECT user_id, ? FROM user_libraries "
                    "WHERE section_id=?", (str(lib["id"]), str(target)))
         else:

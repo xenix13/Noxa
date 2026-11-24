@@ -32,7 +32,7 @@ class SyncMixin:
             caps = hello.get("caps") if isinstance(hello.get("caps"), dict) else {}
             st.update(online=True, latency=int((time.monotonic() - t0) * 1000), fails=0,
                       tmdb=bool(caps.get("tmdb")), seerr=bool(caps.get("seerr")), load=int(hello.get("load") or 0),
-                      # écart entre son horloge et la nôtre (regarder ensemble : positions datées par son horloge)
+                      # gap between its clock and ours (watch together: positions dated by its clock)
                       clock=int(hello["now_ms"] - (w0 + w1) / 2) if isinstance(hello.get("now_ms"), (int, float)) else 0)
             self.set_online(pid, True)
             self.pull_users(peer)
@@ -52,7 +52,7 @@ class SyncMixin:
         except (FedError, OSError, ValueError, KeyError, TypeError, http.client.HTTPException) as e:
             fails = self.status.get(pid, {}).get("fails", 0) + 1
             st.update(online=False, fails=fails)
-            if fails >= 2:  # deux échecs de suite (une trentaine de secondes) : ses titres sont masqués
+            if fails >= 2:  # two failures in a row (about thirty seconds): its titles are hidden
                 self.set_online(pid, False)
             log.info("Serveur lié %s : %s", pid, e)
             try:
@@ -66,17 +66,17 @@ class SyncMixin:
             lk.release()
 
     def _snapshot(self):
-        """Lecture cohérente (une transaction) : le numéro de changement rendu couvre exactement ce qui est envoyé."""
+        """Consistent read (one transaction): the change number returned covers exactly what is sent."""
         c = self.ctx.db.conn()
         c.execute("BEGIN")
         return c
 
     # comptes ---------------------------------------------------------------
-    # ------------------------------------------------------------------ préférences des comptes
-    # Elles suivent le compte sur les serveurs liés. Ce qui désigne une bibliothèque (lib:N, bibliothèques masquées,
-    # rangées épinglées d'un genre ou de filtres) passe par l'identifiant commun des bibliothèques, le fond d'écran
-    # par la désignation commune de l'élément. Les rangées épinglées d'une collection ou d'une playlist restent
-    # propres à chaque serveur (elles n'existent que sur le leur).
+    # ------------------------------------------------------------------ account preferences
+    # They follow the account on the linked servers. What points to a library (lib:N, hidden libraries,
+    # pinned rows of a genre or of filters) goes through the libraries' shared id, the wallpaper
+    # through the item's shared reference. Pinned rows of a collection or a playlist stay
+    # specific to each server (they only exist on theirs).
     LIB_KEYS = ("home_order", "home_hidden", "nav_order", "nav_hidden")
 
     def prefs_out(self, user_id):
@@ -109,12 +109,12 @@ class SyncMixin:
         wp = p.get("wallpaper") or ""
         m = re.match(r"^/library/metadata/(\d{1,12})/art/(\d{1,14})$", wp)
         out["wallpaper"] = {"ref": self.ref_of(int(m.group(1))), "v": m.group(2)} if m else wp
-        if "muted_shows" in p:  # séries dont on ne veut plus être prévenu : désignées pour tous les serveurs
+        if "muted_shows" in p:  # shows you no longer want to hear about: named for all the servers
             out["muted_shows"] = [r for r in (self.ref_of(int(i)) for i in p["muted_shows"] if str(i).isdigit()) if r]
-        return {"_v": 1, **out}  # présent même vide : un retour aux réglages par défaut se propage aussi
+        return {"_v": 1, **out}  # present even when empty: going back to the default settings spreads too
 
     def prefs_in(self, user_id, incoming):
-        """Préférences reçues d'un serveur lié, traduites pour ce serveur, puis vérifiées une à une."""
+        """Preferences received from a linked server, translated for this server, then checked one by one."""
         from ..catalog import validate_prefs
         db = self.ctx.db
         if not isinstance(incoming, dict):
@@ -128,7 +128,7 @@ class SyncMixin:
                 local = {}
         ids = {}
         for r in db.all("SELECT id, uid, merge_into FROM libraries WHERE uid IS NOT NULL"):
-            ids[r["uid"]] = str(r["merge_into"] or r["id"])  # bibliothèque fusionnée : celle qu'on affiche ici
+            ids[r["uid"]] = str(r["merge_into"] or r["id"])  # merged library: the one shown here
         p = {k: v for k, v in incoming.items() if k != "_v"}
         mine = [pin for pin in local.get("home_pins") or [] if pin.get("type") in ("collection", "playlist")]
         used = {pin["id"] for pin in mine}
@@ -159,7 +159,7 @@ class SyncMixin:
         for k in self.LIB_KEYS:
             if isinstance(incoming.get(k), list):
                 lst = [v for v in (key(x) for x in incoming[k]) if v]
-                # rangées propres à ce serveur (collections, playlists épinglées) : gardées à leur place
+                # rows specific to this server (pinned collections, playlists): kept in their place
                 lst += [x for x in local.get(k) or [] if x.startswith("pin:") and int(x[4:]) in {q["id"] for q in mine}
                         and x not in lst]
                 p[k] = list(dict.fromkeys(lst))
@@ -176,7 +176,7 @@ class SyncMixin:
             try:
                 clean.update(validate_prefs({k: v}))
             except HTTPError:
-                continue  # réglage inconnu ici (version différente) ou devenu invalide : on garde celui d'ici
+                continue  # setting unknown here (other version) or no longer valid: ours is kept
         if not clean.get("home_pins"):
             clean.pop("home_pins", None)
         db.run("INSERT INTO prefs(user_id,data) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data",
@@ -217,9 +217,9 @@ class SyncMixin:
             self.fetch_avatar(peer, lid, uid, ver)
 
     def apply_users(self, peer, users, gone, mode="lww"):
-        """Comptes reçus d'un serveur lié. mode : « lww » (le plus récent gagne), « keep » (adhésion d'un serveur :
-        nos comptes gardent leurs données), « adopt » (nous rejoignons : les comptes de même identifiant prennent
-        celles du serveur rejoint). -> avatars à récupérer [(id local, uid, version)]."""
+        """Accounts received from a linked server. mode: "lww" (the most recent wins), "keep" (a server joins:
+        our accounts keep their data), "adopt" (we join: accounts with the same username take
+        those of the server joined). -> avatars to fetch [(local id, uid, version)]."""
         db = self.ctx.db
         avatars, logout = [], []
         with db.tx():
@@ -230,18 +230,18 @@ class SyncMixin:
                             and USERNAME.match(u["username"]) and isinstance(u.get("password_hash"), str)):
                         continue
                     if db.scalar("SELECT 1 FROM fed_gone WHERE kind='user' AND ref=?", (u["uid"],)):
-                        continue  # supprimé ici : la suppression l'emporte
+                        continue  # deleted here: the deletion wins
                     rev = int(u.get("rev") or 0)
                     local = db.one("SELECT * FROM users WHERE uid=?", (u["uid"],))
                     force = adopted = renamed_in = False
                     if not local:
                         same = find_user(db, u["username"])
                         if same and mode == "keep":
-                            continue  # adhésion : l'autre serveur a déjà renommé ou choisi de fusionner
+                            continue  # joining: the other server already renamed or chose to merge
                         if same and mode == "lww":
-                            # créé des deux côtés avant la synchronisation : deux personnes, deux comptes. Les deux
-                            # serveurs renomment le même (le plus grand uid) ; le changement repart vers l'autre.
-                            # nouveau nom tiré du compte renommé : le même choix sur les deux serveurs
+                            # created on both sides before the synchronisation: two people, two accounts. Both
+                            # servers rename the same one (the highest uid); the change goes back to the other.
+                            # new name derived from the renamed account: the same choice on both servers
                             loser = same["username"] if same["uid"] > u["uid"] else u["username"]
                             new = free_username(db, loser)
                             if same["uid"] > u["uid"]:
@@ -252,14 +252,14 @@ class SyncMixin:
                                 renamed_in = True
                                 self.notice(same["username"], new)
                             same = None
-                        if same:  # adhésion, même personne d'après l'administrateur : les données du serveur rejoint
+                        if same:  # joining, same person according to the administrator: the data of the server joined
                             db.run("UPDATE users SET uid=? WHERE id=?", (u["uid"], same["id"]))
                             local = dict(same, uid=u["uid"])
                             force, adopted = True, True
                     if local and not force and (local["rev"] or 0) >= rev:
                         if adopted:
-                            # notre version est la plus récente : elle repart vers l'autre serveur sous l'uid commun,
-                            # sinon chacun garderait la sienne (deux mots de passe pour un même compte)
+                            # our version is the most recent: it goes back to the other server under the shared uid,
+                            # otherwise each would keep its own (two passwords for the same account)
                             db.run("UPDATE users SET rev=rev WHERE id=?", (local["id"],))
                         continue
                     fields = {f: u.get(f) for f in USER_FIELDS}
@@ -273,17 +273,17 @@ class SyncMixin:
                         fields["max_age"] = None
                     for f in LIMIT_FIELDS:
                         if f not in u:
-                            fields.pop(f)  # serveur d'une version plus ancienne : nos limites restent
+                            fields.pop(f)  # server of an older version: our limits stay
                         elif f == "bedtime":
                             fields[f] = u[f] if isinstance(u[f], str) and BEDTIME.match(u[f]) else None
                         elif not isinstance(u[f], int) or isinstance(u[f], bool) or u[f] <= 0:
                             fields[f] = None
                     if local:
                         if mode == "adopt" and local["is_admin"]:
-                            fields["is_admin"] = 1  # on ne perd pas l'administration de ce serveur en le liant
+                            fields["is_admin"] = 1  # linking a server does not lose its administration
                         other = find_user(db, fields["username"])
                         if other and other["id"] != local["id"]:
-                            continue  # identifiant pris par un autre compte ici : réglé au prochain changement
+                            continue  # username taken by another account here: settled at the next change
                         sets = ",".join(f"{k}=?" for k in fields)
                         db.run(f"UPDATE users SET {sets}, rev=? WHERE id=?", [*fields.values(), rev, local["id"]])
                         lid = local["id"]
@@ -295,7 +295,7 @@ class SyncMixin:
                         lid = db.run(f"INSERT INTO users({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
                                      [u["uid"], rev, int(u.get("created_at") or time.time()), *fields.values()]).lastrowid
                         if renamed_in:
-                            db.run("UPDATE users SET rev=rev WHERE id=?", (lid,))  # le nouveau nom repart vers l'autre
+                            db.run("UPDATE users SET rev=rev WHERE id=?", (lid,))  # the new name goes back to the other
                         old_avatar = None
                     db.run("DELETE FROM user_libraries WHERE user_id=?", (lid,))
                     db.run("DELETE FROM fed_pending_libs WHERE user_id=?", (lid,))
@@ -305,10 +305,10 @@ class SyncMixin:
                         lib = db.scalar("SELECT id FROM libraries WHERE uid=?", (luid,))
                         if lib:
                             db.run("INSERT OR IGNORE INTO user_libraries(user_id,section_id) VALUES(?,?)", (lid, str(lib)))
-                        else:  # bibliothèque pas encore reçue (catalogue d'un serveur lié) : posée à son arrivée
+                        else:  # library not received yet (catalogue of a linked server): set when it arrives
                             db.run("INSERT OR IGNORE INTO fed_pending_libs(user_id,uid) VALUES(?,?)", (lid, luid))
                     if isinstance(u.get("prefs"), dict) and u["prefs"]:
-                        self.prefs_in(lid, u["prefs"])  # thème, langues, accueil… : les mêmes sur chaque serveur
+                        self.prefs_in(lid, u["prefs"])  # theme, languages, home…: the same on each server
                     if fields["avatar_ver"] != old_avatar or (fields["avatar_ver"] and not self.has_avatar(lid)):
                         avatars.append((lid, u["uid"], fields["avatar_ver"]))
                 for uid in gone:
@@ -323,7 +323,7 @@ class SyncMixin:
         return avatars
 
     def notice(self, old, new):
-        """Compte renommé pour éviter un doublon d'identifiant : signalé dans Serveurs liés."""
+        """Account renamed to avoid a duplicate username: shown in Linked servers."""
         log.warning("Serveurs liés : identifiant %s créé sur deux serveurs, l'un des comptes devient %s", old, new)
         db = self.ctx.db
         try:
@@ -366,8 +366,8 @@ class SyncMixin:
 
     # catalogue -------------------------------------------------------------
     def _backfill(self, table):
-        """Numéros de changement des lignes modifiées quand aucun serveur n'était lié (séries avant saisons
-        avant épisodes : un élément arrive toujours après son parent)."""
+        """Change numbers of the rows changed while no server was linked (shows before seasons
+        before episodes: an item always arrives after its parent)."""
         db = self.ctx.db
         if table == "items":
             where, order, key = "peer_id IS NULL AND fseq IS NULL", \
@@ -388,7 +388,7 @@ class SyncMixin:
         c = self._snapshot()
         try:
             clock = db.scalar("SELECT n FROM fed_clock")
-            # photothèques : pas partagées entre serveurs (photos personnelles, et rien à y fusionner)
+            # photo libraries: not shared between servers (personal photos, and nothing to merge)
             rows = db.all("SELECT * FROM items WHERE peer_id IS NULL AND fseq>? AND type NOT IN ('photo','album','book') "
                           "ORDER BY fseq LIMIT ?", (since, limit))
             more = len(rows) == limit
@@ -446,7 +446,7 @@ class SyncMixin:
                     lid = db.run("INSERT INTO libraries(name,kind,paths,position,created_at,uid,peer_id,remote_id) "
                                  "VALUES(?,?,'[]',?,?,?,?,?)",
                                  (name, kind, 1000 + int(l.get("position") or 0), int(time.time()), luid, pid, rid)).lastrowid
-                    # comptes qui avaient déjà accès à cette bibliothèque (reçus avant elle)
+                    # accounts that already had access to this library (received before it)
                     db.run("UPDATE fed_clock SET applying=1")
                     db.run("INSERT OR IGNORE INTO user_libraries(user_id,section_id) SELECT user_id, ? FROM fed_pending_libs "
                            "WHERE uid=?", (str(lid), luid))
@@ -455,7 +455,7 @@ class SyncMixin:
             if data.get("libraries") is not None:
                 for r in db.all("SELECT id, remote_id FROM libraries WHERE peer_id=?", (pid,)):
                     if r["remote_id"] not in seen:
-                        db.run("DELETE FROM items WHERE src_lib=?", (r["id"],))  # y compris ceux rangés ailleurs (fusion)
+                        db.run("DELETE FROM items WHERE src_lib=?", (r["id"],))  # including those placed elsewhere (merge)
                         db.run("DELETE FROM libraries WHERE id=?", (r["id"],))
             libmap = {r["remote_id"]: r["id"] for r in db.all("SELECT id, remote_id FROM libraries WHERE peer_id=?", (pid,))}
             for it in data.get("items") or []:
@@ -465,10 +465,10 @@ class SyncMixin:
                     continue
                 vals = {k: v for k, v in it.items() if k in cols}
                 parent, show = self.local_item(pid, it.get("parent_id")), self.local_item(pid, it.get("show_id"))
-                # place d'origine ; la place affichée (fusion, serveur éteint) est décidée par relink()
+                # original place; the place shown (merge, server off) is decided by relink()
                 vals.update(src_lib=lib, src_parent=parent, src_show=show)
                 if vals.get("meta_state") == "pending":
-                    vals["meta_state"] = "done"  # les métadonnées se cherchent chez le serveur d'origine
+                    vals["meta_state"] = "done"  # metadata is looked up on the origin server
                 cur = self.local_item(pid, rid)
                 if cur:
                     sets = ",".join(f"{k}=?" for k in vals)
@@ -502,13 +502,13 @@ class SyncMixin:
             self.relink(p["id"])
 
     def relink(self, pid):
-        """Place affichée des éléments reçus d'un serveur lié.
+        """Place shown for the items received from a linked server.
 
-        - Bibliothèque non fusionnée : telle quelle (une bibliothèque de plus).
-        - Fusionnée avec une bibliothèque de ce serveur : un titre que nous avons aussi (même identifiant TMDB, IMDb,
-          TVDB, ou même titre et même année) est masqué et devient une seconde copie du nôtre (alias_of) ; une saison
-          ou un épisode qui nous manque se range sous notre série. Le reste rejoint notre bibliothèque.
-        - Serveur injoignable : tout retourne dans sa bibliothèque, masquée ; nos titres restent.
+        - Library not merged: as is (one more library).
+        - Merged with a library of this server: a title we also have (same TMDB, IMDb or
+          TVDB id, or same title and year) is hidden and becomes a second copy of ours (alias_of); a season
+          or an episode we lack goes under our show. The rest joins our library.
+        - Server unreachable: everything goes back to its library, hidden; our titles stay.
         """
         db = self.ctx.db
         peer = db.one("SELECT online FROM peers WHERE id=?", (pid,))
@@ -532,7 +532,7 @@ class SyncMixin:
                         continue
                     for key in self._match_keys(r):
                         hit = index.get(key)
-                        # même titre et même année, mais deux films différents chez TMDB (remake) : pas le même
+                        # same title and year, but two different movies at TMDB (remake): not the same
                         if hit and not (key[1] == "title" and r["tmdb_id"] and hit["tmdb_id"]
                                         and r["tmdb_id"] != hit["tmdb_id"]):
                             alias[r["id"]] = hit["id"]
@@ -575,7 +575,7 @@ class SyncMixin:
             db.run("UPDATE peers SET online=? WHERE id=?", (1 if online else 0, pid))
             log.warning("Serveur lié %s %s", pid, "de nouveau joignable" if online else "injoignable : ses titres sont masqués")
             if online and getattr(self.ctx, "images", None):
-                self.ctx.images.forget_missing()  # ses images sont redemandées
+                self.ctx.images.forget_missing()  # its pictures are asked for again
             self.relink(pid)
 
     # progression -----------------------------------------------------------
@@ -614,14 +614,14 @@ class SyncMixin:
                     users[r["user"]] = db.scalar("SELECT id FROM users WHERE uid=?", (str(r["user"]),))
                 uid = users[r["user"]]
                 item = self.local_item(peer["id"], r["rating_key"])
-                if item:  # titre fusionné avec l'un des nôtres : la progression va sur le nôtre
+                if item:  # title merged with one of ours: the progress goes to ours
                     item = db.scalar("SELECT COALESCE(alias_of, id) FROM items WHERE id=?", (item,))
                 if not uid or not item:
                     continue
                 rk = str(item)
                 cur = db.one("SELECT updated_at FROM progress WHERE user_id=? AND rating_key=?", (uid, rk))
                 if cur and cur["updated_at"] > int(r["updated_at"] or 0):
-                    continue  # plus récent ici (regardé depuis ce serveur)
+                    continue  # more recent here (watched from this server)
                 if not cur:
                     row = db.one(CARD_SQL + "WHERE i.id=?", (item,))
                     x.upsert_meta(uid, x.card(row))

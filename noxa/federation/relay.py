@@ -14,7 +14,7 @@ from .common import ADMIN_ITEM, ADMIN_STREAM, DOWNLOAD_JOB, FedError, ITEM_SUB, 
 
 
 class RelayMixin:
-    # ------------------------------------------------------------------ relais (appareil -> serveur qui a le fichier)
+    # ------------------------------------------------------------------ relay (device -> server that has the file)
     def mirror(self, rk):
         return self.ctx.db.one("SELECT id, peer_id, remote_id, type FROM items WHERE id=? AND peer_id IS NOT NULL",
                                (int(rk),))
@@ -26,7 +26,7 @@ class RelayMixin:
             return dest
         try:
             peer = self.peer(item["peer_id"])
-            if not peer["online"]:  # serveur lié injoignable : pas d'attente, l'image viendra à son retour
+            if not peer["online"]:  # linked server unreachable: no waiting, the picture will come when it is back
                 return None
             self.ctx.db.release()
             resp, close = self.request(peer, "GET", f"/fed/img/{int(item['remote_id'])}/{kind}?w={w}&h={h}", timeout=10)
@@ -55,7 +55,7 @@ class RelayMixin:
         if req.method in ("POST", "PUT"):
             length = int(req.headers.get("Content-Length") or 0) if str(req.headers.get("Content-Length") or "0").isdigit() else 0
             if STREAMED_UPLOAD.match(path.split("?")[0]) and length > MAX_BODY:
-                # gros fichier (archive de sauvegarde) : transmis par morceaux, sans tout garder en mémoire
+                # big file (backup archive): passed on in chunks, without keeping it all in memory
                 body = _Limited(req.handler.rfile, length)
                 headers["Content-Length"] = str(length)
                 req._body = b""
@@ -80,8 +80,8 @@ class RelayMixin:
                         length=int(length) if length and length.isdigit() else None, headers=out, on_close=close)
 
     def admin_relay(self, req, target):
-        """Paramètres d'un serveur lié, choisis dans le sélecteur de serveur : la requête d'administration lui est
-        transmise telle quelle, au nom du même administrateur (il vérifie lui-même ses droits)."""
+        """Settings of a linked server, picked in the server selector: the admin request is passed
+        on as is, on behalf of the same administrator (it checks the rights itself)."""
         try:
             pid = int(target)
             peer = self.peer(pid)
@@ -92,7 +92,7 @@ class RelayMixin:
         return self.relay(req, pid, req.path)
 
     def active_source(self, user_id, rk):
-        """Copie d'un serveur lié en cours de lecture par ce compte pour cet élément (la plus récente)."""
+        """Copy of a linked server being played by this account for this item (the most recent)."""
         with self.lock:
             for e in reversed(list(self.proxied.values())):
                 if e[1] == user_id and e[2] == int(rk):
@@ -100,12 +100,12 @@ class RelayMixin:
         return None
 
     def intercept(self, req):
-        """Requête d'un appareil connecté à ce serveur, portant sur un élément d'un serveur lié : relayée.
-        -> Response, ou None si la route locale s'en charge (éventuellement après avoir prévenu le serveur lié)."""
+        """Request from a device connected to this server, about an item of a linked server: relayed.
+        -> Response, or None when the local route handles it (possibly after telling the linked server)."""
         if not self.has_peers():
             return None
         if not req.user:
-            # flux d'un serveur lié lu par une TV (sans session) : relayé si ce flux a été lancé pour elle
+            # stream of a linked server played by a TV (no session): relayed when this stream was started for it
             m = STREAM.match(req.path) if req.method == "GET" else None
             entry = self.proxied.get(m.group("sid")) if m else None
             row = self.ctx.db.one("SELECT params FROM streams WHERE id=?", (m.group("sid"),)) if entry else None
@@ -138,7 +138,7 @@ class RelayMixin:
                 if r:
                     x.require_item(req.user, m.group(1))
                     return self.relay(req, r["peer_id"], f"/api/items/{r['remote_id']}/{m.group(2)}")
-                # titre fusionné lu depuis la copie d'un serveur lié : sous-titres, aperçus, chapitres de cette copie
+                # merged title played from a linked server's copy: subtitles, previews, chapters of that copy
                 e = self.active_source(req.user["id"], m.group(1))
                 if e:
                     x.require_item(req.user, m.group(1))
@@ -195,10 +195,10 @@ class RelayMixin:
             raise HTTPError(400, "Cet élément vient d'un serveur lié : modifiez-le sur ce serveur")
         return None
 
-    # téléchargements (hors ligne) -------------------------------------------
+    # downloads (offline) -------------------------------------------
     def download(self, req):
-        """Titre d'un serveur lié, ou présent seulement là-bas : le téléchargement est préparé par lui et relayé.
-        Un titre dont ce serveur a le fichier se télécharge d'ici (rien ne transite par la liaison)."""
+        """Title of a linked server, or only present there: the download is prepared by it and relayed.
+        A title whose file this server has is downloaded from here (nothing goes through the link)."""
         b = req.json()
         rk = str(b.get("id") or "")
         if not rk.isdigit():
@@ -216,7 +216,7 @@ class RelayMixin:
             raise HTTPError(503, "Aucune copie de ce titre n'est disponible pour l'instant")
         c = cands[0]
         fwd = dict(self.remap(b, row, c) if c["id"] != row["id"] else b, id=str(c["remote_id"]))
-        if "burn" in b and b.get("burn") is not None:  # sous-titres à incruster : la même langue dans cette copie
+        if "burn" in b and b.get("burn") is not None:  # subtitles to burn in: the same language in this copy
             fwd["burn"] = self.remap({"subtitle": b["burn"]}, row, c).get("subtitle") or None
         peer = self.peer(c["peer_id"])
         db.release()
@@ -247,9 +247,9 @@ class RelayMixin:
         data["item_id"] = str(entry[2])
         return json_response(data)
 
-    # choix de la copie ------------------------------------------------------
+    # choice of the copy ------------------------------------------------------
     def sources(self, row):
-        """Copies lisibles d'un titre : la nôtre (si le fichier est là) et celles des serveurs liés joignables."""
+        """Playable copies of a title: ours (when the file is here) and those of the reachable linked servers."""
         if row["peer_id"] is not None:
             return [row]
         out = [row] if row["key"] and os.path.isfile(row["key"]) else []
@@ -261,9 +261,9 @@ class RelayMixin:
         return stream_lists(json.loads(row["probe"] or "{}"))
 
     def rank(self, req, row, cands, b):
-        """La copie qui a la langue voulue (audio, puis sous-titres demandés) si une seule l'a ; puis celle d'un
-        serveur qui n'est pas déjà chargé (assez de lectures en cours) ; puis la meilleure qualité (définition,
-        puis débit) ; à égalité, celle du serveur le moins occupé, puis la nôtre."""
+        """The copy that has the wanted language (audio, then the subtitles asked for) when only one has it; then the one of a
+        server that is not already loaded (enough streams running); then the best quality (resolution,
+        then bitrate); when equal, the least busy server's, then ours."""
         x, uid = self.x, req.user["id"]
         audio0, subs0 = self._tracks(row)
         tp = x.track_prefs(uid, row) or {}
@@ -285,7 +285,7 @@ class RelayMixin:
         return sorted(cands, key=score, reverse=True)
 
     def remap(self, b, row, c):
-        """Pistes choisies sur la fiche (celles de notre copie) -> les mêmes langues dans la copie retenue."""
+        """Tracks chosen on the title page (those of our copy) -> the same languages in the copy picked."""
         if c["id"] == row["id"]:
             return b
         audio0, subs0 = self._tracks(row)
@@ -318,11 +318,11 @@ class RelayMixin:
         x, db = self.x, self.ctx.db
         r = db.one("SELECT id, peer_id FROM items WHERE id=?", (int(rk),))
         if not r or (r["peer_id"] is None and not db.scalar("SELECT 1 FROM items WHERE alias_of=? LIMIT 1", (r["id"],))):
-            self._drop_proxied(old, req.user)  # flux relayé remplacé par une lecture locale : on arrête l'autre
+            self._drop_proxied(old, req.user)  # relayed stream replaced by a local playback: the other one is stopped
             return None
         row = x.require_item(req.user, rk)
         cands = self.sources(row)
-        # même titre relancé (saut, changement de piste ou de qualité) : même copie, ses pistes
+        # same title started again (seek, track or quality change): same copy, its tracks
         e = self.proxied.get(old) if old else None
         sticky = None
         if e and e[2] == row["id"]:
@@ -331,7 +331,7 @@ class RelayMixin:
             sticky = next((c for c in cands if c["peer_id"] is None), None)
         order = [sticky] + [c for c in cands if c is not sticky] if sticky else self.rank(req, row, cands, b)
         if not order and row["peer_id"] is None:
-            return None  # aucune copie : la route locale explique (fichier introuvable)
+            return None  # no copy: the local route explains (file not found)
         error = None
         for c in order:
             body = b if c is sticky else self.remap(b, row, c)
@@ -354,7 +354,7 @@ class RelayMixin:
         fwd.pop("playlist", None)
         e = self.proxied.get(old) if old else None
         if old and not e:
-            x.stop_stream(old, uid)  # flux local remplacé par celui du serveur lié
+            x.stop_stream(old, uid)  # local stream replaced by the linked server's
             fwd.pop("replace", None)
         elif e and e[0] != peer["id"]:
             self._drop_proxied(old, req.user)
@@ -375,9 +375,9 @@ class RelayMixin:
             raise HTTPError(502, "Réponse inattendue du serveur lié")
         with self.lock:
             if e and e[0] == peer["id"]:
-                self.proxied.pop(old, None)  # remplacé chez lui par le nouveau flux
+                self.proxied.pop(old, None)  # replaced there by the new stream
             self.proxied[sid] = (peer["id"], uid, row["id"], c["remote_id"])
-            if not (e and e[0] == peer["id"]):  # une lecture de plus chez lui, d'ici sa prochaine annonce
+            if not (e and e[0] == peer["id"]):  # one more stream there, until its next announcement
                 st = self.status.setdefault(peer["id"], {})
                 st["load"] = int(st.get("load") or 0) + 1
         if old and e:

@@ -19,7 +19,7 @@ from .common import FedError, HEX32, IDLE_TUNNELS, Pool, SYNC_EVERY, TUNNEL_TTL,
 
 
 class LinksMixin:
-    # ------------------------------------------------------------------ identité
+    # ------------------------------------------------------------------ identity
     def uid(self):
         db = self.ctx.db
         v = db.setting("server_uid")
@@ -35,7 +35,7 @@ class LinksMixin:
         return os.path.isfile(self.cert) and os.path.isfile(self.key)
 
     def ensure_cert(self):
-        """Certificat propre à ce serveur, créé au premier jumelage (clé EC P-256, valable 100 ans)."""
+        """Certificate of this server, created at the first pairing (EC P-256 key, valid 100 years)."""
         if self.ready():
             return
         os.makedirs(self.dir, mode=0o700, exist_ok=True)
@@ -64,20 +64,20 @@ class LinksMixin:
         return self._fp
 
     def local_address(self):
-        """Adresse de ce serveur proposée dans les invitations (réglable par l'administrateur)."""
+        """Address of this server offered in invitations (can be set by the administrator)."""
         manual = self.ctx.db.setting("fed_address")
         if manual:
             return manual
         ip = "127.0.0.1"
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.connect(("192.0.2.1", 9))  # aucune donnée envoyée : sert à connaître l'adresse locale de sortie
+                s.connect(("192.0.2.1", 9))  # no data sent: used to learn the local outgoing address
                 ip = s.getsockname()[0]
         except OSError:
             pass
         return f"{ip}:{self.port}"
 
-    # --------------------------------------------------------------- démarrage
+    # --------------------------------------------------------------- start-up
     def attach(self, app, x):
         self.x = x
         self.handler = make_handler(app, fed=self)
@@ -143,7 +143,7 @@ class LinksMixin:
                 self.spawn_tunnels(p["id"])
             self.sync(p["id"])
 
-    # ------------------------------------------------------------------ serveurs liés
+    # ------------------------------------------------------------------ linked servers
     def peers(self):
         return self.ctx.db.all("SELECT * FROM peers ORDER BY name COLLATE NOCASE")
 
@@ -163,7 +163,7 @@ class LinksMixin:
         return None
 
     def user_for(self, req):
-        """Compte au nom duquel le serveur lié fait la requête (même compte, répliqué)."""
+        """Account on whose behalf the linked server makes the request (same account, replicated)."""
         uid = req.headers.get("X-Fed-User") or ""
         if not HEX32.match(uid):
             return None
@@ -177,7 +177,7 @@ class LinksMixin:
     def _client_context(self):
         c = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         c.check_hostname = False
-        c.verify_mode = ssl.CERT_NONE  # la confiance vient de l'empreinte épinglée, vérifiée juste après
+        c.verify_mode = ssl.CERT_NONE  # trust comes from the pinned fingerprint, checked right after
         c.minimum_version = ssl.TLSVersion.TLSv1_2
         return c
 
@@ -196,7 +196,7 @@ class LinksMixin:
         return s
 
     def _open(self, peer, timeout):
-        """Connexion vers un serveur lié : tunnel qu'il nous a ouvert, sinon connexion directe."""
+        """Connection to a linked server: the tunnel it opened to us, otherwise a direct connection."""
         pool = self.pools.get(peer.get("id"))
         got = pool.take(0) if pool else None
         if got:
@@ -221,8 +221,8 @@ class LinksMixin:
         try:
             return self._request(peer, method, path, body, headers, user, timeout)
         except FedError as e:
-            # connexion de tunnel morte (l'autre serveur a changé d'adresse IP) : la requête n'est pas arrivée,
-            # on la refait une fois par une autre connexion
+            # dead tunnel connection (the other server changed IP address): the request did not arrive,
+            # it is sent again once through another connection
             if getattr(e, "retry", False):
                 return self._request(peer, method, path, body, headers, user, timeout)
             raise
@@ -282,7 +282,7 @@ class LinksMixin:
         return out
 
     def send_later(self, peer_id, method, path, data, user):
-        """Progression, arrêts, « vu » : envoyés au serveur lié dans l'ordre, sans faire attendre l'appareil."""
+        """Progress, stops, "watched": sent to the linked server in order, without making the device wait."""
         with self.lock:
             q = self.queues.get(peer_id)
             if q is None:
@@ -319,7 +319,7 @@ class LinksMixin:
             threading.Thread(target=self._tunnel, args=(pid, gen), daemon=True, name="fed-tunnel").start()
 
     def reset_link(self, pid):
-        """Lien remplacé ou supprimé : connexions, tunnels et échecs passés oubliés."""
+        """Link replaced or removed: connections, tunnels and past failures forgotten."""
         with self.lock:
             self.tunnel_gen[pid] = self.tunnel_gen.get(pid, 0) + 1
             self.tunnels.pop(pid, None)
@@ -337,7 +337,7 @@ class LinksMixin:
                 got[0].close()
             except OSError:
                 pass
-            got[1]()  # libère le fil qui gardait cette connexion
+            got[1]()  # frees the thread that kept this connection
 
     def _uncount(self, pid, gen):
         with self.lock:
@@ -345,7 +345,7 @@ class LinksMixin:
                 self.tunnels[pid] = max(0, self.tunnels.get(pid, 1) - 1)
 
     def _tunnel(self, pid, gen=0):
-        """Connexion ouverte vers un serveur lié, pour qu'il nous envoie ses requêtes (il n'a pas à nous joindre)."""
+        """Connection opened to a linked server, so that it can send us its requests (it does not have to reach us)."""
         counted = True
         sock = None
         try:
@@ -371,7 +371,7 @@ class LinksMixin:
                 ready, _, _ = select.select([sock], [], [], TUNNEL_TTL + 60)
                 if not ready:
                     return
-            # une requête arrive : on rouvre tout de suite une connexion d'avance, puis on la traite
+            # a request arrives: a spare connection is opened again right away, then the request is handled
             self._uncount(pid, gen)
             counted = False
             self.spawn_tunnels(pid)

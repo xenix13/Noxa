@@ -1,15 +1,15 @@
-"""Fédération : plusieurs serveurs Noxa d'un même propriétaire, liés entre eux.
+"""Federation: several Noxa servers of one owner, linked together.
 
-- Jumelage : un serveur crée une invitation (son adresse, l'empreinte de son certificat, un jeton à usage unique
-  valable 15 minutes). L'autre la colle, vérifie l'empreinte du serveur qu'il contacte et reçoit un secret partagé.
-  Ensuite tout passe par un port dédié (8421) en TLS : chaque serveur épingle le certificat de l'autre (pas
-  d'autorité de certification, pas de nom de domaine) et présente le secret à chaque requête.
-- Tunnel : un serveur qui peut joindre l'autre lui garde quelques connexions ouvertes, par lesquelles l'autre lui
-  envoie ses requêtes. Un seul des deux doit donc être joignable : rien à ouvrir sur la box de l'autre.
-- Comptes : répliqués dans les deux sens ; la modification la plus récente l'emporte, une suppression est définitive.
-- Catalogue : les bibliothèques de chaque serveur sont recopiées chez l'autre (fiches ; affiches relayées).
-- Lecture : le serveur auquel l'appareil est connecté relaie le flux du serveur qui a le fichier, et lui renvoie la
-  progression ; la progression enregistrée chez l'un revient chez l'autre.
+- Pairing: a server creates an invitation (its address, its certificate's fingerprint, a one-time token
+  valid 15 minutes). The other one pastes it, checks the fingerprint of the server it contacts and gets a shared secret.
+  Then everything goes through a dedicated port (8421) over TLS: each server pins the other's certificate (no
+  certificate authority, no domain name) and presents the secret with each request.
+- Tunnel: a server that can reach the other keeps a few connections open to it, through which the other sends it
+  its requests. So only one of the two has to be reachable: nothing to open on the other one's router.
+- Accounts: replicated both ways; the most recent change wins, a deletion is final.
+- Catalogue: each server's libraries are copied to the other (records; posters relayed).
+- Playback: the server the device is connected to relays the stream of the server that has the file, and sends it
+  the progress back; the progress saved on one comes back on the other.
 """
 import base64
 import json
@@ -33,9 +33,9 @@ log = logging.getLogger("noxa.fed")
 DEFAULT_PORT = 8421
 INVITE_PREFIX = "NEXIS1-"
 INVITE_TTL = 15 * 60
-SYNC_EVERY = 15          # s entre deux synchronisations avec chaque serveur lié
-IDLE_TUNNELS = 4         # connexions de tunnel gardées ouvertes vers chaque serveur lié joignable
-TUNNEL_TTL = 240         # s : une connexion de tunnel inutilisée est renouvelée
+SYNC_EVERY = 15          # s between two synchronisations with each linked server
+IDLE_TUNNELS = 4         # tunnel connections kept open to each reachable linked server
+TUNNEL_TTL = 240         # s: an unused tunnel connection is renewed
 CATALOG_PAGE = 400
 PROGRESS_PAGE = 1000
 HEX32 = re.compile(r"^[0-9a-f]{32}$")
@@ -45,7 +45,7 @@ ADDRESS = re.compile(r"^(\[[0-9a-fA-F:.]{2,45}\]|[A-Za-z0-9.-]{1,253})(:\d{1,5})
 USER_FIELDS = ("username", "display_name", "password_hash", "is_admin", "all_libraries", "disabled", "avatar_color",
                "pin_hash", "managed", "home", "max_age", "allow_unrated", "avatar_ver", "kids", "totp_enabled",
                "totp_secret", "totp_recovery", "language", "max_streams", "remote_kbps", "daily_minutes", "bedtime")
-LIMIT_FIELDS = ("max_streams", "remote_kbps", "daily_minutes", "bedtime")  # depuis la 3.34 : absents chez un serveur plus ancien
+LIMIT_FIELDS = ("max_streams", "remote_kbps", "daily_minutes", "bedtime")  # since 3.34: missing on an older server
 ITEM_LOCAL = {"id", "library_id", "parent_id", "show_id", "key", "fseq", "peer_id", "remote_id", "src_lib", "src_parent",
               "src_show", "alias_of"}
 ITEM_SUB = re.compile(r"^/api/items/(\d{1,12})/(prepare|subtitles/.+|fonts/.+|trickplay(?:/.+)?|chapters/.+)$")
@@ -59,18 +59,18 @@ TMDB_PATH = re.compile(r"^/(movie|tv|search|discover|trending|watch|genre|find|c
 SEERR_ALLOWED = (("GET", re.compile(r"^/media\?[A-Za-z0-9=&_.-]{0,200}$")),
                  ("GET", re.compile(r"^/user\?[A-Za-z0-9=&_.-]{0,200}$")),
                  ("POST", re.compile(r"^/request$")))
-# ce qu'un serveur lié peut demander au nom d'un compte : la lecture des éléments de ce serveur, rien d'autre
+# what a linked server may ask for on behalf of an account: playing this server's items, nothing else
 PEER_USER_PATHS = re.compile(r"^/api/(play|progress|stop|stream/.+|downloads(/options|/[A-Za-z0-9_-]{8,20}(/file)?)?|"
                              r"items/\d{1,12}/(prepare|subtitles/.+|fonts/.+|"
                              r"trickplay(/.+)?|chapters/.+|watched))$")
-# administration à distance : un administrateur connecté à un serveur lié règle celui-ci (même compte, répliqué)
+# remote administration: an administrator signed in to a linked server sets this one up (same account, replicated)
 PEER_ADMIN_PATHS = re.compile(r"^/api/admin/.+$")
-LOCAL_ADMIN_ONLY = re.compile(r"^/api/admin/servers$")  # la liste des serveurs administrables : toujours d'ici
+LOCAL_ADMIN_ONLY = re.compile(r"^/api/admin/servers$")  # the list of servers that can be administered: always from here
 STREAMED_UPLOAD = re.compile(r"^/api/admin/backups/upload$")
 
 
 class _Limited:
-    """Corps d'une requête lu au fur et à mesure (au plus `left` octets), pour le relayer sans le copier en mémoire."""
+    """Request body read as it comes (at most `left` bytes), to relay it without copying it in memory."""
 
     def __init__(self, f, left):
         self.f, self.left = f, left
@@ -127,7 +127,7 @@ def decode_invite(text):
 
 
 def free_username(db, base, taken=()):
-    """Identifiant libre dérivé de base (« nina-2 », « nina-3 »…), ici et parmi `taken`."""
+    """Free username derived from base ("nina-2", "nina-3"…), here and among `taken`."""
     taken = {t.casefold() for t in taken}
     for n in range(2, 1000):
         cand = f"{base[:31 - len(str(n))]}-{n}"
@@ -137,8 +137,8 @@ def free_username(db, base, taken=()):
 
 
 def keepalive(sock):
-    """Connexion coupée sans prévenir (changement d'adresse IP, box redémarrée) : détectée en une minute environ,
-    au lieu de rester ouverte « dans le vide » jusqu'à son renouvellement."""
+    """Connection cut without warning (IP address change, router restarted): detected in about a minute,
+    instead of staying open "into the void" until it is renewed."""
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         for opt, v in (("TCP_KEEPIDLE", 30), ("TCP_KEEPINTVL", 10), ("TCP_KEEPCNT", 3)):
@@ -149,7 +149,7 @@ def keepalive(sock):
 
 
 def alive(sock):
-    """Connexion de tunnel inutilisée encore valable : rien à lire (sinon c'est sa fermeture par l'autre côté)."""
+    """Unused tunnel connection still valid: nothing to read (otherwise the other side closed it)."""
     try:
         if sock.pending():
             return False
@@ -160,14 +160,14 @@ def alive(sock):
 
 
 class Pool:
-    """Connexions de tunnel ouvertes par un serveur lié, en attente d'une requête de notre part."""
+    """Tunnel connections opened by a linked server, waiting for a request from us."""
 
     def __init__(self):
         self.cond = threading.Condition()
         self.idle = []
 
     def offer(self, sock):
-        """Fil de la connexion entrante : attend qu'une requête s'en serve (puis qu'elle soit finie), ou l'expiration."""
+        """Thread of the incoming connection: waits for a request to use it (and to finish), or for the expiry."""
         keepalive(sock)
         entry = {"sock": sock, "born": time.monotonic(), "done": threading.Event(), "taken": False}
         with self.cond:
@@ -192,7 +192,7 @@ class Pool:
                     if now - e["born"] < TUNNEL_TTL - 15 and alive(e["sock"]):
                         e["taken"] = True
                         return e["sock"], e["done"].set
-                    e["done"].set()  # trop ancienne ou coupée : l'autre serveur va la renouveler
+                    e["done"].set()  # too old or cut: the other server will renew it
                 if now >= end:
                     return None
                 self.cond.wait(end - now)
@@ -203,7 +203,7 @@ class Pool:
 
 
 class PeerTMDB(TMDB):
-    """TMDB interrogé avec la clé d'un serveur lié (ce serveur n'en a pas) : même usage qu'une clé locale."""
+    """TMDB queried with a linked server's key (this server has none): same use as a local key."""
 
     def __init__(self, fed, peer, language, country):
         super().__init__("", language, country)
@@ -232,7 +232,7 @@ class PeerTMDB(TMDB):
 
 
 class PeerSeerr:
-    """Seerr d'un serveur lié : les demandes de ce serveur passent par lui."""
+    """Seerr of a linked server: this server's requests go through it."""
     enabled = True
 
     def __init__(self, fed, peer):

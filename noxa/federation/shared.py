@@ -9,9 +9,9 @@ from .common import FedError, HEX32, PeerSeerr, PeerTMDB, log
 
 
 class SharedMixin:
-    # ------------------------------------------------------------------ services partagés (TMDB, Seerr)
+    # ------------------------------------------------------------------ shared services (TMDB, Seerr)
     def provider(self, cap):
-        """Serveur lié joignable qui a ce service (clé TMDB, Seerr) et le prête aux autres, ou None."""
+        """Reachable linked server that has this service (TMDB key, Seerr) and lends it to the others, or None."""
         if not self.has_peers():
             return None
         for p in self.peers():
@@ -29,8 +29,8 @@ class SharedMixin:
         return PeerSeerr(self, p) if p else None
 
     def kick_metadata(self):
-        """Une clé TMDB devient disponible par un serveur lié : les titres restés sans métadonnées faute de clé
-        sont cherchés (une fois par serveur prêteur)."""
+        """A TMDB key becomes available through a linked server: the titles left without metadata for lack of a key
+        are looked up (once per lending server)."""
         p = self.provider("tmdb")
         db = self.ctx.db
         if not p or db.setting("tmdb_key") or db.setting("fed_tmdb_from") == p["uid"]:
@@ -50,9 +50,9 @@ class SharedMixin:
         finally:
             self.ctx.db.release()
 
-    # ------------------------------------------------------------------ charge (répartition des lectures)
+    # ------------------------------------------------------------------ load (spreading playback)
     def local_load(self):
-        """Lectures servies par ce serveur (les flux qu'il relaie depuis un serveur lié ne comptent pas)."""
+        """Streams served by this server (those it relays from a linked server do not count)."""
         cut = int(time.time()) - 60
         ids = [r["id"] for r in self.ctx.db.all("SELECT id FROM streams WHERE last_seen>?", (cut,))]
         with self.lock:
@@ -64,9 +64,9 @@ class SharedMixin:
         except ValueError:
             return 3
 
-    # ------------------------------------------------------------------ titres d'un serveur à l'autre
+    # ------------------------------------------------------------------ titles from one server to another
     def ref_of(self, item_id):
-        """Désignation d'un élément valable sur tous les serveurs liés : le serveur qui a le fichier et son numéro là-bas."""
+        """Reference of an item valid on all the linked servers: the server that has the file and its number there."""
         r = self.ctx.db.one("SELECT i.id, i.remote_id, p.uid FROM items i LEFT JOIN peers p ON p.id=i.peer_id WHERE i.id=?",
                             (int(item_id),))
         if not r:
@@ -74,7 +74,7 @@ class SharedMixin:
         return {"s": r["uid"], "i": r["remote_id"]} if r["uid"] else {"s": self.uid(), "i": r["id"]}
 
     def resolve_ref(self, ref):
-        """Élément d'ici (celui qu'on affiche) correspondant à une désignation reçue d'un serveur lié, ou None."""
+        """Item here (the one shown) matching a reference received from a linked server, or None."""
         if not isinstance(ref, dict) or not HEX32.match(str(ref.get("s"))) or not isinstance(ref.get("i"), int):
             return None
         db = self.ctx.db
@@ -89,7 +89,7 @@ class SharedMixin:
 
     # ------------------------------------------------------------------ regarder ensemble entre serveurs
     def together_changed(self):
-        """Les groupes de ce serveur ont changé : les serveurs liés rafraîchissent leur liste tout de suite."""
+        """This server's groups changed: the linked servers refresh their list right away."""
         if not self.has_peers():
             return
         for p in self.peers():
@@ -97,7 +97,7 @@ class SharedMixin:
                 self.send_later(p["id"], "POST", "/fed/together/changed", {}, None)
 
     def present_uids(self):
-        """Comptes qui ont Noxa ouvert ici : ils restent membres des groupes d'un serveur lié pendant qu'ils cherchent."""
+        """Accounts that have Noxa open here: they stay members of a linked server's groups while they browse."""
         ids = sorted(self.ctx.together.present())
         if not ids:
             return []
@@ -117,7 +117,7 @@ class SharedMixin:
         return groups
 
     def remote_groups(self, max_age=3):
-        """[(serveur lié, groupes)] des serveurs liés joignables (gardés quelques secondes)."""
+        """[(linked server, groups)] of the reachable linked servers (kept a few seconds)."""
         if not self.has_peers():
             return []
         out = []
@@ -139,7 +139,7 @@ class SharedMixin:
         return out
 
     def group_peer(self, gid):
-        """Serveur lié qui anime ce groupe, ou None."""
+        """Linked server that hosts this group, or None."""
         pid = self.rgroup_peer.get(gid)
         if pid is None:
             self.remote_groups(max_age=0)
@@ -156,7 +156,7 @@ class SharedMixin:
             self.rgroups.pop(pid, None)
 
     def to_local(self, pid, ev):
-        """Événement ou état d'un groupe animé par un serveur lié -> nos numéros (titre, comptes) et notre horloge."""
+        """Event or state of a group hosted by a linked server -> our numbers (title, accounts) and our clock."""
         shift = int((self.status.get(pid) or {}).get("clock") or 0)
         for k in ("ref", "server_now"):
             if isinstance(ev.get(k), (int, float)):
@@ -174,7 +174,7 @@ class SharedMixin:
                 m.pop("uid", None)
         return ev
 
-    # ------------------------------------------------------------------ état pour l'administration
+    # ------------------------------------------------------------------ status for the administration
     def view(self):
         db = self.ctx.db
         peers = []
