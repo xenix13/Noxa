@@ -424,12 +424,13 @@ class Scanner:
                 self._new_media(row["id"], info)
             return
         title, year = parse_movie(path, root)
-        # same folder (its own folder, or the same title and year when movies share a folder)
+        # same folder AND same title and year: a folder can hold several movies (a "Marvel" collection folder), and
+        # a different movie arriving as another one leaves must not take over its watched state and metadata
+        same = lambda t, y: (fold(t), y) == (fold(title), year)
         old = self._orphan([r for r in db.all("SELECT id, key FROM items WHERE library_id=? AND type='movie' "
                                               "AND peer_id IS NULL AND key LIKE ? ESCAPE '\\'",
                                               (lib["id"], like_prefix(folder)))
-                            if os.path.dirname(r["key"]) == folder
-                            and (own_folder or parse_movie(r["key"], root) == (title, year))])
+                            if os.path.dirname(r["key"]) == folder and same(*parse_movie(r["key"], root))])
         if old:
             return self._replace(old, path, size, mtime, info, dur)
         new_id = self._insert(library_id=lib["id"], type="movie", key=path, title=title, year=year, duration_ms=dur,
