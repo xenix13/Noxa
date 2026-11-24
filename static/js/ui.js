@@ -82,10 +82,6 @@ export function fmtDuration(ms) {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
 }
 
-export function fmtDate(ts) {
-  return new Date(ts * 1000).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' });
-}
-
 export function episodeCode(c) {
   if (c.season == null || c.episode == null) return '';
   return `S${String(c.season).padStart(2, '0')}E${String(c.episode).padStart(2, '0')}`;

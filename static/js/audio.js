@@ -22,7 +22,6 @@ const totalDur = () => (cur ? cur.duration || cur.offsets[cur.offsets.length - 1
 const chapterAt = (ms) => (cur && cur.chapters ? cur.chapters.findIndex((c) => ms >= c.s && ms < c.e) : -1);
 
 export function nowPlaying() { return cur ? { kind: cur.kind, id: cur.id, playing: !audio.paused } : null; }
-export function onAudio(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 const notify = () => listeners.forEach((fn) => { try { fn(nowPlaying()); } catch { /* vue fermée */ } });
 
 function ensure() {

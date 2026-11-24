@@ -386,7 +386,7 @@ def register(app, ctx, x):
                 "watch_events": [dict(e, text=i18n.tr(e["text"])) for e in ctx.watcher.events[:8]],"tmdb_set": bool(db.setting("tmdb_key")),
                 "tmdb_shared": (lambda p: p["name"] if p else None)(ctx.fed.provider("tmdb")), "language": db.setting("meta_language", "fr-FR"),
                 "max_streams": max_streams,
-                "max_transcodes": max_transcodes, "cpus": os.cpu_count(), "ffmpeg": media.available(),
+                "max_transcodes": max_transcodes, "ffmpeg": media.available(),
                 "hw_engine": db.setting("hw_engine", "none"), "hw_device": db.setting("hw_device", "/dev/dri/renderD128"),
                 "hw_devices": transcoder.hw_devices(), "version": VERSION,
                 "default_language": i18n.default_language(db), "languages": i18n.LANGUAGES}

@@ -154,18 +154,6 @@ class FingerprintCache:
         os.replace(path + ".tmp", path)
         return fp, start
 
-    def drop_unknown(self, keep):
-        """Supprime les empreintes des fichiers qui ne sont plus dans les bibliothèques."""
-        n = 0
-        for name in os.listdir(self.base):
-            if name.split("_head")[0].split("_tail")[0] not in keep:
-                try:
-                    os.remove(os.path.join(self.base, name))
-                    n += 1
-                except OSError:
-                    pass
-        return n
-
 
 def detect_season(episodes, cache, part, minutes, min_s, max_s, cancelled=lambda: False):
     """Pour une saison : {id d'épisode: (début, fin) en secondes dans le fichier} du passage commun.

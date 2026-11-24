@@ -228,30 +228,6 @@ def probe(path):
     return info
 
 
-def keyframe_before(path, seconds, video_index=0):
-    """Instant de la dernière image clé <= seconds (pour couper proprement en copie)."""
-    if seconds <= 0:
-        return 0.0
-    start = max(0.0, seconds - 30)
-    try:
-        out = run([FFPROBE, "-v", "error", *LOCAL_ONLY, "-select_streams", f"v:{video_index}", "-skip_frame", "nokey",
-                   "-show_entries", "frame=pts_time,best_effort_timestamp_time", "-of", "csv=p=0",
-                   "-read_intervals", f"{start:.3f}%{seconds + 0.5:.3f}", path], timeout=30)
-    except MediaError:
-        return seconds
-    best = None
-    for line in out.decode().splitlines():
-        for v in line.split(","):
-            try:
-                t = float(v)
-            except ValueError:
-                continue
-            if t <= seconds + 0.05 and (best is None or t > best):
-                best = t
-            break
-    return best if best is not None else seconds
-
-
 def resize_image(src, dest, w, h, crop=True, orient=None):
     """Redimensionne (et recadre) une image avec ffmpeg -> JPEG. orient : filtres qui la remettent à l'endroit
     (orientation EXIF d'une photo, appliquée ici plutôt que devinée par ffmpeg selon sa version)."""
