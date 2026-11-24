@@ -1,4 +1,4 @@
-"""Images des éléments : TMDB ou fichiers locaux, sinon capture de la vidéo. Redimensionnées et mises en cache."""
+"""Item pictures: TMDB or local files, otherwise a frame of the video. Resized and cached."""
 import hashlib
 import logging
 import os
@@ -12,12 +12,12 @@ from .metadata import TMDB_IMG
 
 log = logging.getLogger("noxa.images")
 _dl_lock = threading.Lock()
-# Une image introuvable (pas d'affiche, capture impossible, serveur lié ou TMDB injoignable) n'est pas recherchée
-# de nouveau à chaque affichage : sans cela, chaque retour sur l'accueil relançait des dizaines de téléchargements
-# et de captures ffmpeg qui occupaient les connexions du navigateur pendant de longues minutes.
-MISSING_TTL = 1800      # image absente d'ici : redemandée au plus toutes les 30 min
-PEER_MISSING_TTL = 300  # image d'un serveur lié : 5 min
-TMDB_PAUSE = 120        # TMDB injoignable : plus de téléchargement pendant 2 min
+# A picture that cannot be found (no poster, frame impossible, linked server or TMDB unreachable) is not looked for
+# again at each display: without this, each return to the home page started dozens of downloads
+# and ffmpeg frame grabs that kept the browser's connections busy for long minutes.
+MISSING_TTL = 1800      # picture missing here: asked for again at most every 30 min
+PEER_MISSING_TTL = 300  # picture from a linked server: 5 min
+TMDB_PAUSE = 120        # TMDB unreachable: no download for 2 min
 MAX_MISSING = 50000
 
 
@@ -28,7 +28,7 @@ class Images:
         self.orig = os.path.join(ctx.data_dir, "cache", "orig")
         os.makedirs(self.cache, exist_ok=True)
         os.makedirs(self.orig, exist_ok=True)
-        self._missing = {}  # clé -> instant jusqu'auquel on ne la recherche plus
+        self._missing = {}  # key -> instant until which it is not looked for anymore
         self._missing_lock = threading.Lock()
         self._tmdb_down_until = 0
 
@@ -50,7 +50,7 @@ class Images:
             self._missing[key] = time.time() + ttl
 
     def forget_missing(self):
-        """Après un changement d'images (métadonnées actualisées, serveur lié revenu) : tout est redemandé."""
+        """After a change of pictures (metadata refreshed, linked server back): everything is asked for again."""
         with self._missing_lock:
             self._missing.clear()
 
@@ -68,9 +68,9 @@ class Images:
             with urllib.request.urlopen(req, timeout=12) as r:
                 data = r.read(15 * 1024 * 1024)
         except urllib.error.HTTPError:
-            raise  # image absente chez TMDB : seule celle-ci est concernée
+            raise  # picture missing at TMDB: only this one is concerned
         except (OSError, ValueError):
-            self._tmdb_down_until = time.time() + TMDB_PAUSE  # réseau coupé, DNS, délai dépassé : on attend un peu
+            self._tmdb_down_until = time.time() + TMDB_PAUSE  # network down, DNS, timeout: wait a little
             raise
         tmp = dest + f".{threading.get_ident()}.tmp"
         with open(tmp, "wb") as f:
@@ -97,7 +97,7 @@ class Images:
                                "e.type='episode' ORDER BY s.idx=0, s.idx, e.idx LIMIT 1", (show_id,))
 
     def resolve(self, item, kind):
-        """-> ('file', chemin) ou ('frame', fichier vidéo, instant) ou None."""
+        """-> ('file', path) or ('frame', video file, instant) or None."""
         db = self.ctx.db
         t = item["type"]
         show = db.one("SELECT * FROM items WHERE id=?", (item["show_id"],)) if item["show_id"] else None
@@ -115,7 +115,7 @@ class Images:
             src = self._source(spec, k)
             if src:
                 return ("file", src)
-        # repli : une image de la vidéo
+        # fallback: a frame of the video
         video = None
         if t in ("movie", "episode", "extra"):
             video = item
@@ -130,7 +130,7 @@ class Images:
         spec = coll["poster"] if kind == "thumb" else coll["backdrop"]
         src = self._source(spec, "poster" if kind == "thumb" else "backdrop")
         if not src:
-            # pas d'image propre : celle du premier élément de la collection
+            # no picture of its own: the one of the collection's first item
             first = self.ctx.db.one("SELECT i.* FROM collection_items c JOIN items i ON i.id=c.item_id "
                                     "WHERE c.collection_id=? ORDER BY i.year, i.sort_title LIMIT 1", (coll["id"],))
             return self.get(first, kind, w, h) if first else None
@@ -144,8 +144,8 @@ class Images:
         return dest
 
     def get(self, item, kind, w, h):
-        # désignation de l'image demandée : change avec les métadonnées (nouvelle affiche), donc une image
-        # introuvable hier est cherchée de nouveau dès qu'une source apparaît
+        # name of the picture asked for: changes with the metadata (new poster), so a picture
+        # not found yesterday is looked for again as soon as a source appears
         key = (f"{item.get('peer_id') or ''}|{item['id']}|{kind}|{item.get('img_version')}|{item.get('poster')}|"
                f"{item.get('backdrop')}|{item.get('still')}|{w}|{h}")
         if self._is_missing(key):
@@ -156,12 +156,12 @@ class Images:
         return path
 
     def _get(self, item, kind, w, h):
-        if item.get("peer_id"):  # élément d'un serveur lié : son image vient de lui
+        if item.get("peer_id"):  # item of a linked server: its picture comes from it
             return self.ctx.fed.image(item, kind, w, h)
-        if item["type"] in ("photo", "album"):  # photothèque : la photo elle-même (celle de l'album : la plus récente)
+        if item["type"] in ("photo", "album"):  # photo library: the photo itself (for the album: the most recent)
             photo = item if item["type"] == "photo" else photos.cover(self.ctx.db, item["id"])
             return photos.render(self.ctx, photo, w, h, crop=True) if photo else None
-        if item["type"] == "book":  # livre audio : sa couverture (fichier à côté, ou image intégrée)
+        if item["type"] == "book":  # audiobook: its cover (file next to it, or embedded picture)
             from . import books
             return books.cover_path(self.ctx, item, w, h)
         src = self.resolve(item, kind)

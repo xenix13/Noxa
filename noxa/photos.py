@@ -1,9 +1,9 @@
-"""Photothèque : les photos d'un dossier (et de ses sous-dossiers, qui deviennent des albums).
+"""Photo library: the photos of a folder (and of its sub-folders, which become albums).
 
-- Scan : chaque sous-dossier est un album, chaque image une photo. La date de prise de vue et l'orientation
-  viennent des données EXIF (JPEG, TIFF), sinon de la date du fichier.
-- Affichage : miniatures recadrées pour la grille, image entière (redimensionnée, remise à l'endroit) pour la
-  visionneuse, et fichier d'origine à télécharger. Rien n'est jamais écrit dans les dossiers de photos.
+- Scan: each sub-folder is an album, each picture a photo. The date taken and the orientation
+  come from the EXIF data (JPEG, TIFF), otherwise from the file date.
+- Display: cropped thumbnails for the grid, whole picture (resized, turned the right way up) for the
+  viewer, and original file to download. Nothing is ever written in the photo folders.
 """
 import json
 import logging
@@ -19,16 +19,16 @@ from . import media
 log = logging.getLogger("noxa.photos")
 
 PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".tif", ".tiff", ".bmp"}
-CLIP_EXT = {".mp4", ".mov", ".m4v", ".3gp", ".webm", ".mkv", ".avi", ".mts"}  # vidéos du téléphone, dans les albums
+CLIP_EXT = {".mp4", ".mov", ".m4v", ".3gp", ".webm", ".mkv", ".avi", ".mts"}  # phone videos, in the albums
 CLIP_MIME = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".3gp": "video/3gpp", ".webm": "video/webm",
              ".mkv": "video/x-matroska", ".avi": "video/x-msvideo", ".mts": "video/mp2t"}
 SKIP_DIRS = {"@eadir", "#recycle", "$recycle.bin", "lost+found", ".trickplay", "@__thumb", ".thumbnails"}
 RECENT_SECONDS = 45
 VIEW_SIZES = (640, 1280, 1920, 2560)
 TIMELINE_PAGE = 200
-MAP_MAX = 50000  # points affichés sur la carte
+MAP_MAX = 50000  # points shown on the map
 
-# orientation EXIF -> filtres ffmpeg qui remettent l'image à l'endroit
+# EXIF orientation -> ffmpeg filters that turn the picture the right way up
 ORIENT = {2: "hflip", 3: "hflip,vflip", 4: "vflip", 5: "transpose=0", 6: "transpose=1", 7: "transpose=3", 8: "transpose=2"}
 
 
@@ -58,7 +58,7 @@ def _tiff(data):
                 out[tag] = u16(p + 8)
             elif typ == 4 and count == 1:    # LONG
                 out[tag] = u32(p + 8)
-            elif typ == 5 and 1 <= count <= 4:  # RATIONAL (coordonnées GPS : degrés, minutes, secondes)
+            elif typ == 5 and 1 <= count <= 4:  # RATIONAL (GPS coordinates: degrees, minutes, seconds)
                 start = u32(p + 8)
                 if start + 8 * count <= len(data):
                     out[tag] = tuple(u32(start + 8 * k) / (u32(start + 8 * k + 4) or 1) for k in range(count))
@@ -92,7 +92,7 @@ def _tiff(data):
 
 
 def _deg(dms, ref):
-    """(degrés, minutes, secondes) EXIF et « N »/« S »/« E »/« W » -> degrés décimaux, ou None."""
+    """EXIF (degrees, minutes, seconds) and "N"/"S"/"E"/"W" -> decimal degrees, or None."""
     if not isinstance(dms, tuple) or not dms:
         return None
     v = dms[0] + (dms[1] / 60 if len(dms) > 1 else 0) + (dms[2] / 3600 if len(dms) > 2 else 0)
@@ -107,7 +107,7 @@ def is_clip(path):
 
 
 def read_clip_info(path):
-    """Vidéo d'un album : dimensions, durée, date de tournage (ffprobe) -> {v: 1, w, h, dur, taken}."""
+    """Video of an album: dimensions, duration, recording date (ffprobe) -> {v: 1, w, h, dur, taken}."""
     info = {"v": 1}
     try:
         out = subprocess.run([media.FFPROBE, "-v", "error", "-print_format", "json", "-show_entries",
@@ -140,8 +140,8 @@ def read_clip_info(path):
 
 
 def read_info(path):
-    """-> {w, h, o, taken, make, model, lat, lon} (ce qu'on a pu lire ; rien d'obligatoire). gv : lecture qui
-    comprend les coordonnées GPS (les photos analysées avant sont relues une fois)."""
+    """-> {w, h, o, taken, make, model, lat, lon} (what could be read; nothing required). gv: reading that
+    includes the GPS coordinates (photos analysed before are read again once)."""
     ext = os.path.splitext(path)[1].lower()
     if ext in CLIP_EXT:
         return {**read_clip_info(path), "gv": 1}
@@ -171,13 +171,13 @@ def read_info(path):
     elif ext == ".png" and head[:8] == b"\x89PNG\r\n\x1a\n" and len(head) >= 24:
         info["w"], info["h"] = struct.unpack_from(">II", head, 16)
     if info.get("o") in (5, 6, 7, 8) and info.get("w"):
-        info["w"], info["h"] = info["h"], info["w"]  # dimensions affichées (photo prise en portrait)
+        info["w"], info["h"] = info["h"], info["w"]  # dimensions shown (photo taken in portrait)
     return info
 
 
 # ------------------------------------------------------------------ scan
 def scan(scanner, lib):
-    """Scan complet d'une photothèque (les sous-dossiers sont des albums)."""
+    """Full scan of a photo library (the sub-folders are albums)."""
     db = scanner.ctx.db
     paths = [p for p in json.loads(lib["paths"]) if p]
     reachable = [p for p in paths if os.path.isdir(p)]
@@ -185,7 +185,7 @@ def scan(scanner, lib):
         if p not in reachable:
             scanner._err(f"Dossier inaccessible : {p}")
     if paths and not reachable:
-        return  # partage non monté : surtout ne rien supprimer
+        return  # share not mounted: above all, delete nothing
     scanner._set(phase="Recherche des photos", done=0, total=0)
     files, folders = [], []
     for root in reachable:
@@ -207,7 +207,7 @@ def scan(scanner, lib):
         "AND peer_id IS NULL", (lib["id"],))}
     now = int(time.time())
     albums = {}
-    for root, d in folders:  # de haut en bas : le parent existe avant ses sous-albums
+    for root, d in folders:  # top down: the parent exists before its sub-albums
         parent = albums.get(os.path.dirname(d))
         old = existing.get(("album", d))
         if old:
@@ -224,13 +224,13 @@ def scan(scanner, lib):
             scanner._set(done=n)
         seen.add(("photo", path))
         if time.time() - mtime < RECENT_SECONDS:
-            deferred += 1  # en cours de copie : au prochain passage
+            deferred += 1  # being copied: at the next pass
             deferred_dirs.add(os.path.dirname(path))
             continue
         old = existing.get(("photo", path))
         parent = albums.get(os.path.dirname(path))
         if old and old["file_size"] == size and old["file_mtime"] == mtime:
-            if '"gv":' not in (old["probe"] or ""):  # analysée avant la lecture du GPS : relue une fois
+            if '"gv":' not in (old["probe"] or ""):  # analysed before GPS was read: read again once
                 info = read_info(path)
                 old_info = json.loads(old["probe"] or "{}")
                 old_info.update({k: info[k] for k in ("lat", "lon", "gv") if k in info})
@@ -259,7 +259,7 @@ def scan(scanner, lib):
     if gone:
         with scanner.lock:
             scanner.state["removed"] += len(gone)
-    # albums sans photo (ni sous-album qui en a) : retirés
+    # albums without a photo (nor a sub-album that has one): removed
     while db.run("DELETE FROM items WHERE library_id=? AND type='album' AND peer_id IS NULL AND NOT EXISTS "
                  "(SELECT 1 FROM items c WHERE c.parent_id=items.id)", (lib["id"],)).rowcount:
         pass
@@ -279,14 +279,14 @@ def orientation(item):
 
 
 def cover(db, album_id):
-    """Photo la plus récente d'un album (sous-albums compris), pour sa vignette."""
+    """Most recent photo of an album (sub-albums included), for its thumbnail."""
     return db.one("WITH RECURSIVE t(id) AS (SELECT ? UNION ALL SELECT i.id FROM items i JOIN t ON i.parent_id=t.id "
                   "WHERE i.type='album') SELECT p.* FROM items p WHERE p.type='photo' AND p.parent_id IN (SELECT id FROM t) "
                   "ORDER BY p.released DESC, p.id DESC LIMIT 1", (int(album_id),))
 
 
 def render(ctx, item, w, h, crop):
-    """Photo redimensionnée et remise à l'endroit (JPEG en cache) -> chemin, ou None."""
+    """Photo resized and turned the right way up (cached JPEG) -> path, or None."""
     import hashlib
     key = item["key"]
     if not key or not os.path.isfile(key):
@@ -296,7 +296,7 @@ def render(ctx, item, w, h, crop):
     if os.path.isfile(dest):
         return dest
     try:
-        if is_clip(key):  # vidéo : une image prise au début (1 s, ou le début si elle est plus courte)
+        if is_clip(key):  # video: a frame taken at the start (1 s, or the start when it is shorter)
             dur = (json.loads(item["probe"] or "{}").get("dur") or 0) / 1000
             media.grab_frame(key, dest, min(1.0, dur / 2) if dur else 0.0, w, h)
             return dest
@@ -326,7 +326,7 @@ def register(app, ctx, x):
                "WHERE i.type='album') ")
 
     def photo_card(r, favs=(), base=None):
-        """Carte d'une photo (ou d'une vidéo) ; base : adresses d'un album partagé par lien (sans compte)."""
+        """Card of a photo (or of a video); base: addresses of an album shared by link (no account)."""
         info = json.loads(r["probe"] or "{}")
         v = r["img_version"]
         rid = str(r["id"])
@@ -335,7 +335,7 @@ def register(app, ctx, x):
              "size": r["file_size"], "gif": r["key"].lower().endswith(".gif"), "video": bool(info.get("v")),
              "duration": info.get("dur"), "fav": r["id"] in favs}
         if not base and isinstance(info.get("lat"), (int, float)):
-            c.update(lat=info["lat"], lon=info.get("lon"))  # pas dans un album partagé par lien : le lieu reste privé
+            c.update(lat=info["lat"], lon=info.get("lon"))  # not in an album shared by link: the place stays private
         if base:
             c.update(thumb_url=f"{base}/img/{rid}?k=thumb", view_url=f"{base}/img/{rid}?k=view",
                      stream_url=f"{base}/stream/{rid}", original_url=f"{base}/original/{rid}")
@@ -365,8 +365,8 @@ def register(app, ctx, x):
         return lib
 
     def listing(sid, album, view, start, size, favs=(), fav_uid=None, root=None, base=None):
-        """Contenu d'un album (sous-albums et photos), toutes les photos par date, ou les favoris d'une personne.
-        root : album partagé par lien, dont on ne sort pas."""
+        """Content of an album (sub-albums and photos), all the photos by date, or a person's favourites.
+        root: album shared by link, which cannot be left."""
         if view == "timeline" or view == "favorites":
             cond, args = ("library_id=?", [int(sid)])
             if view == "favorites":
@@ -400,7 +400,7 @@ def register(app, ctx, x):
         return {"total": total, "albums": albums, "photos": [photo_card(r, favs, base) for r in rows], "path": path}
 
     def map_points(sid):
-        """Photos et vidéos qui portent des coordonnées GPS -> {points: [[id, lat, lon], …]} (pour la carte)."""
+        """Photos and videos that carry GPS coordinates -> {points: [[id, lat, lon], …]} (for the map)."""
         rows = db.all("SELECT id, probe FROM items WHERE library_id=? AND type='photo' AND probe LIKE '%\"lat\":%' "
                       "ORDER BY released DESC, id DESC LIMIT ?", (int(sid), MAP_MAX))
         pts = []
@@ -411,7 +411,7 @@ def register(app, ctx, x):
         return {"points": pts, "total": len(pts)}
 
     def photos_by_ids(sid, ids, favs):
-        """Les photos d'un endroit de la carte (au plus 500), de la plus récente à la plus ancienne."""
+        """The photos of a place on the map (500 at most), from the most recent to the oldest."""
         wanted = [int(i) for i in str(ids).split(",")[:500] if i.isdigit()]
         if not wanted:
             return []
@@ -421,8 +421,8 @@ def register(app, ctx, x):
 
     @app.route("GET", r"/api/libraries/(?P<sid>\d{1,6})/photos")
     def library_photos(req):
-        """Un album (ses sous-albums et ses photos), toutes les photos de la plus récente à la plus ancienne, ou
-        les favoris de la personne."""
+        """An album (its sub-albums and its photos), all the photos from the most recent to the oldest, or
+        the person's favourites."""
         sid = req.params["sid"]
         photo_library(req.user, sid)
         uid = req.user["id"]
@@ -440,7 +440,7 @@ def register(app, ctx, x):
         x.require_section(req.user, str(r["library_id"]))
         return r
 
-    # ------------------------------------------------------------ fichiers (visionneuse, vidéo, original)
+    # ------------------------------------------------------------ files (viewer, video, original)
     def view_response(r, w):
         size = next((s for s in VIEW_SIZES if s >= w), VIEW_SIZES[-1])
         db.release()
@@ -454,7 +454,7 @@ def register(app, ctx, x):
             return Response(f.read(), 200, "image/jpeg", {"Cache-Control": "private, max-age=604800, immutable"})
 
     def file_response(req, path, attachment=False):
-        """Fichier d'origine, par plages (vidéo : avance rapide dans le navigateur)."""
+        """Original file, by ranges (video: fast forward in the browser)."""
         if not os.path.isfile(path):
             raise HTTPError(404, "Fichier introuvable : le partage est-il monté ?")
         db.release()
@@ -494,7 +494,7 @@ def register(app, ctx, x):
 
     @app.route("GET", r"/api/photos/(?P<rk>\d{1,12})/view")
     def photo_view(req):
-        """Image entière pour la visionneuse : redimensionnée à l'écran, remise à l'endroit (GIF animés tels quels)."""
+        """Whole picture for the viewer: resized to the screen, turned the right way up (animated GIFs as they are)."""
         return view_response(photo_or_404(req), req.int_arg("w", 1920, 100, 4000))
 
     @app.route("GET", r"/api/photos/(?P<rk>\d{1,12})/stream")
@@ -517,7 +517,7 @@ def register(app, ctx, x):
             db.run("DELETE FROM photo_favs WHERE user_id=? AND item_id=?", (req.user["id"], r["id"]))
         return {"fav": bool(req.json().get("on"))}
 
-    # ------------------------------------------------------------ album partagé par lien (sans compte)
+    # ------------------------------------------------------------ album shared by link (no account)
     def album_or_404(req):
         a = db.one("SELECT * FROM items WHERE id=? AND type='album'", (int(req.params["aid"]),))
         if not a:
@@ -560,7 +560,7 @@ def register(app, ctx, x):
                    (req.params["token"], int(time.time())))
         if not s:
             ctx.throttle.check("share:" + req.client_ip)
-            ctx.throttle.fail("share:" + req.client_ip)  # liens essayés au hasard : freinés comme les mots de passe
+            ctx.throttle.fail("share:" + req.client_ip)  # links tried at random: slowed down like passwords
             raise HTTPError(404, "Ce lien a expiré ou n'existe pas")
         return s
 

@@ -1,14 +1,14 @@
-"""Détection des intros (opening) et génériques de fin par empreinte audio, pour les fichiers sans
-chapitres exploitables (empreintes audio comparées d'un épisode à l'autre).
+"""Detection of intros (openings) and end credits by audio fingerprint, for files without
+usable chapters (audio fingerprints compared from one episode to the next).
 
-Les épisodes d'une même saison partagent la même chanson d'ouverture et le même générique. On calcule
-l'empreinte Chromaprint (fournie par ffmpeg) du début et de la fin de chaque épisode, puis on cherche,
-entre deux épisodes, le plus long passage dont les empreintes se ressemblent (à un décalage près).
+The episodes of a season share the same opening song and the same credits. The
+Chromaprint fingerprint (provided by ffmpeg) of the start and the end of each episode is computed, then,
+between two episodes, the longest passage whose fingerprints look alike (up to an offset) is searched for.
 
-Une empreinte est une suite d'entiers 32 bits, un toutes les ~0,124 s. Deux points « correspondent »
-s'ils diffèrent de peu de bits. On repère d'abord les décalages plausibles grâce aux valeurs identiques
-(index inversé), puis on mesure, pour chacun, la plus longue suite de points correspondants (en tolérant
-de petites coupures).
+A fingerprint is a series of 32-bit integers, one every ~0.124 s. Two points "match"
+when they differ by few bits. The plausible offsets are found first thanks to the identical values
+(inverted index), then, for each one, the longest series of matching points is measured (tolerating
+small gaps).
 """
 import json
 import logging
@@ -20,9 +20,9 @@ from . import media
 
 log = logging.getLogger("noxa.intro")
 
-POINT = 0.1238              # durée d'un point d'empreinte (s)
-MAX_BIT_DIFF = 6            # bits différents tolérés entre deux points « identiques »
-MAX_GAP = int(3.5 / POINT)  # coupure tolérée dans une suite (bruitages, dialogue par-dessus…)
+POINT = 0.1238              # duration of a fingerprint point (s)
+MAX_BIT_DIFF = 6            # differing bits tolerated between two "identical" points
+MAX_GAP = int(3.5 / POINT)  # gap tolerated in a series (sound effects, dialogue on top…)
 TOP_SHIFTS = 8
 
 
@@ -45,7 +45,7 @@ def supported():
 
 
 def fingerprint(path, start, length):
-    """Empreinte du passage [start, start+length] (secondes) de la première piste audio."""
+    """Fingerprint of the passage [start, start+length] (seconds) of the first audio track."""
     cmd = [media.FFMPEG, "-hide_banner", "-nostdin", "-v", "error", "-ss", f"{max(0.0, start):.2f}", "-t", f"{length:.2f}",
            *media.LOCAL_ONLY, "-i", path, "-map", "0:a:0", "-vn", "-sn", "-ac", "1", "-f", "chromaprint",
            "-fp_format", "raw", "-"]
@@ -63,7 +63,7 @@ def fingerprint(path, start, length):
 
 
 def _shifts(a, b):
-    """Décalages (position dans b - position dans a) les plus fréquents parmi les valeurs identiques."""
+    """Most frequent offsets (position in b - position in a) among the identical values."""
     index = {}
     for j, v in enumerate(b):
         index.setdefault(v, []).append(j)
@@ -72,7 +72,7 @@ def _shifts(a, b):
         for j in index.get(v, ()):
             d = j - i
             counts[d] = counts.get(d, 0) + 1
-    # valeurs presque identiques : on regroupe les décalages voisins
+    # almost identical values: neighbouring offsets are grouped
     ranked = sorted(counts.items(), key=lambda kv: -kv[1])
     out = []
     for d, n in ranked:
@@ -86,7 +86,7 @@ def _shifts(a, b):
 
 
 def _longest_run(a, b, shift):
-    """Plus longue suite de points correspondants pour ce décalage -> (début dans a, fin dans a) en points."""
+    """Longest series of matching points for this offset -> (start in a, end in a) in points."""
     lo = max(0, -shift)
     hi = min(len(a), len(b) - shift)
     best = (0, 0)
@@ -105,7 +105,7 @@ def _longest_run(a, b, shift):
 
 
 def common_segment(a, b, min_s, max_s):
-    """Passage commun le plus long (entre min_s et max_s secondes) -> ((a_debut, a_fin), (b_debut, b_fin)) en s."""
+    """Longest common passage (between min_s and max_s seconds) -> ((a_start, a_end), (b_start, b_end)) in s."""
     if not a or not b:
         return None
     found = None
@@ -115,7 +115,7 @@ def common_segment(a, b, min_s, max_s):
         if dur < min_s:
             continue
         if dur > max_s:
-            # passage commun trop long (récapitulatif, même scène) : on garde la fin, côté chanson
+            # common passage too long (recap, same scene): the end is kept, on the song side
             s = e - int(max_s / POINT)
             dur = max_s
         if not found or dur > found[0]:
@@ -124,7 +124,7 @@ def common_segment(a, b, min_s, max_s):
 
 
 class FingerprintCache:
-    """Empreintes gardées sur disque (le calcul relit le fichier) ; clé = fichier + passage analysé."""
+    """Fingerprints kept on disk (computing them reads the file again); key = file + passage analysed."""
 
     def __init__(self, base):
         self.base = base
@@ -135,7 +135,7 @@ class FingerprintCache:
         return os.path.join(self.base, f"f{size}_{item['file_mtime'] or 0}_{part}{minutes}.json")
 
     def get(self, item, part, minutes):
-        """part = 'head' (début) ou 'tail' (fin). Renvoie (empreinte, début du passage en s)."""
+        """part = 'head' (start) or 'tail' (end). Returns (fingerprint, start of the passage in s)."""
         path = self._path(item, part, minutes)
         try:
             with open(path, encoding="utf-8") as f:
@@ -156,10 +156,10 @@ class FingerprintCache:
 
 
 def detect_season(episodes, cache, part, minutes, min_s, max_s, cancelled=lambda: False):
-    """Pour une saison : {id d'épisode: (début, fin) en secondes dans le fichier} du passage commun.
+    """For a season: {episode id: (start, end) in seconds in the file} of the common passage.
 
-    Chaque épisode est comparé à ses voisins (suivant, précédent, puis un plus loin) ; on garde le plus
-    long passage commun trouvé."""
+    Each episode is compared with its neighbours (next, previous, then one further); the longest
+    common passage found is kept."""
     prints = {}
 
     def fp(ep):
@@ -190,7 +190,7 @@ def detect_season(episodes, cache, part, minutes, min_s, max_s, cancelled=lambda
             if seg and (not best or seg[0][1] - seg[0][0] > best[1] - best[0]):
                 best = seg[0]
             if best and best[1] - best[0] >= min(max_s, 80):
-                break  # chanson complète trouvée : inutile de comparer davantage
+                break  # whole song found: no need to compare further
         if best:
             found[ep["id"]] = (mine[1] + best[0], mine[1] + best[1])
     return found

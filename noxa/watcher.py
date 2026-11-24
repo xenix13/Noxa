@@ -1,10 +1,10 @@
-"""Détection des changements dans les bibliothèques.
+"""Detection of changes in the libraries.
 
-Sur un partage SMB, Linux n'est pas prévenu des fichiers ajoutés depuis une autre machine
-(inotify ne voit que les écritures locales). On compare donc régulièrement les dates de
-modification des DOSSIERS (ajout, suppression ou renommage d'un fichier les change) : c'est
-très léger, même sur des milliers de dossiers. Après un changement, on attend que les dossiers
-soient stables (copie terminée) puis on rescanne uniquement la bibliothèque concernée.
+On an SMB share, Linux is not told about files added from another machine
+(inotify only sees local writes). So the modification dates of the FOLDERS are compared
+regularly (adding, deleting or renaming a file changes them): this is
+very light, even over thousands of folders. After a change, we wait until the folders
+are stable (copy finished), then only the library concerned is scanned again.
 """
 import json
 import logging
@@ -16,17 +16,17 @@ log = logging.getLogger("noxa.watch")
 SKIP = {"@eadir", "#recycle", "$recycle.bin", "lost+found", ".trickplay"}
 
 
-MAX_PARTIAL = 500  # au-delà de ce nombre de dossiers touchés, un scan complet est plus simple
+MAX_PARTIAL = 500  # beyond this number of folders touched, a full scan is simpler
 
 
 def snapshot(paths):
-    """-> {dossier: date de modification} pour tous les dossiers des bibliothèques (fichiers non lus)."""
+    """-> {folder: modification date} for all the folders of the libraries (files not read)."""
     snap = {}
     for root in paths:
         try:
             snap[root] = os.stat(root).st_mtime_ns
         except OSError:
-            continue  # partage non monté : ses dossiers « disparaissent » mais le scanner ne supprime rien
+            continue  # share not mounted: its folders "disappear" but the scanner deletes nothing
         stack = [root]
         while stack:
             d = stack.pop()
@@ -47,12 +47,12 @@ def snapshot(paths):
 
 
 def vanished_dirs(db, lib):
-    """Dossiers indexés de cette bibliothèque qui n'existent plus (série ou film déplacé ailleurs).
+    """Indexed folders of this library that no longer exist (show or movie moved elsewhere).
 
-    Filet de sécurité quand la bibliothèque d'ORIGINE d'un déplacement n'a pas vu de changement (cache
-    SMB, déplacement fait pendant une coupure…) : on ne teste que les dossiers de premier niveau (un par
-    série / film), donc quelques centaines d'appels au plus, et seulement après une détection ailleurs."""
-    roots = [r for r in json.loads(lib["paths"]) if r and os.path.isdir(r)]  # partage non monté : on ne touche à rien
+    Safety net when the SOURCE library of a move saw no change (SMB
+    cache, move done during an outage…): only the top-level folders are tested (one per
+    show / movie), so a few hundred calls at most, and only after a detection elsewhere."""
+    roots = [r for r in json.loads(lib["paths"]) if r and os.path.isdir(r)]  # share not mounted: nothing is touched
     if not roots:
         return set()
     by_top = {}
@@ -75,20 +75,20 @@ def vanished_dirs(db, lib):
 class Watcher:
     def __init__(self, ctx):
         self.ctx = ctx
-        self.prints = {}      # bibliothèque -> {dossier: date}
-        self.pending = {}     # bibliothèque -> {"t": instant, "dirs": dossiers à revoir, ou None = tout}
+        self.prints = {}      # library -> {folder: date}
+        self.pending = {}     # library -> {"t": instant, "dirs": folders to check again, or None = everything}
         self.last_check = {}
-        self.force_at = None  # webhook : scan demandé
-        self.force_scope = None  # {bibliothèque: dossiers} ; None = scan complet
+        self.force_at = None  # webhook: scan requested
+        self.force_scope = None  # {library: folders}; None = full scan
         self.lock = threading.Lock()
         self.stopped = threading.Event()
-        self.events = []      # derniers déclenchements (affichés dans l'admin)
+        self.events = []      # latest triggers (shown in the admin)
 
     def interval(self):
         return self.ctx.setting_int("watch_interval", 60)
 
     def request_scan(self, reason="webhook", delay=10, scope=None):
-        """scope : {bibliothèque: dossiers} pour ne revoir que ces dossiers (sinon scan complet)."""
+        """scope: {library: folders} to check only these folders (otherwise full scan)."""
         with self.lock:
             full = self.force_at is not None and self.force_scope is None
             if scope and not full:
@@ -103,7 +103,7 @@ class Watcher:
             self._event(f"Scan demandé ({reason})" + (f" : {what}" if scope else ""))
 
     def defer(self, library_id, dirs=None):
-        """Le scanner a ignoré des fichiers en cours de copie : on repassera (sur ces dossiers seulement)."""
+        """The scanner skipped files being copied: another pass will come (on these folders only)."""
         with self.lock:
             self._add_pending(library_id, dirs)
 
@@ -146,12 +146,12 @@ class Watcher:
             with self.lock:
                 ids, scope = None, None
                 if self.force_scope:
-                    # on y ajoute ce que la surveillance avait déjà relevé pour ces bibliothèques
+                    # what the watcher had already noted for these libraries is added
                     ids, scope = list(self.force_scope), {}
                     for lib, dirs in self.force_scope.items():
                         p = self.pending.get(lib)
                         if p and p["dirs"] is None:
-                            continue  # absente de scope = scan complet de cette bibliothèque seulement
+                            continue  # missing from scope = full scan of this library only
                         scope[lib] = set(dirs) | (p["dirs"] if p else set())
             ok = scanner.start(ids, scope=scope or None)
             if ok:
@@ -180,18 +180,18 @@ class Watcher:
             old = self.prints.get(lib["id"])
             self.prints[lib["id"]] = snap
             if old is None:
-                continue  # premier passage : référence
+                continue  # first pass: reference
             if snap != old:
                 changed = {d for d, m in snap.items() if old.get(d) != m} | {d for d in old if d not in snap}
                 with self.lock:
                     self._add_pending(lib["id"], changed)
                 log.info("Changement détecté dans « %s » (%d dossier(s))", lib["name"], len(changed))
                 detected.add(lib["id"])
-                continue  # on attend un passage stable (copie en cours ?)
+                continue  # wait for a stable pass (copy in progress?)
             if lib["id"] in self.pending:
                 due.append(lib)
         if detected:
-            # un dossier arrivé ici a peut-être été déplacé depuis une autre bibliothèque
+            # a folder that arrived here may have been moved from another library
             for lib in libs:
                 if lib["id"] in detected:
                     continue

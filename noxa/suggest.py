@@ -1,5 +1,5 @@
-"""Suggestions locales, sans service extérieur : à partir de ce que l'utilisateur a regardé récemment
-(genres, réalisateurs, acteurs), on cherche dans ses bibliothèques les films et séries qu'il n'a pas encore vus."""
+"""Local suggestions, without an outside service: from what the user watched recently
+(genres, directors, actors), their libraries are searched for the movies and shows they have not seen yet."""
 import json
 import math
 import threading
@@ -8,13 +8,13 @@ import time
 from .catalog import CARD_SQL, MIN_RESUME_MS, RK
 from .web import HTTPError
 
-RECENT_DAYS = 90         # fenêtre de « ce que j'ai regardé récemment »
-HALF_LIFE_DAYS = 21      # un visionnage d'il y a 3 semaines compte moitié moins
-LIKE_WEIGHT = 1.5        # un « j'aime » compte comme un visionnage récent appuyé
-DISLIKE_WEIGHT = 0.8     # un « je n'aime pas » éloigne les titres qui lui ressemblent
+RECENT_DAYS = 90         # window of "what I watched recently"
+HALF_LIFE_DAYS = 21      # a viewing from 3 weeks ago counts half as much
+LIKE_WEIGHT = 1.5        # a "like" counts as a strong recent viewing
+DISLIKE_WEIGHT = 0.8     # a "dislike" pushes away the titles that look like it
 CACHE_SECONDS = 300
 ROW_SIZE = 24
-MIN_ROW = 4              # en dessous, la rangée n'est pas affichée
+MIN_ROW = 4              # below this, the row is not shown
 
 
 def _names(people, key, limit):
@@ -27,7 +27,7 @@ def _names(people, key, limit):
 
 
 def features(row):
-    """Genres et personnes d'un film ou d'une série."""
+    """Genres and people of a movie or a show."""
     try:
         genres = [g for g in json.loads(row["genres"] or "[]") if isinstance(g, str)]
     except (TypeError, ValueError):
@@ -42,7 +42,7 @@ def features(row):
 
 
 def similarity(a, b):
-    """Proximité entre deux titres : genres en commun, même réalisateur, acteurs en commun."""
+    """Closeness between two titles: genres in common, same director, actors in common."""
     ga, da, ca = a
     gb, db_, cb = b
     score = 0.0
@@ -59,7 +59,7 @@ def register(app, ctx, x):
     cache, lock = {}, threading.Lock()
 
     def seen_titles(uid):
-        """Films vus ou commencés, séries dont au moins un épisode a été vu ou commencé : jamais proposés."""
+        """Movies watched or started, shows with at least one episode watched or started: never suggested."""
         ids = set()
         for r in db.all("SELECT rating_key, type, show_key FROM progress WHERE user_id=? "
                         "AND (watched=1 OR position_ms>=? OR view_count>0)", (uid, MIN_RESUME_MS)):
@@ -70,7 +70,7 @@ def register(app, ctx, x):
         for r in db.all("SELECT h.rating_key FROM history h WHERE h.user_id=?", (uid,)):
             if str(r["rating_key"]).isdigit():
                 ids.add(int(r["rating_key"]))
-        if ids:  # épisodes de l'historique -> leur série
+        if ids:  # episodes in the history -> their show
             for chunk in _chunks(sorted(ids), 900):
                 marks = ",".join("?" * len(chunk))
                 for r in db.all(f"SELECT show_id FROM items WHERE id IN ({marks}) AND show_id IS NOT NULL", chunk):
@@ -78,7 +78,7 @@ def register(app, ctx, x):
         return ids
 
     def seeds(uid):
-        """Titres regardés récemment (film, ou série de l'épisode), avec un poids qui baisse avec le temps."""
+        """Titles watched recently (movie, or show of the episode), with a weight that drops over time."""
         since = int(time.time()) - RECENT_DAYS * 86400
         events = db.all("SELECT rating_key, watched_at AS t FROM history WHERE user_id=? AND watched_at>? "
                         "ORDER BY watched_at DESC LIMIT 400", (uid, since))
@@ -102,12 +102,12 @@ def register(app, ctx, x):
             w = 0.5 ** ((now - e["t"]) / 86400 / HALF_LIFE_DAYS)
             weight[tid] = weight.get(tid, 0) + w
             last[tid] = max(last.get(tid, 0), e["t"])
-        # une série regardée d'une traite ne doit pas écraser tout le reste
+        # a show binge-watched must not crush everything else
         weight = {k: min(v, 2.5) for k, v in weight.items()}
         return weight, last
 
     def opinions(uid):
-        """{titre: avis} ; avis 1 = j'aime, -1 = je n'aime pas, 0 = ne plus suggérer."""
+        """{title: opinion}; opinion 1 = like, -1 = dislike, 0 = do not suggest anymore."""
         return {r["item_id"]: r["value"] for r in db.all("SELECT item_id, value FROM ratings WHERE user_id=?", (uid,))}
 
     def candidates(user, exclude):
@@ -144,7 +144,7 @@ def register(app, ctx, x):
         marks = ",".join("?" * len(seed_ids))
         seed_rows = {r["id"]: r for r in db.all(f"SELECT id, title, genres, people FROM items WHERE id IN ({marks})", seed_ids)}
         seed_feat = {i: features(r) for i, r in seed_rows.items()}
-        # profil : genres, réalisateurs et acteurs pondérés par la fraîcheur des visionnages
+        # profile: genres, directors and actors weighted by how recent the viewings are
         genre_w, dir_w, cast_w = {}, {}, {}
         for i, (g, d, c) in seed_feat.items():
             w = weight[i]
@@ -154,7 +154,7 @@ def register(app, ctx, x):
                 dir_w[name] = dir_w.get(name, 0) + w
             for name in c:
                 cast_w[name] = cast_w.get(name, 0) + w
-        if dislikes:  # ce qui ressemble à un titre non aimé recule
+        if dislikes:  # what looks like a disliked title moves back
             marks_d = ",".join("?" * len(dislikes))
             for r in db.all(f"SELECT id, genres, people FROM items WHERE id IN ({marks_d})", dislikes):
                 g, d, c = features(r)
@@ -177,13 +177,13 @@ def register(app, ctx, x):
             s += 0.4 * sum(min(cast_w.get(n, 0), 2) for n in c)
             if s <= 0:
                 continue
-            s += 0.03 * (r["rating"] or 0)  # à score égal, le mieux noté d'abord
+            s += 0.03 * (r["rating"] or 0)  # same score: the best rated first
             scored.append((s, r["added_at"] or 0, r["id"]))
         scored.sort(reverse=True)
         suggestions = [i for _, _, i in scored[:ROW_SIZE]]
 
-        # « Parce que tu as regardé … » : les deux titres les plus récents qui ont assez de voisins
-        # (ce qui est déjà en tête des suggestions passe après, pour varier ce qu'on voit)
+        # "Because you watched …": the two most recent titles that have enough neighbours
+        # (what already leads the suggestions comes after, to vary what is seen)
         because, used, shown = [], set(), set(suggestions[:8])
         for sid in sorted(last, key=last.get, reverse=True)[:6]:
             if len(because) == 2 or sid not in seed_feat:
@@ -197,7 +197,7 @@ def register(app, ctx, x):
         return {"suggestions": suggestions, "because": because}
 
     def suggestions(user):
-        """Rangées « Suggestions » et « Parce que vous avez regardé… » de l'accueil."""
+        """"Suggestions" and "Because you watched…" rows of the home page."""
         stamp = (db.scalar("SELECT MAX(id) FROM history WHERE user_id=?", (user["id"],)),
                  db.scalar("SELECT MAX(updated_at) FROM progress WHERE user_id=? AND position_ms>=?", (user["id"], MIN_RESUME_MS)),
                  db.scalar("SELECT COUNT(*) FROM items WHERE type IN ('movie','show')"),
@@ -221,7 +221,7 @@ def register(app, ctx, x):
         return out
 
     def similar_to(user, row):
-        """Titres proches d'un film ou d'une série (fiche) : pas besoin d'historique."""
+        """Titles close to a movie or a show (title page): no history needed."""
         if row["type"] in ("episode", "season") and row["show_id"]:
             row = db.one("SELECT * FROM items WHERE id=?", (row["show_id"],))
         if not row or row["type"] not in ("movie", "show"):
@@ -236,7 +236,7 @@ def register(app, ctx, x):
     x.similar_to = similar_to
 
     def title_of(row):
-        """Les avis portent sur un film ou une série (un épisode renvoie à sa série)."""
+        """Opinions are about a movie or a show (an episode points to its show)."""
         if row["type"] in ("episode", "season") and row["show_id"]:
             return row["show_id"]
         return row["id"] if row["type"] in ("movie", "show") else None
@@ -262,10 +262,10 @@ def register(app, ctx, x):
         else:
             raise HTTPError(400, "Avis invalide")
         with lock:
-            cache.pop(req.user["id"], None)  # suggestions recalculées avec ce nouvel avis
+            cache.pop(req.user["id"], None)  # suggestions computed again with this new opinion
         return {"value": v}
 
-    # notes personnelles et titres masqués ------------------------------------------------------------
+    # personal ratings and hidden titles ------------------------------------------------------------
     def my_stars(user, row):
         tid = title_of(row)
         return db.scalar("SELECT stars FROM stars WHERE user_id=? AND item_id=?", (user["id"], tid)) if tid else None
@@ -277,7 +277,7 @@ def register(app, ctx, x):
     x.is_hidden = is_hidden
 
     def set_stars(uid, tid, v):
-        """Note de 1 à 5 (None : retirée) d'un film ou d'une série, et l'avis qui en découle."""
+        """Rating from 1 to 5 (None: removed) of a movie or a show, and the opinion that follows from it."""
         now = int(time.time())
         if v is None:
             db.run("DELETE FROM stars WHERE user_id=? AND item_id=?", (uid, tid))
@@ -296,8 +296,8 @@ def register(app, ctx, x):
 
     @app.route("PUT", f"/api/items/{RK}/stars")
     def item_stars(req):
-        """Note de 1 à 5 étoiles (null : retirée). Elle oriente aussi les suggestions : 4 ou 5 = j'aime,
-        1 ou 2 = je n'aime pas, 3 = sans avis."""
+        """Rating from 1 to 5 stars (null: removed). It also steers the suggestions: 4 or 5 = like,
+        1 or 2 = dislike, 3 = no opinion."""
         row = x.require_item(req.user, req.params["rk"])
         tid = title_of(row)
         if not tid:
@@ -310,7 +310,7 @@ def register(app, ctx, x):
 
     @app.route("PUT", f"/api/items/{RK}/hidden")
     def item_hidden(req):
-        """Masquer un titre pour soi : il disparaît de ses listes (bibliothèques, accueil, recherche, suggestions)."""
+        """Hide a title for oneself: it disappears from one's lists (libraries, home, search, suggestions)."""
         row = x.require_item(req.user, req.params["rk"])
         tid = title_of(row)
         if not tid:

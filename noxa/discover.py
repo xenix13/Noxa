@@ -1,12 +1,12 @@
-"""« Découvrir » : catalogues des services de streaming (via TMDB) et demandes envoyées à Seerr.
+""""Discover": catalogues of the streaming services (through TMDB) and requests sent to Seerr.
 
-- Les catalogues (Netflix, Prime Video, Disney+, Canal+…) viennent de TMDB : ce qui est proposé en
-  abonnement dans le pays choisi. Chaque titre indique s'il est déjà dans Noxa ou déjà demandé.
-- « Demander » transmet la demande à Seerr (ex-Overseerr / Jellyseerr) au nom de l'utilisateur, qui
-  la fait télécharger par Radarr / Sonarr. Noxa retrouve le compte Seerr de chacun par son nom ;
-  sans correspondance, la demande part au nom du propriétaire de la clé d'API.
-- « À regarder » accepte aussi les titres absents de la bibliothèque : ils sont demandés
-  automatiquement (si activé) et rejoignent la liste habituelle dès leur arrivée.
+- The catalogues (Netflix, Prime Video, Disney+, Canal+…) come from TMDB: what is offered by
+  subscription in the chosen country. Each title says whether it is already in Noxa or already requested.
+- "Request" passes the request on to Seerr (formerly Overseerr / Jellyseerr) on behalf of the user, which
+  has Radarr / Sonarr download it. Noxa finds each person's Seerr account by their name;
+  without a match, the request is made on behalf of the API key's owner.
+- "Watchlist" also accepts titles missing from the library: they are requested
+  automatically (when enabled) and join the usual list as soon as they arrive.
 """
 import concurrent.futures
 import hashlib
@@ -27,7 +27,7 @@ from .web import HTTPError, Response
 
 log = logging.getLogger("noxa.discover")
 
-# Services mis en avant (identifiants TMDB des fournisseurs), dans cet ordre s'ils existent dans le pays
+# Featured services (TMDB provider ids), in this order when they exist in the country
 FEATURED = [8, 119, 337, 381, 1899, 350, 531, 283, 415]
 FALLBACK_NAMES = {8: "Netflix", 119: "Prime Video", 337: "Disney+", 381: "Canal+", 1899: "Max", 350: "Apple TV+",
                   531: "Paramount+", 283: "Crunchyroll", 415: "ADN"}
@@ -140,7 +140,7 @@ def register(app, ctx, x):
     def seerr():
         s = Seerr(db.setting("seerr_url"), db.setting("seerr_key"))
         if not s.enabled and getattr(ctx, "fed", None):
-            return ctx.fed.shared_seerr() or s  # Seerr d'un serveur lié : les demandes passent par lui
+            return ctx.fed.shared_seerr() or s  # Seerr of a linked server: the requests go through it
         return s
 
     # ------------------------------------------------------------ statuts
@@ -167,14 +167,14 @@ def register(app, ctx, x):
         return status_cache.put("all", out)
 
     def library_matches(user, pairs):
-        """{(type, tmdb_id): item_id} pour les titres déjà dans les bibliothèques visibles par l'utilisateur."""
+        """{(type, tmdb_id): item_id} for the titles already in the libraries visible to the user."""
         ids = sorted({t for _, t in pairs})
         if not ids:
             return {}
         allowed = sorted(x.allowed_set(user), key=int)
         if not allowed:
             return {}
-        age_sql, age_args = x.age_filter(user, hidden=False)  # titre masqué : il est quand même sur le serveur
+        age_sql, age_args = x.age_filter(user, hidden=False)  # hidden title: it is on the server all the same
         rows = db.all(x.ITEM_SQL + f"WHERE i.type IN ('movie','show') AND i.tmdb_id IN ({','.join('?' * len(ids))}) "
                       f"AND i.library_id IN ({','.join('?' * len(allowed))})" + age_sql,
                       ids + [int(a) for a in allowed] + age_args)
@@ -207,7 +207,7 @@ def register(app, ctx, x):
             c["item_id"] = lib.get(k)
             c["status"] = "available" if c["item_id"] else st.get(k)
             if c["status"] == "available" and not c["item_id"]:
-                c["status"] = "processing"  # disponible pour Seerr mais pas encore scanné (ou pas visible ici)
+                c["status"] = "processing"  # available for Seerr but not scanned yet (or not visible here)
             c["wished"] = k in wl
         return cards
 
@@ -227,7 +227,7 @@ def register(app, ctx, x):
         return [out[p] for p in FEATURED if p in out]
 
     def browse(kind, provider, sort="popular", page=1, genre=0):
-        """Catalogue TMDB : populaires, tendances, à venir, récents ou mieux notés ; par service et par genre."""
+        """TMDB catalogue: popular, trending, upcoming, recent or top rated; per service and per genre."""
         if sort == "trending" and not provider and not genre:
             r = tget(f"/trending/{kind}/week", page=page)
             return [card(res, kind) for res in r.get("results", [])], int(r.get("total_pages") or 1)
@@ -239,7 +239,7 @@ def register(app, ctx, x):
             params["with_genres"] = str(genre)
         today = date.today()
         field = "primary_release_date" if kind == "movie" else "first_air_date"
-        if sort == "upcoming":  # pas encore sortis : à partir de demain, sur un an, les plus attendus d'abord
+        if sort == "upcoming":  # not released yet: from tomorrow, over a year, the most awaited first
             params[field + ".gte"] = (today + timedelta(days=1)).isoformat()
             params[field + ".lte"] = (today + timedelta(days=365)).isoformat()
             if kind == "movie":
@@ -259,7 +259,7 @@ def register(app, ctx, x):
         except HTTPError:
             return []
 
-    # rangées de l'accueil de Découvrir, en plus des tendances et des services : (clé, type, tri)
+    # rows of the Discover home, besides the trends and the services: (key, type, sort)
     SECTIONS = (("upcoming_movie", "movie", "upcoming"), ("upcoming_tv", "tv", "upcoming"),
                 ("popular_movie", "movie", "popular"), ("popular_tv", "tv", "popular"))
 
@@ -284,7 +284,7 @@ def register(app, ctx, x):
         for p in provs:
             mixed = []
             mv, tv = rows.get(p["id"], {}).get("movie", []), rows.get(p["id"], {}).get("tv", [])
-            for i in range(max(len(mv), len(tv))):  # films et séries en alternance
+            for i in range(max(len(mv), len(tv))):  # movies and shows alternating
                 mixed += [c for c in (tv[i] if i < len(tv) else None, mv[i] if i < len(mv) else None) if c]
             out_rows.append({**p, "items": decorate(user, mixed[:24])})
         sections = []
@@ -348,9 +348,9 @@ def register(app, ctx, x):
 
     # ------------------------------------------------------------ demandes
     def seerr_user(user):
-        """Compte Seerr de cet utilisateur, retrouvé par son identifiant, son nom ou celui de son compte de
-        serveur multimédia (champs de l'API de Seerr). Sans correspondance, la demande est faite au nom du
-        propriétaire de la clé d'API."""
+        """Seerr account of this user, found by their username, their name or that of their
+        media server account (fields of the Seerr API). Without a match, the request is made on behalf of the
+        API key's owner."""
         s = seerr()
         users = users_cache.get("users")
         if users is None:
@@ -404,7 +404,7 @@ def register(app, ctx, x):
                (int(time.time()), req.user["id"], kind, tid))
         return r
 
-    # ------------------------------------------------------------ « À regarder » hors bibliothèque
+    # ------------------------------------------------------------ "Watchlist" outside the library
     @app.route("GET", "/api/wishlist")
     def wishlist(req):
         rows = db.all("SELECT * FROM wishlist WHERE user_id=? ORDER BY added_at DESC", (req.user["id"],))
@@ -426,7 +426,7 @@ def register(app, ctx, x):
         d = tget(f"/{kind}/{tid}")
         c = decorate(req.user, [card(d, kind)])[0]
         if c["item_id"]:
-            # déjà dans la bibliothèque : c'est la liste « À regarder » habituelle
+            # already in the library: it is the usual "Watchlist"
             db.run("INSERT OR IGNORE INTO watchlist(user_id,item_id,added_at) VALUES(?,?,?)",
                    (uid, int(c["item_id"]), int(time.time())))
             return {"ok": True, "wished": True, "item_id": c["item_id"]}
@@ -468,7 +468,7 @@ def register(app, ctx, x):
         ctype = {".png": "image/png", ".svg": "image/svg+xml"}.get(os.path.splitext(p)[1], "image/jpeg")
         headers = {"Cache-Control": "private, max-age=2592000, immutable"}
         if ctype == "image/svg+xml":
-            # un SVG ouvert directement ne doit pouvoir exécuter aucun script (logos des plateformes)
+            # an SVG opened directly must not be able to run any script (platform logos)
             headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
         with open(dest, "rb") as f:
             return Response(f.read(), 200, ctype, headers)

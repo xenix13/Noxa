@@ -1,15 +1,15 @@
-"""Applications natives (Windows, macOS, Linux, Android, Android TV) distribuées par le serveur lui-même.
+"""Native apps (Windows, macOS, Linux, Android, Android TV) distributed by the server itself.
 
-L'intégration continue construit les applications et les joint à la publication GitHub de chaque version (et à la
-pré-version « apps-test » pour la branche test). Ce serveur lit la liste des fichiers de la publication qui le
-concerne, puis :
-  - /api/apps : ce qui s'installe, pour la page Applications et le bouton « Installer » ;
-  - /apps/<plateforme> : le fichier à installer — servi depuis la copie gardée par ce serveur, sinon redirigé vers
-    GitHub le temps que la copie se fasse (en arrière-plan, au premier téléchargement) ;
-  - /apps/desktop/<fichier> : de quoi se mettre à jour pour l'application de bureau (latest*.yml d'electron-updater).
+Continuous integration builds the apps and attaches them to the GitHub release of each version (and to the
+"apps-test" pre-release for the test branch). This server reads the list of files of the release that
+concerns it, then:
+  - /api/apps: what can be installed, for the Apps page and the "Install" button;
+  - /apps/<platform>: the file to install — served from the copy kept by this server, otherwise redirected to
+    GitHub while the copy is made (in the background, at the first download);
+  - /apps/desktop/<file>: what the desktop app needs to update (electron-updater's latest*.yml).
 
-Les applications affichent l'interface de ce serveur : elle suit donc chaque mise à jour du serveur. Le programme
-lui-même (lecteur, téléchargements, fenêtre) change rarement ; sa version est indépendante de celle du serveur.
+The apps show this server's interface: so it follows each server update. The program
+itself (player, downloads, window) rarely changes; its version is independent of the server's.
 """
 import json
 import logging
@@ -25,7 +25,7 @@ from .web import HTTPError, Response
 
 log = logging.getLogger("noxa.apps")
 
-# plateforme -> fichier joint à la publication (noms fixes, voir .github/workflows/tests.yml)
+# platform -> file attached to the release (fixed names, see .github/workflows/tests.yml)
 APPS = {
     "windows": "Noxa-Setup.exe",
     "macos": "Noxa.dmg",
@@ -34,11 +34,11 @@ APPS = {
     "android": "noxa-android.apk",
     "tv": "noxa-tv.apk",
 }
-MANIFEST = "noxa-apps.json"  # versions des applications (écrit par l'intégration continue)
-# mises à jour de l'application de bureau : fichiers lus par electron-updater
+MANIFEST = "noxa-apps.json"  # app versions (written by continuous integration)
+# desktop app updates: files read by electron-updater
 DESKTOP = re.compile(r"^(latest(-mac|-linux)?\.yml|Noxa-Setup\.exe(\.blockmap)?|Noxa\.AppImage|Noxa-mac\.zip(\.blockmap)?)$")
 REFRESH = 6 * 3600
-RETRY = 600  # publication sans applications (pas encore jointes) ou GitHub injoignable
+RETRY = 600  # release without apps (not attached yet) or GitHub unreachable
 API = "https://api.github.com"
 
 
@@ -76,11 +76,11 @@ class Apps:
             test = self.tag() == "apps-test"
             try:
                 data = self._get(f"{API}/repos/{owner}/{repo}/releases/tags/{self.tag()}")
-            except (OSError, ValueError) as e:  # pas encore publiée (404), ou GitHub injoignable
+            except (OSError, ValueError) as e:  # not published yet (404), or GitHub unreachable
                 self.error = str(e)[:200]
             if not self._has_apps(data):
-                # publication de cette version pas encore complète (les applications y sont jointes un quart d'heure
-                # après le paquet) : en attendant, la plus récente qui les a
+                # release of this version not complete yet (the apps are attached a quarter of an hour
+                # after the package): meanwhile, the most recent one that has them
                 try:
                     data = next((r for r in self._get(f"{API}/repos/{owner}/{repo}/releases?per_page=15") or []
                                  if (test or not r.get("prerelease")) and self._has_apps(r)), None)
@@ -100,7 +100,7 @@ class Apps:
                     except (OSError, ValueError):
                         complete = False
         finally:
-            # publication incomplète ou GitHub injoignable : nouvel essai dans 10 minutes plutôt que 6 heures
+            # incomplete release or GitHub unreachable: new try in 10 minutes rather than 6 hours
             self.checked = time.time() if complete else time.time() - REFRESH + RETRY
             self.lock.release()
 
@@ -126,7 +126,7 @@ class Apps:
 
     # ------------------------------------------------------------ copie locale
     def local(self, name):
-        """Chemin de la copie locale à jour de ce fichier, ou None (et la copie démarre en arrière-plan)."""
+        """Path of the up-to-date local copy of this file, or None (and the copy starts in the background)."""
         rel = self.release
         if not rel or name not in rel["assets"]:
             return None
@@ -155,7 +155,7 @@ class Apps:
             if size and os.path.getsize(tmp) != size:
                 raise OSError("fichier incomplet")
             os.replace(tmp, path)
-            # anciennes publications : effacées
+            # old releases: erased
             for d in os.listdir(self.dir):
                 if os.path.join(self.dir, d) != os.path.dirname(path):
                     old = os.path.join(self.dir, d)
@@ -177,7 +177,7 @@ class Apps:
         if not rel or name not in rel["assets"]:
             raise HTTPError(404, "Application pas encore publiée pour cette version")
         path = self.local(name)
-        if not path:  # copie en cours : GitHub en attendant
+        if not path:  # copy in progress: GitHub meanwhile
             return Response(b"", 302, "text/plain", {"Location": rel["assets"][name]["url"], "Cache-Control": "no-store"})
         with open(path, "rb") as f:
             data = f.read() if os.path.getsize(path) < 4 * 1024 * 1024 else None
@@ -227,9 +227,9 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/apps", auth=None)
     def apps_list(req):
-        """Applications à installer (page Applications, bouton « Installer ») : lisible sans être connecté."""
+        """Apps to install (Apps page, "Install" button): readable without being signed in."""
         if apps.release is None:
-            apps.refresh()  # premier appel : on attend la réponse de GitHub (10 s au plus)
+            apps.refresh()  # first call: wait for GitHub's answer (10 s at most)
         else:
             apps.refresh_later()
         return apps.listing()
@@ -245,7 +245,7 @@ def register(app, ctx, x):
 
     @app.route("GET", r"/apps/desktop/(?P<name>[A-Za-z0-9._-]{3,60})", auth=None)
     def desktop_update(req):
-        """Mises à jour de l'application de bureau (fournisseur « generic » d'electron-updater)."""
+        """Desktop app updates (electron-updater's "generic" provider)."""
         name = req.params["name"]
         if not DESKTOP.match(name):
             raise HTTPError(404, "Introuvable")

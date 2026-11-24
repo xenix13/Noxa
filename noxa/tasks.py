@@ -1,9 +1,9 @@
-"""Tâches planifiées du serveur .
+"""Scheduled tasks of the server.
 
-Chaque tâche a une planification (désactivée, toutes les N heures, chaque jour ou chaque semaine à une
-heure donnée), des options, et garde le résultat de sa dernière exécution. Les tâches tournent une à la
-fois dans un fil dédié ; les plus lourdes (lecture des fichiers) se mettent en pause pendant qu'on regarde
-quelque chose, pour ne pas gêner la lecture sur le partage réseau.
+Each task has a schedule (off, every N hours, every day or every week at a
+given hour), options, and keeps the result of its last run. Tasks run one at a
+time in a dedicated thread; the heaviest (reading the files) pause while someone watches
+something, so as not to disturb playback on the network share.
 """
 import json
 import logging
@@ -64,7 +64,7 @@ AFTER_SCAN = opt_bool("after_scan", "Lancer aussi après chaque ajout de fichier
 
 
 def _option_view(o):
-    """Option d'une tâche dans la langue de la requête (libellés, aides, unités, choix)."""
+    """Task option in the request's language (labels, help, units, choices)."""
     o = dict(o)
     for k in ("label", "hint", "unit"):
         if o.get(k):
@@ -86,12 +86,12 @@ class Task:
     def available(self, ctx):
         return True, None
 
-    def run(self, ctx, job, opts):  # -> résumé (texte)
+    def run(self, ctx, job, opts):  # -> summary (text)
         raise NotImplementedError
 
 
 def lib_clause(opts, column="i.library_id"):
-    """Bibliothèques choisies pour une tâche ; jamais celles d'un serveur lié (traitées par ce serveur)."""
+    """Libraries chosen for a task; never those of a linked server (handled by that server)."""
     libs = [int(x) for x in opts.get("libraries") or [] if str(x).isdigit()]
     local = f" AND {column.rsplit('.', 1)[0]}.peer_id IS NULL" if "." in column else " AND peer_id IS NULL"
     if not libs:
@@ -99,7 +99,7 @@ def lib_clause(opts, column="i.library_id"):
     return f"{local} AND {column} IN ({','.join('?' * len(libs))})", libs
 
 
-# ------------------------------------------------------------------ tâches
+# ------------------------------------------------------------------ tasks
 class ScanTask(Task):
     id = "scan"
     name = "Analyser les bibliothèques"
@@ -216,7 +216,7 @@ class ChapterImagesTask(Task):
             job.message = r["title"]
             try:
                 made += ctx.chapter_images.extract_all(r, cancelled=job.cancel.is_set)
-            except Exception as e:  # un fichier en défaut ne doit pas arrêter la tâche
+            except Exception as e:  # a faulty file must not stop the task
                 log.warning("Images de chapitres de %s : %s", r["title"], e)
                 failed += 1
             job.check()
@@ -296,7 +296,7 @@ class IntroTask(Task):
                                                 bool(opts.get("pause_playback", True)))
                 job.check()
                 if ctx.subtitles._streaming() and opts.get("pause_playback", True):
-                    continue  # interrompu par une lecture : on reprendra cette saison
+                    continue  # interrupted by a playback: this season will be resumed
                 for e in need[kind]:
                     if e["id"] in skip:
                         mark_analysis(db, e, kind, {"skipped": "chapters"})
@@ -415,11 +415,11 @@ class CleanupTask(Task):
                     continue
                 try:
                     if now - os.path.getmtime(p) < 7 * 86400:
-                        continue  # fichier peut-être seulement déplacé, pas encore rescanné
+                        continue  # file maybe only moved, not scanned again yet
                 except OSError:
                     continue
                 rm(p)
-        # sous-titres téléchargés de titres qui ne sont plus dans les bibliothèques
+        # downloaded subtitles of titles no longer in the libraries
         dl = os.path.join(ctx.data_dir, "subtitles")
         if os.path.isdir(dl):
             ids = {str(r["id"]) for r in ctx.db.all("SELECT id FROM items WHERE type IN ('movie','episode')")}
@@ -491,7 +491,7 @@ class OpenSubtitlesTask(Task):
                 log.warning("OpenSubtitles, %s : %s", r["title"], e)
             finally:
                 ctx.db.release()
-            time.sleep(0.3)  # l'API limite à quelques requêtes par seconde
+            time.sleep(0.3)  # the API allows only a few requests per second
         job.progress = 1
         return f"{got} sous-titre(s) téléchargé(s) pour {searched} titre(s)" if todo else "Rien à chercher"
 
@@ -633,7 +633,7 @@ def _at(day_struct, hhmm):
 
 
 def next_run(schedule, last, anchor):
-    """Prochaine exécution (timestamp) ou None si désactivée."""
+    """Next run (timestamp) or None when off."""
     mode = schedule.get("mode")
     ref = last or anchor
     if mode == "interval":
@@ -722,7 +722,7 @@ class TaskManager:
             db.set_setting("scan_interval", None)
         db.release()
 
-    # ------------------------------------------------------------ état
+    # ------------------------------------------------------------ status
     def conf(self, tid):
         task = self.tasks[tid]
         raw = self.ctx.db.setting(f"task_conf:{tid}")
@@ -770,7 +770,7 @@ class TaskManager:
         return [self.view(t) for t in self.tasks]
 
 
-    # ------------------------------------------------------------ exécution
+    # ------------------------------------------------------------ run
     def run_now(self, tid, reason="manuel"):
         task = self.tasks[tid]
         ok, note = task.available(self.ctx)
@@ -793,7 +793,7 @@ class TaskManager:
                 self.job.cancel.set()
 
     def after_scan(self, added):
-        """Des fichiers viennent d'être ajoutés : les tâches qui le demandent passent sur les nouveautés."""
+        """Files were just added: the tasks that ask for it go over the new arrivals."""
         if not added:
             return
         for tid, task in self.tasks.items():

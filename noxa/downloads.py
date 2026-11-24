@@ -1,12 +1,12 @@
-"""Téléchargements pour regarder hors ligne (comme Netflix).
+"""Downloads to watch offline (like Netflix).
 
-Noxa prépare un MP4 que l'appareil sait lire, à la qualité choisie, avec la piste audio voulue (et les
-sous-titres image incrustés si on les demande). L'application le récupère ensuite par morceaux et le garde
-dans le stockage du navigateur. Un MP4 déjà lisible tel quel est envoyé directement, sans préparation.
+Noxa prepares an MP4 the device can play, at the chosen quality, with the wanted audio track (and the
+picture subtitles burnt in when asked for). The app then fetches it in chunks and keeps it
+in the browser's storage. An MP4 already playable as is is sent directly, without preparation.
 
-Les fichiers préparés sont temporaires : effacés dès que l'appareil a fini de les récupérer, sinon au bout de
-48 h. shortcut: la file d'attente vit en mémoire ; après un redémarrage, l'application redemande la
-préparation (elle reprend toute seule).
+Prepared files are temporary: erased as soon as the device has finished fetching them, otherwise after
+48 h. shortcut: the queue lives in memory; after a restart, the app asks for the
+preparation again (it resumes by itself).
 """
 import logging
 import os
@@ -26,16 +26,16 @@ log = logging.getLogger("noxa.downloads")
 
 KEEP = 48 * 3600
 MAX_PER_USER = 40
-SPARE_DISK = 2 * 1024 ** 3   # on garde toujours 2 Go libres sur le disque du serveur
+SPARE_DISK = 2 * 1024 ** 3   # 2 GB are always kept free on the server's disk
 CPUS = os.cpu_count() or 2
-COPY_READRATE = 20          # priorité discrète : lecture du partage plafonnée à 20x le temps réel
+COPY_READRATE = 20          # discreet priority: reading from the share capped at 20x real time
 IONICE = shutil.which("ionice")
-# Priorité des préparations (Paramètres → Visionnage hors ligne). Une conversion coûte ~30 s de processeur par
-# minute de vidéo en 1080p, une copie ~2 s.
-#  - discrète : le moins de processeur et de disque possible, en pause dès que quelqu'un regarde (ancien réglage) ;
-#  - normale : pleine vitesse quand personne ne regarde ; pendant une lecture, priorité basse, et une conversion
-#    ne s'arrête que si une autre conversion (celle d'un spectateur) a besoin du processeur ;
-#  - rapide : tout le processeur, jamais en pause.
+# Priority of the preparations (Settings → Offline viewing). A conversion costs ~30 s of processor per
+# minute of 1080p video, a copy ~2 s.
+#  - discreet: as little processor and disk as possible, paused as soon as someone watches (former setting);
+#  - normal: full speed when nobody watches; during a playback, low priority, and a conversion
+#    only stops when another conversion (a viewer's) needs the processor;
+#  - fast: the whole processor, never paused.
 PRIORITIES = {
     "low": {"threads": max(1, min(4, CPUS // 4)), "nice": 19, "ionice": ["-c", "3"], "readrate": True, "workers": 1},
     "normal": {"threads": max(2, min(8, CPUS // 2)), "nice": 10, "ionice": ["-c", "2", "-n", "7"], "readrate": False,
@@ -64,9 +64,9 @@ class Job:
         self.error = None
         self.created = self.touched = time.time()
         self.proc = None
-        self.waiting = False      # en pause : quelqu'un regarde, il passe en premier
-        # transfert pendant la préparation : MP4 fragmenté, écrit dans l'ordre ; l'appareil récupère ce qui est déjà
-        # écrit (ready octets). gen change à chaque nouvel essai (repli de la carte graphique sur le processeur)
+        self.waiting = False      # paused: someone is watching, they go first
+        # transfer during the preparation: fragmented MP4, written in order; the device fetches what is already
+        # written (ready bytes). gen changes at each new try (graphics card falling back to the processor)
         self.progressive = bool(progressive) and self.mode != "original"
         self.ready = self.size
         self.gen = 0
@@ -82,7 +82,7 @@ class Downloads:
     def __init__(self, ctx):
         self.ctx = ctx
         self.base = os.path.join(ctx.data_dir, "downloads")
-        shutil.rmtree(self.base, ignore_errors=True)  # préparations d'avant le redémarrage : redemandées
+        shutil.rmtree(self.base, ignore_errors=True)  # preparations from before the restart: asked for again
         os.makedirs(self.base, exist_ok=True)
         self.jobs = {}
         self.queue = deque()
@@ -100,7 +100,7 @@ class Downloads:
             self.jobs[job.id] = job
             if job.state == "queued":
                 self.queue.append(job.id)
-                # préparations simultanées : selon la priorité choisie et le nombre de cœurs
+                # simultaneous preparations: depending on the chosen priority and the number of cores
                 self.workers = [w for w in self.workers if w.is_alive()]
                 while len(self.workers) < self.settings()["workers"]:
                     w = threading.Thread(target=self._loop, daemon=True, name="downloads")
@@ -152,7 +152,7 @@ class Downloads:
         for j in old:
             self._drop(j)
 
-    # ------------------------------------------------------------ préparation
+    # ------------------------------------------------------------ preparation
     def _loop(self):
         while True:
             self.wake.wait(30)
@@ -179,11 +179,11 @@ class Downloads:
             job.state, job.error = "error", "Espace disque insuffisant sur le serveur pour préparer ce téléchargement"
             return
         hw = self.ctx.hw() if job.plan["mode"] == "transcode" else None
-        for attempt_hw in ([hw, None] if hw else [None]):  # carte graphique, sinon repli sur le processeur
+        for attempt_hw in ([hw, None] if hw else [None]):  # graphics card, otherwise falling back to the processor
             if job.state == "cancelled":
                 return
             job.state, job.progress, job.ready = "preparing", 0.0, 0
-            job.gen += 1  # l'appareil repart de zéro s'il avait commencé à récupérer l'essai précédent
+            job.gen += 1  # the device starts again from zero if it had started fetching the previous try
             if self._run(job, out_dir, attempt_hw):
                 return
         if job.state != "cancelled":
@@ -195,7 +195,7 @@ class Downloads:
         prio = self.priority()
         conf = PRIORITIES[prio]
         threads = str(conf["threads"])
-        cmd = [*([IONICE, *conf["ionice"]] if IONICE and conf["ionice"] else []),  # part du disque laissée aux autres
+        cmd = [*([IONICE, *conf["ionice"]] if IONICE and conf["ionice"] else []),  # share of the disk left to the others
                media.FFMPEG, "-hide_banner", "-nostdin", "-loglevel", "error", "-y", *(hw_input(hw) if hw else []),
                "-threads", threads,
                *(["-readrate", str(COPY_READRATE)] if copy and conf["readrate"] and media.readrate_ok() else []),
@@ -204,8 +204,8 @@ class Downloads:
                *media_args(job.plan, hw), "-sn", "-dn", "-max_muxing_queue_size", "2048", "-nostats"]
         progress_r = progress_w = None
         if job.progressive:
-            # MP4 fragmenté écrit d'un trait sur la sortie standard : rien n'est réécrit après coup, l'appareil peut
-            # récupérer chaque partie dès qu'elle est écrite ; l'avancement passe par un autre tube
+            # fragmented MP4 written in one go to the standard output: nothing is rewritten afterwards, the device can
+            # fetch each part as soon as it is written; the progress goes through another pipe
             progress_r, progress_w = os.pipe()
             cmd += ["-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-progress", f"pipe:{progress_w}",
                     "-f", "mp4", "pipe:1"]
@@ -249,7 +249,7 @@ class Downloads:
                         break
                     out.write(block)
                     out.flush()
-                    job.ready += len(block)  # écrit et vidé : lisible par l'appareil
+                    job.ready += len(block)  # written and flushed: readable by the device
             reader.join(5)
         else:
             with job.proc.stdout:
@@ -270,23 +270,23 @@ class Downloads:
         return True
 
     def _yield_to_viewers(self, job, proc, prio, nice):
-        """Laisse la place aux spectateurs : selon la priorité, pause ou priorité basse pendant une lecture."""
+        """Makes room for viewers: depending on the priority, paused or low priority during a playback."""
         lowered = False
         while proc.poll() is None:
             if prio == "high":
                 return
             viewing = self.ctx.viewing()
             if prio == "low":
-                pause = viewing  # discrète : en pause dès que quelqu'un regarde
+                pause = viewing  # discreet: paused as soon as someone watches
             else:
-                # normale : une conversion s'efface devant celle d'un spectateur ; une copie continue, ralentie
+                # normal: a conversion gives way to a viewer's; a copy goes on, slowed down
                 pause = job.mode == "transcode" and viewing and self.ctx.transcoder.counts()[1] > 0
                 if viewing != lowered:
                     try:
                         os.setpriority(os.PRIO_PROCESS, proc.pid, 19 if viewing else nice)
                         lowered = viewing
                     except (OSError, PermissionError):
-                        pass  # remonter la priorité demande des droits : elle reste basse jusqu'à la fin
+                        pass  # raising the priority again needs rights: it stays low until the end
             if pause != job.waiting:
                 try:
                     os.kill(proc.pid, signal.SIGSTOP if pause else signal.SIGCONT)
