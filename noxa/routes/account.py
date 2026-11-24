@@ -1,4 +1,4 @@
-"""Comptes : installation, connexion, préférences, profils (« Qui regarde ? ») et code PIN."""
+"""Accounts: setup, sign-in, preferences, profiles ("Who's watching?") and PIN code."""
 import base64
 import json
 import logging
@@ -26,7 +26,7 @@ def avatar_url(u):
 
 def register(app, ctx, x):
     db = ctx.db
-    # outils du catalogue partagé (noxa/catalog.py)
+    # tools of the shared catalogue (noxa/catalog.py)
     allowed_set, get_prefs, libraries_all = x.allowed_set, x.get_prefs, x.libraries_all
 
     # ---------------------------------------------------------- public / auth
@@ -39,7 +39,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/tv", auth=None)
     def tv_app(req):
-        """Adresse courte à taper dans l'appli Downloader de la TV : renvoie vers le dernier APK publié."""
+        """Short address to type in the TV's Downloader app: redirects to the latest published APK."""
         try:
             owner, repo, _ = update.read_source()
         except update.UpdateError:
@@ -61,7 +61,7 @@ def register(app, ctx, x):
         with db.tx():
             if db.scalar("SELECT COUNT(*) FROM users"):
                 raise HTTPError(409, "Déjà configuré")
-            if lang:  # langue choisie à l'installation : celle du serveur, donc des comptes à venir
+            if lang:  # language chosen at setup: the server's, so that of the accounts to come
                 db.set_setting("default_language", lang)
                 i18n.set_server_default(lang)
             uid = db.run("INSERT INTO users(username,display_name,password_hash,is_admin,created_at) "
@@ -88,7 +88,7 @@ def register(app, ctx, x):
             raise HTTPError(401, "Identifiant ou mot de passe incorrect")
         ctx.throttle.reset(keys[1])
         if user.get("totp_enabled"):
-            # mot de passe correct : le code de l'application d'authentification est encore demandé
+            # right password: the authenticator app code is still asked for
             return {"two_factor": True, "ticket": tickets.create(user["id"])}
         create_session(db, req, user["id"], ctx.cookie_secure)
         return {"ok": True}
@@ -155,7 +155,7 @@ def register(app, ctx, x):
 
     @app.route("POST", "/api/me/prefs/reset")
     def me_prefs_reset(req):
-        """Retour aux réglages par défaut (sur tous les serveurs liés)."""
+        """Back to the default settings (on all the linked servers)."""
         db.run("INSERT INTO prefs(user_id,data) VALUES(?, '{}') ON CONFLICT(user_id) DO UPDATE SET data='{}'", (req.user["id"],))
         return get_prefs(req.user["id"])
 
@@ -180,9 +180,9 @@ def register(app, ctx, x):
         db.run("UPDATE users SET display_name=?, avatar_color=? WHERE id=?", (name, color, req.user["id"]))
         return {"ok": True}
 
-    # ------------------------------------------------------------ avatar en image
-    # Le navigateur envoie une image déjà recadrée (256 × 256) ; le serveur la réencode avec ffmpeg :
-    # seule une vraie image passe, et les métadonnées (EXIF, position GPS des photos) disparaissent.
+    # ------------------------------------------------------------ avatar picture
+    # The browser sends a picture already cropped (256 × 256); the server encodes it again with ffmpeg:
+    # only a real picture gets through, and the metadata (EXIF, GPS position of photos) is dropped.
     avatar_dir = os.path.join(ctx.data_dir, "avatars")
     DEMUXERS = {b"\xff\xd8\xff": "jpeg_pipe", b"\x89PNG": "png_pipe", b"RIFF": "webp_pipe"}
 
@@ -219,14 +219,14 @@ def register(app, ctx, x):
         db.run("UPDATE users SET avatar_ver=? WHERE id=?", (ver, uid))
         return {"avatar": avatar_url({"id": uid, "avatar_ver": ver})}
 
-    # ------------------------------------------------------------ fond d'écran
+    # ------------------------------------------------------------ wallpaper
     wall_dir = os.path.join(ctx.data_dir, "wallpapers")
     WALL_MAX = 8 * 1024 * 1024
 
     @app.route("GET", "/api/me/wallpaper/daily")
     def me_wallpaper_daily(req):
-        """« Un de vos titres chaque jour » : l'arrière-plan d'un titre de votre liste, de ceux que vous avez aimés
-        ou regardés récemment ; le même toute la journée."""
+        """"One of your titles each day": the backdrop of a title from your list, from those you liked
+        or watched recently; the same all day."""
         import hashlib
         uid = req.user["id"]
         cands = db.all("SELECT i.id, i.img_version FROM items i WHERE i.type IN ('movie','show') AND (i.backdrop IS NOT NULL "
@@ -236,7 +236,7 @@ def register(app, ctx, x):
                        (uid, uid, uid))
         cands = [c for c in cands if x.visible(req.user, db.one("SELECT i.*, COALESCE(sh.age, i.age) AS eff_age FROM items i "
                                                               "LEFT JOIN items sh ON sh.id=i.show_id WHERE i.id=?", (c["id"],)))]
-        if not cands:  # rien de personnel encore : un ajout récent de vos bibliothèques
+        if not cands:  # nothing personal yet: a recent addition from your libraries
             allowed = sorted(int(i) for i in x.allowed_set(req.user) if str(i).isdigit()) or [0]
             cands = db.all(f"SELECT id, img_version FROM items WHERE type IN ('movie','show') AND backdrop IS NOT NULL "
                            f"AND backdrop<>'' AND library_id IN ({','.join('?' * len(allowed))}) ORDER BY added_at DESC LIMIT 30",
@@ -244,12 +244,12 @@ def register(app, ctx, x):
         if not cands:
             return {"path": None}
         day = time.strftime("%Y-%m-%d")
-        pick = cands[int(hashlib.sha256(f"{uid}|{day}".encode()).hexdigest(), 16) % len(cands)]  # tirage du jour, pas de sécurité
+        pick = cands[int(hashlib.sha256(f"{uid}|{day}".encode()).hexdigest(), 16) % len(cands)]  # draw of the day, not security
         return {"path": f"/library/metadata/{pick['id']}/art/{pick['img_version']}"}
 
     @app.route("POST", "/api/me/wallpaper")
     def me_wallpaper_upload(req):
-        """Image de fond choisie sur l'appareil : réencodée (1920 px au plus, sans métadonnées)."""
+        """Background picture picked on the device: encoded again (1920 px at most, no metadata)."""
         try:
             length = int(req.headers.get("Content-Length") or 0)
         except ValueError:
@@ -260,7 +260,7 @@ def register(app, ctx, x):
         uid = req.user["id"]
         with tempfile.TemporaryDirectory(dir=wall_dir) as tmp:
             src, out = os.path.join(tmp, "in"), os.path.join(tmp, "out.jpg")
-            req._body = b""  # lu ici par morceaux (au-delà de la limite des requêtes ordinaires)
+            req._body = b""  # read here in chunks (beyond the limit of ordinary requests)
             left = length
             with open(src, "wb") as f:
                 while left:
@@ -318,7 +318,7 @@ def register(app, ctx, x):
                 data = f.read()
         except OSError:
             raise HTTPError(404, "Pas d'image")
-        # adresse versionnée (?v=…) : une nouvelle image a une nouvelle adresse
+        # versioned address (?v=…): a new picture has a new address
         return Response(data, 200, "image/jpeg", {"Cache-Control": "private, max-age=31536000, immutable"})
 
     def remove_avatar(uid):
@@ -357,14 +357,14 @@ def register(app, ctx, x):
         for u in rows:
             v = user_view(u)
             v["current"] = u["id"] == req.user["id"]
-            # sans PIN, un compte complet (avec mot de passe) ou administrateur demande son mot de passe
+            # without a PIN, a full account (with a password) or an administrator asks for its password
             v["needs"] = "pin" if u["pin_hash"] else ("none" if u["managed"] and not u["is_admin"] else "password")
             v["needs_code"] = bool(u["totp_enabled"])
             out.append(v)
         return out
 
     def less_restricted(target, current):
-        """Le profil visé voit-il plus de choses que le profil actuel (âge, contenus non classés, bibliothèques) ?"""
+        """Does the target profile see more than the current one (age, unrated content, libraries)?"""
         if target["max_age"] is None or target["max_age"] > current["max_age"]:
             return True
         if target["allow_unrated"] and not current.get("allow_unrated"):
@@ -394,7 +394,7 @@ def register(app, ctx, x):
             if target["pin_hash"]:
                 ok = verify_password(str(b.get("pin") or "")[:8], target["pin_hash"])
             elif target["managed"] and not target["is_admin"]:
-                # profil ouvert (sans PIN) : un profil limité par âge ne peut pas s'en servir pour lever sa limite
+                # open profile (no PIN): an age-limited profile cannot use it to lift its limit
                 if req.user.get("max_age") is not None and less_restricted(target, req.user):
                     raise HTTPError(403, "Ce profil n'a pas de code PIN : il doit en définir un, ou être ouvert avec son mot de passe")
                 ok = True
@@ -449,7 +449,7 @@ def register(app, ctx, x):
         codes, hashed = twofa.new_recovery_codes()
         db.run("UPDATE users SET totp_enabled=1, totp_secret=totp_pending, totp_pending=NULL, totp_last_step=?, "
                "totp_recovery=? WHERE id=?", (step, hashed, u["id"]))
-        # les autres sessions de ce compte (autres appareils) devront passer par la double authentification
+        # the other sessions of this account (other devices) will have to go through two-factor authentication
         db.run("DELETE FROM sessions WHERE user_id=? AND token_hash<>?", (u["id"], req.session_hash))
         log.warning("Double authentification activée pour %s", u["username"])
         return {"enabled": True, "recovery_codes": codes}

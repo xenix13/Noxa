@@ -1,4 +1,4 @@
-"""Administration : utilisateurs, bibliothèques, scan, réglages, webhook, lectures, partages, identification."""
+"""Administration: users, libraries, scan, settings, webhook, streams, shares, identification."""
 import hashlib
 import json
 import logging
@@ -25,7 +25,7 @@ IN_DOCKER = env("DOCKER") == "1"
 
 def register(app, ctx, x):
     db = ctx.db
-    # outils du catalogue partagé (noxa/catalog.py)
+    # tools of the shared catalogue (noxa/catalog.py)
     hash_pin, item_row, stop_stream, user_view = x.hash_pin, x.item_row, x.stop_stream, x.user_view
 
     # -------------------------------------------------------- admin users
@@ -72,7 +72,7 @@ def register(app, ctx, x):
         if "pin" in b:
             fields["pin_hash"] = hash_pin(b["pin"])
         try:
-            fields.update(valid_limits(b))  # lectures simultanées, débit hors de la maison, temps d'écran
+            fields.update(valid_limits(b))  # simultaneous streams, bandwidth away from home, screen time
         except ValueError as e:
             raise HTTPError(400, {"max_streams": "Lectures simultanées : de 1 à 20",
                                   "remote_kbps": "Débit hors de la maison : de 0,5 à 200 Mbit/s",
@@ -87,9 +87,9 @@ def register(app, ctx, x):
         if managed and fields.get("is_admin", cur["is_admin"]):
             raise HTTPError(400, "Un profil géré (sans mot de passe) ne peut pas être administrateur")
         if managed and fields.get("managed") and "password_hash" not in fields:
-            fields["password_hash"] = "!"  # plus de connexion par mot de passe : uniquement via « Changer de profil »
+            fields["password_hash"] = "!"  # no more password sign-in: only through "Switch profile"
         if managed and fields.get("managed"):
-            twofa.disable(db, uid)  # un profil géré ne se connecte pas : pas de double authentification
+            twofa.disable(db, uid)  # a managed profile does not sign in: no two-factor authentication
         if not managed and cur["password_hash"] == "!" and "password_hash" not in fields:
             raise HTTPError(400, "Un mot de passe est requis pour ce compte")
         if fields:
@@ -102,7 +102,7 @@ def register(app, ctx, x):
             db.run("DELETE FROM user_libraries WHERE user_id=?", (uid,))
             for sid in set(libs):
                 db.run("INSERT INTO user_libraries(user_id,section_id) VALUES(?,?)", (uid, sid))
-                # bibliothèques d'un serveur lié fusionnées avec celle-ci : même accès
+                # libraries of a linked server merged with this one: same access
                 db.run("INSERT OR IGNORE INTO user_libraries(user_id,section_id) SELECT ?, CAST(id AS TEXT) FROM libraries "
                        "WHERE merge_into=?", (uid, int(sid)))
         if not creating and (fields.get("disabled") or "password_hash" in fields):
@@ -110,7 +110,7 @@ def register(app, ctx, x):
 
     @app.route("POST", r"/api/admin/users/(?P<uid>\d{1,10})/prefs", auth="admin")
     def admin_copy_prefs(req):
-        """Copier tous les réglages d'un compte vers un autre (régler d'un coup les profils des enfants)."""
+        """Copies all the settings of an account to another one (set up the children's profiles in one go)."""
         uid, src = int(req.params["uid"]), req.json().get("from")
         if not isinstance(src, (int, str)) or not str(src).isdigit() or int(src) == uid:
             raise HTTPError(400, "Compte d'origine invalide")
@@ -134,7 +134,7 @@ def register(app, ctx, x):
             uid = db.run("INSERT INTO users(username,display_name,password_hash,created_at) VALUES(?,?,?,?)",
                          (username, username, "!", int(time.time()))).lastrowid
             b.setdefault("display_name", username)
-            b.setdefault("language", i18n.default_language(db))  # langue choisie pour les nouveaux comptes
+            b.setdefault("language", i18n.default_language(db))  # language chosen for new accounts
             apply_user_fields(uid, b, creating=True)
         return admin_user_view(db.one("SELECT * FROM users WHERE id=?", (uid,)))
 
@@ -161,7 +161,7 @@ def register(app, ctx, x):
 
     @app.route("POST", r"/api/admin/users/(?P<uid>\d{1,10})/2fa/reset", auth="admin")
     def admin_reset_2fa(req):
-        """Téléphone perdu, plus de codes de secours : l'administrateur désactive la double authentification."""
+        """Phone lost, no recovery codes left: the administrator turns off two-factor authentication."""
         uid = int(req.params["uid"])
         u = db.one("SELECT username, totp_enabled FROM users WHERE id=?", (uid,))
         if not u:
@@ -195,7 +195,7 @@ def register(app, ctx, x):
         return {"id": str(l["id"]), "name": l["name"], "kind": l["kind"], "paths": json.loads(l["paths"]),
                 "scanned_at": l["scanned_at"], "counts": counts, "unmatched": unmatched,
                 "paths_ok": [os.path.isdir(p) for p in json.loads(l["paths"])],
-                # Noxa n'a besoin que de lire les médias : un dossier modifiable par le service est signalé (audit)
+                # Noxa only needs to read the media: a folder the service can write to is flagged (audit)
                 "paths_writable": [os.path.isdir(p) and os.access(p, os.W_OK) for p in json.loads(l["paths"])]}
 
     def validate_library(b):
@@ -219,7 +219,7 @@ def register(app, ctx, x):
         return name, b["kind"], clean
 
     def scan_view():
-        """État du scan, étape et erreurs dans la langue de la requête."""
+        """Scan state, step and errors in the request's language."""
         st = dict(ctx.scanner.status())
         st["phase"] = i18n.tr(st.get("phase"))
         st["errors"] = [i18n.tr(e) for e in st.get("errors") or []]
@@ -227,7 +227,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/admin/libraries", auth="admin")
     def admin_libraries(req):
-        # bibliothèques d'un serveur lié : gérées par ce serveur (page Serveurs liés)
+        # libraries of a linked server: managed by that server (Linked servers page)
         return {"libraries": [library_view(l) for l in db.all("SELECT * FROM libraries WHERE peer_id IS NULL "
                                                                 "ORDER BY position, name")],
                 "scan": scan_view()}
@@ -252,7 +252,7 @@ def register(app, ctx, x):
         if kind != l["kind"] and db.scalar("SELECT COUNT(*) FROM items WHERE library_id=?", (lid,)):
             db.run("DELETE FROM items WHERE library_id=? AND peer_id IS NULL", (lid,))
         db.run("UPDATE libraries SET name=?, kind=?, paths=? WHERE id=?", (name, kind, json.dumps(paths), lid))
-        ctx.fed.relink_all()  # une fusion avec une bibliothèque d'un autre type ne vaut plus
+        ctx.fed.relink_all()  # a merge with a library of another type no longer applies
         db.release()
         ctx.scanner.start([lid], queue=True)
         return library_view(db.one("SELECT * FROM libraries WHERE id=?", (lid,)))
@@ -295,7 +295,7 @@ def register(app, ctx, x):
 
     # ---------------------------------------------------- admin settings
     def webhook_folders(payload):
-        """Dossiers cités par Radarr / Sonarr (vus depuis leur machine)."""
+        """Folders named by Radarr / Sonarr (as seen from their machine)."""
         out = []
         for obj, key in (("movie", "folderPath"), ("series", "path")):
             v = (payload.get(obj) or {}).get(key) if isinstance(payload.get(obj), dict) else None
@@ -311,9 +311,9 @@ def register(app, ctx, x):
         return out[:50]
 
     def local_dirs(remote):
-        """Retrouve le dossier local correspondant (chemins différents entre Radarr et Noxa) en comparant
-        la fin du chemin : /movies/Inception (2010) -> /mnt/films/Inception (2010)."""
-        # « .. » refusé : le webhook ne doit pas pouvoir désigner un dossier hors des bibliothèques
+        """Finds the matching local folder (paths differ between Radarr and Noxa) by comparing
+        the end of the path: /movies/Inception (2010) -> /mnt/films/Inception (2010)."""
+        # ".." refused: the webhook must not be able to point to a folder outside the libraries
         parts = [p for p in remote.replace("\\", "/").split("/") if p and p not in (".", "..")]
         found = []
         for lib in db.all("SELECT id, paths FROM libraries WHERE peer_id IS NULL"):
@@ -326,7 +326,7 @@ def register(app, ctx, x):
                     if os.path.isdir(cand):
                         found.append((lib["id"], cand))
                         break
-                    # dossier supprimé : on le retrouve par les fichiers indexés dessous
+                    # deleted folder: found again through the files indexed under it
                     like = like_prefix(cand)
                     if db.scalar("SELECT 1 FROM items WHERE library_id=? AND key LIKE ? ESCAPE '\\' LIMIT 1",
                                  (lib["id"], like)):
@@ -341,13 +341,13 @@ def register(app, ctx, x):
                 dirs = scope.setdefault(lib_id, set())
                 dirs.add(d)
                 dirs.add(os.path.dirname(d))
-                for dp, dn, _ in os.walk(d):  # nouveau dossier : ses sous-dossiers (saisons…) aussi
+                for dp, dn, _ in os.walk(d):  # new folder: its sub-folders (seasons…) too
                     dirs.update(os.path.join(dp, x) for x in dn)
         return scope
 
     @app.route("POST", "/api/hooks/scan", auth="webhook")
     def hook_scan(req):
-        """Webhook pour Radarr / Sonarr / script : scan limité aux dossiers cités (regroupé sur 10 s)."""
+        """Webhook for Radarr / Sonarr / scripts: scan limited to the folders named (grouped over 10 s)."""
         try:
             payload = req.json() or {}
         except HTTPError:
@@ -455,7 +455,7 @@ def register(app, ctx, x):
             if not re.match(r"^/dev/dri/renderD\d{3}$", str(device)):
                 raise HTTPError(400, "Périphérique invalide (attendu : /dev/dri/renderD128…)")
             if engine != "none":
-                try:  # on n'enregistre qu'un moteur qui marche vraiment sur cette machine
+                try:  # only an engine that really works on this machine is saved
                     transcoder.hw_test({"engine": engine, "device": device}, ctx.transcoder.work_dir)
                 except media.MediaError as e:
                     raise HTTPError(400, f"Test du transcodage matériel en échec : {e}")
@@ -482,7 +482,7 @@ def register(app, ctx, x):
             p = json.loads(r.pop("params") or "{}")
             r["mode"] = p.get("mode")
             r["reasons"] = [i18n.tr(x) for x in p.get("reasons", [])]
-            r["peer"] = p.get("peer")  # lecture d'un titre d'un serveur lié, relayée par ce serveur
+            r["peer"] = p.get("peer")  # playback of a title from a linked server, relayed by this server
             if x.get_prefs(r["uid"]).get("private_mode"):
                 r["title"] = i18n.tr("Lecture privée")
                 r["private"] = True
@@ -494,9 +494,9 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/admin/system", auth="admin")
     def admin_system(req):
-        """Charge du serveur, pour comprendre une lecture qui saccade (mémoire, swap, ffmpeg en cours)."""
+        """Server load, to understand a playback that stutters (memory, swap, running ffmpegs)."""
         load = os.getloadavg() if hasattr(os, "getloadavg") else (0, 0, 0)
-        # sécurité de l'accès : réglages actifs et ce que le serveur voit de cette requête
+        # access security: active settings and what the server sees of this request
         security = {"cookie_secure": bool(ctx.cookie_secure), "trust_proxy": bool(ctx.trust_proxy),
                     "client_ip": req.client_ip, "https": (req.headers.get("X-Forwarded-Proto") or "").lower() == "https",
                     "via_proxy": bool(req.headers.get("X-Forwarded-For")),
@@ -632,7 +632,7 @@ def register(app, ctx, x):
 
     @app.route("POST", "/api/admin/backups/upload", auth="admin")
     def admin_backup_upload(req):
-        """Archive d'un autre serveur (ou d'avant une réinstallation), ajoutée à la liste pour la restaurer."""
+        """Archive from another server (or from before a reinstall), added to the list to restore it."""
         from .. import backup
         db.release()
         try:
@@ -643,7 +643,7 @@ def register(app, ctx, x):
 
     @app.route("POST", f"/api/admin/backups/{BK}/restore", auth="admin")
     def admin_backup_restore(req):
-        """Prépare la restauration, puis redémarre Noxa (la base ne peut pas être remplacée en marche)."""
+        """Prepares the restore, then restarts Noxa (the database cannot be replaced while running)."""
         from .. import backup
         try:
             man = backup.stage(ctx.data_dir, backup.path_of(ctx, req.params["name"]))
@@ -652,20 +652,20 @@ def register(app, ctx, x):
         log.warning("Restauration de %s demandée par %s", req.params["name"], req.user["username"])
         restarting = bool(ctx.restart)
         if restarting:
-            threading.Timer(1.5, ctx.restart).start()  # le temps d'envoyer la réponse
+            threading.Timer(1.5, ctx.restart).start()  # time to send the answer
         return {"ok": True, "restarting": restarting, "version": man.get("version"), "created": man.get("created")}
 
-    # ---------------------------------------------------- mise à jour de Noxa
+    # ---------------------------------------------------- Noxa update
     @app.route("GET", "/api/admin/update", auth="admin")
     def admin_update(req):
-        db.release()  # appels réseau : pas de connexion à la base gardée pendant ce temps
+        db.release()  # network calls: no database connection kept meanwhile
         out = {"current": VERSION, "channels": update.CHANNELS}
         try:
             out["branch"] = update.read_source()[2]
         except update.UpdateError:
             pass
         if req.arg("refresh") == "1":
-            update.forget()  # bouton « Rechercher une mise à jour » : on ne se fie pas au résultat gardé 30 min
+            update.forget()  # "Check for updates" button: the result kept for 30 min is not trusted
         try:
             out.update(update.check_latest())
             out["available"] = update.newer(out["latest"], VERSION)
@@ -694,7 +694,7 @@ def register(app, ctx, x):
             raise HTTPError(400, "Avec Docker, le canal se choisit par l'étiquette de l'image")
         log.warning("Canal de mise à jour : %s (par %s)", branch, req.user["username"])
         r = mounts("update_channel", {"branch": branch})
-        ctx.update_checked = 0  # nouvelle vérification de l'indicateur au prochain passage
+        ctx.update_checked = 0  # indicator checked again on the next pass
         return r
 
     @app.route("POST", "/api/admin/update", auth="admin")

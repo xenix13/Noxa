@@ -1,4 +1,4 @@
-"""Bibliothèques, accueil, recherche, fiches, images et historique."""
+"""Libraries, home, search, title pages, pictures and history."""
 import json
 import time
 
@@ -10,7 +10,7 @@ from ..web import HTTPError, Response
 
 def register(app, ctx, x):
     db = ctx.db
-    # outils du catalogue partagé (noxa/catalog.py)
+    # tools of the shared catalogue (noxa/catalog.py)
     age_filter, allowed_set, attach_state, card = x.age_filter, x.allowed_set, x.attach_state, x.card
     chapters_for, get_prefs, leaves, libraries_all = x.chapters_for, x.get_prefs, x.leaves, x.libraries_all
     markers_for, next_episode, require_item, require_section = x.markers_for, x.next_episode, x.require_item, x.require_section
@@ -22,7 +22,7 @@ def register(app, ctx, x):
         allowed = allowed_set(req.user)
         return [l for l in libraries_all() if l["id"] in allowed]
 
-    # ------------------------------------------------------------ filtres de bibliothèque
+    # ------------------------------------------------------------ library filters
     HEIGHT = "CAST(json_extract({a}.probe, '$.video.height') AS INTEGER)"
     RES = {"4k": HEIGHT + " >= 1800", "1080p": HEIGHT + " BETWEEN 900 AND 1799", "720p": HEIGHT + " BETWEEN 650 AND 899",
            "sd": HEIGHT + " < 650"}
@@ -30,13 +30,13 @@ def register(app, ctx, x):
                 "long": "i.duration_ms >= 9000000"}
 
     def media_cond(kind, expr):
-        """Condition sur le fichier : celui du film, ou au moins un épisode de la série."""
+        """Condition on the file: the movie's, or at least one episode of the show."""
         if kind == "movie":
             return expr.format(a="i")
         return f"EXISTS (SELECT 1 FROM items e WHERE e.show_id=i.id AND e.type='episode' AND {expr.format(a='e')})"
 
     def library_filters(req, kind):
-        """Filtres de la page d'une bibliothèque (paramètres de l'adresse) -> (SQL, arguments)."""
+        """Filters of a library page (address parameters) -> (SQL, arguments)."""
         sql, args = "", []
         uid = req.user["id"]
         genre = req.arg("genre")
@@ -93,7 +93,7 @@ def register(app, ctx, x):
 
     @app.route("GET", r"/api/libraries/(?P<sid>\d{1,6})/facets")
     def library_facets(req):
-        """Valeurs proposées par les filtres : décennies, langues audio et de sous-titres présentes."""
+        """Values offered by the filters: decades, audio and subtitle languages present."""
         sid = req.params["sid"]
         require_section(req.user, sid)
         lib = db.one("SELECT kind, scanned_at FROM libraries WHERE id=?", (int(sid),))
@@ -152,7 +152,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/me/genres")
     def my_genres(req):
-        """Tous les genres des bibliothèques de ce compte (choix des genres à masquer), y compris ceux déjà masqués."""
+        """All the genres of this account's libraries (choice of genres to hide), including those already hidden."""
         libs = [int(i) for i in x.allowed_ids(req.user)]
         if not libs:
             return []
@@ -257,7 +257,7 @@ def register(app, ctx, x):
         choice = prefs.get("home_hero") or "auto"
         # a different shuffle each hour: (id + hour) * K mod p, not id * K + hour (that only shifts every
         # title by one, so the first title never changed)
-        if choice == "random":  # un film ou une série au hasard (le même pendant une heure)
+        if choice == "random":  # a random movie or show (the same for an hour)
             libs = [int(l["library"]["id"]) for l in rows] or [0]
             af, aa = age_filter(user)
             pick = db.one(CARD_SQL + f"WHERE i.type IN ('movie','show') AND i.library_id IN ({','.join('?' * len(libs))}) "
@@ -278,7 +278,7 @@ def register(app, ctx, x):
         return [int(l["id"]) for l in libraries_all() if l["id"] in allowed and l["type"] == "movie"]
 
     def short_row(user, allowed):
-        """Films de moins de 1 h 30 pas encore vus, les mieux notés d'abord (renouvelés chaque jour)."""
+        """Movies under 1 h 30 not watched yet, best rated first (changes every day)."""
         libs = movie_libs(allowed)
         if not libs:
             return []
@@ -291,8 +291,8 @@ def register(app, ctx, x):
         return attach_state(user["id"], [card(r) for r in rows])
 
     def unfinished_row(user, allowed):
-        """Séries commencées puis laissées de côté (rien de regardé depuis 2 mois, au-delà de « Reprendre et à
-        suivre ») : l'épisode où reprendre."""
+        """Shows started then left aside (nothing watched for 2 months, beyond "Continue watching"):
+        the episode to resume."""
         uid, now = user["id"], int(time.time())
         hidden = x.hidden_ids(user)
         recent = db.all("SELECT show_key, MAX(last_watched_at) AS t FROM progress WHERE user_id=? AND watched=1 AND "
@@ -332,7 +332,7 @@ def register(app, ctx, x):
                           + af + f" ORDER BY (i.search LIKE ? ESCAPE '\\') DESC, i.sort_title LIMIT ?",
                           [typ, *allowed, like, *([year] if year and typ != "episode" else []), *aa, q + "%", limit])
             out[bucket] = attach_state(req.user["id"], [card(r) for r in rows])
-        # personnes (distribution, réalisation) et genres dont le nom correspond
+        # people (cast, directors) and genres whose name matches
         people = {}
         for r in db.all("SELECT DISTINCT json_extract(c.value, '$.name') AS n FROM items i, "
                         "json_each(json_extract(i.people, '$.cast')) c WHERE i.type IN ('movie','show') "
@@ -349,7 +349,7 @@ def register(app, ctx, x):
             f"('movie','show') AND i.library_id IN ({marks}) GROUP BY g.value, i.library_id ORDER BY n DESC", allowed)
             if q in fold(r["g"] or "") and r["g"] not in set(get_prefs(req.user["id"]).get("hidden_genres") or [])][:8]
         if not (out["movies"] or out["shows"] or out["episodes"] or out["people"]):
-            # rien d'exact : titres proches (faute de frappe, lettre en trop ou en moins)
+            # nothing exact: close titles (typo, one letter too many or too few)
             import difflib
             pool = db.all(CARD_SQL.replace("SELECT i.id,", "SELECT i.search, i.id,", 1) +
                           f"WHERE i.type IN ('movie','show') AND i.library_id IN ({marks})" + af, [*allowed, *aa])
@@ -394,7 +394,7 @@ def register(app, ctx, x):
         if d["type"] in ("movie", "episode", "extra"):
             probe = json.loads(r["probe"] or "{}")
             if ctx.subtitles.has_work(r) and d["type"] != "extra":
-                ctx.subtitles.enqueue(r["id"], urgent=True)  # on prépare au cas où la lecture suit
+                ctx.subtitles.enqueue(r["id"], urgent=True)  # prepared in case the playback follows
             audio, subs = stream_lists(probe)
             v = probe.get("video") or {}
             first_audio = (probe.get("audio") or [{}])[0]
@@ -410,7 +410,7 @@ def register(app, ctx, x):
                     d["path"] = r["key"]
             elif req.user["is_admin"]:
                 d["path"] = r["key"]
-            # stockage froid : copie(s) ailleurs ; « cold_only » : le fichier n'est plus que là (lecture un peu plus lente)
+            # cold storage: copy(ies) elsewhere; "cold_only": the file is only there (playback a little slower)
             if not r["peer_id"]:
                 n = db.scalar("SELECT COUNT(*) FROM cold_copies WHERE item_id=? AND verified_at IS NOT NULL", (r["id"],))
                 d["archived"] = bool(n)
@@ -428,13 +428,13 @@ def register(app, ctx, x):
             if d["play_target"]:
                 trow = db.one("SELECT * FROM items WHERE id=?", (int(d["play_target"]["id"]),))
                 if ctx.subtitles.has_work(trow):
-                    ctx.subtitles.enqueue(trow["id"], urgent=True)  # l'épisode à lancer : sous-titres préparés d'avance
+                    ctx.subtitles.enqueue(trow["id"], urgent=True)  # the episode to start: subtitles prepared in advance
                 d["audio"], d["subtitles"] = stream_lists(json.loads(trow["probe"] or "{}"))
         elif d["type"] == "season":
             d["show_id"] = str(r["show_id"])
         if req.user["is_admin"] and not r["peer_id"] and d["type"] in ("movie", "show", "season", "episode"):
             root = r["show_id"] if d["type"] in ("season", "episode") else r["id"]
-            d["kept"] = bool(db.scalar("SELECT 1 FROM cold_keep WHERE item_id=?", (root,)))  # « toujours garder sur le disque »
+            d["kept"] = bool(db.scalar("SELECT 1 FROM cold_keep WHERE item_id=?", (root,)))  # "always keep on the disk"
         return d
 
     @app.route("GET", f"/api/items/{RK}/children")
@@ -453,7 +453,7 @@ def register(app, ctx, x):
 
     @app.route("PUT", f"/api/items/{RK}/tracks")
     def item_tracks(req):
-        """Langues audio / sous-titres retenues pour ce film ou cette série (par utilisateur)."""
+        """Audio / subtitle languages remembered for this movie or show (per user)."""
         r = require_item(req.user, req.params["rk"])
         b = req.json()
         if b.get("reset"):
@@ -477,7 +477,7 @@ def register(app, ctx, x):
         body = req.json()
         watched = bool(body.get("watched"))
         if body.get("undo") and not watched and r["type"] in ("movie", "episode"):
-            # « Annuler » juste après « marquer comme vu » : on remet la reprise et on efface la vue ajoutée
+            # "Undo" right after "mark as watched": the resume point is put back and the added view erased
             undo_watched(req.user["id"], card(r), body.get("position"))
             return {"ok": True}
         if r["type"] == "show":
@@ -506,20 +506,20 @@ def register(app, ctx, x):
         h = max(40, min(1920, round(req.int_arg("h", 450) / 20) * 20))
         path = ctx.images.get(r, m.group(2), w, h)
         if not path:
-            # gardé 10 min par le navigateur : il ne la redemande pas à chaque page
+            # kept 10 min by the browser: it does not ask again on every page
             return Response(json.dumps({"error": i18n.tr("Pas d'image")}), 404, "application/json; charset=utf-8",
                             {"Cache-Control": "private, max-age=600"})
         with open(path, "rb") as f:
             return Response(f.read(), 200, "image/jpeg", {"Cache-Control": "private, max-age=604800, immutable"})
 
-    # ------------------------------------------------------------ personnes (acteurs, réalisation)
+    # ------------------------------------------------------------ people (actors, directors)
     PEOPLE_MATCH = ("(EXISTS (SELECT 1 FROM json_each(json_extract(i.people, '$.cast')) c "
                     "WHERE json_extract(c.value, '$.name') = ?) OR EXISTS (SELECT 1 FROM "
                     "json_each(json_extract(i.people, '$.directors')) d WHERE d.value = ?))")
 
     @app.route("GET", "/api/person")
     def person(req):
-        """Films et séries du serveur où joue (ou que réalise) cette personne."""
+        """Movies and shows of the server this person plays in (or directs)."""
         name = (req.arg("name") or "").strip()
         if not 1 <= len(name) <= 120:
             raise HTTPError(400, "Nom invalide")
@@ -543,11 +543,11 @@ def register(app, ctx, x):
             items.append(c)
         return {"name": name, "photo": photo, "items": attach_state(req.user["id"], items)}
 
-    # ------------------------------------------------------------ au hasard
+    # ------------------------------------------------------------ random
     @app.route("GET", "/api/random")
     def random_pick(req):
-        """Un titre au hasard : un épisode d'une série (?show=), ou un film / une série d'une bibliothèque
-        (?library=, ?genre=), de préférence pas encore vu."""
+        """A random title: an episode of a show (?show=), or a movie / show of a library
+        (?library=, ?genre=), preferably not watched yet."""
         uid = req.user["id"]
         af, aa = age_filter(req.user)
         unseen = ("NOT EXISTS (SELECT 1 FROM progress pr WHERE pr.user_id=? AND pr.rating_key=CAST(i.id AS TEXT) "

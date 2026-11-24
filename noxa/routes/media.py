@@ -1,4 +1,4 @@
-"""Lecture : préparation et sous-titres, polices, aperçus, chapitres, flux vidéo, progression."""
+"""Playback: preparation and subtitles, fonts, previews, chapters, video streams, progress."""
 import hashlib
 import json
 import os
@@ -19,7 +19,7 @@ from ..web import HTTPError, Response
 
 def register(app, ctx, x):
     db = ctx.db
-    # outils du catalogue partagé (noxa/catalog.py)
+    # tools of the shared catalogue (noxa/catalog.py)
     card, chapters_for, get_prefs, markers_for = x.card, x.chapters_for, x.get_prefs, x.markers_for
     next_episode, require_item, set_watched, upsert_meta = x.next_episode, x.require_item, x.set_watched, x.upsert_meta
 
@@ -29,7 +29,7 @@ def register(app, ctx, x):
 
     @app.route("GET", f"/api/items/{RK}/prepare")
     def item_prepare(req):
-        """Avant de lancer la lecture : toutes les pistes de sous-titres internes doivent être extraites."""
+        """Before starting the playback: all the internal subtitle tracks must be extracted."""
         r = require_item(req.user, req.params["rk"])
         if r["type"] not in ("movie", "episode", "extra"):
             raise HTTPError(400, "Élément non lisible")
@@ -40,10 +40,10 @@ def register(app, ctx, x):
             db.release()
             ctx.subtitles.wait(job, min(25, max(1, req.int_arg("wait", 10))))
         if job.done.is_set():
-            # en cas d'échec on n'empêche pas la lecture : les pistes illisibles seront simplement absentes
+            # on failure playback is not prevented: unreadable tracks will simply be missing
             return {"ready": True, "progress": 1, "warning": job.error}
-        # lecture progressive : on démarre dès que les sous-titres couvrent largement le début du visionnage
-        # (l'extraction lit le fichier bien plus vite que le temps réel, elle reste devant)
+        # progressive playback: starts as soon as the subtitles cover well the start of the viewing
+        # (the extraction reads the file much faster than real time, it stays ahead)
         at = max(0, req.int_arg("at", 0))
         if job.until_ms >= at + PREPARE_WINDOW_MS or (r["duration_ms"] and job.until_ms >= r["duration_ms"] - 10000):
             return {"ready": True, "partial": True, "until": job.until_ms, "progress": round(job.progress, 3)}
@@ -56,7 +56,7 @@ def register(app, ctx, x):
         probe = json.loads(r["probe"] or "{}")
         json_type = "application/json; charset=utf-8"
         if sub < EXTERNAL_BASE:
-            # piste interne : préparée par le cache de sous-titres (une seule lecture du fichier)
+            # internal track: prepared by the subtitle cache (a single read of the file)
             s = next((x for x in probe.get("subs", []) if x["index"] == sub), None)
             if not s or s["codec"] not in media.TEXT_SUB_CODECS:
                 raise HTTPError(404, "Sous-titres introuvables")
@@ -82,7 +82,7 @@ def register(app, ctx, x):
         ext = probe.get("external", [])
         if sub - EXTERNAL_BASE >= len(ext):
             raise HTTPError(404, "Sous-titres introuvables")
-        # clé : le fichier lui-même (un sous-titre ajouté dans le dossier décale les numéros des suivants)
+        # key: the file itself (a subtitle added to the folder shifts the numbers of the next ones)
         tag = hashlib.sha1(f"{ext[sub - EXTERNAL_BASE]['path']}|{r['file_mtime']}".encode()).hexdigest()[:16]
         cache = os.path.join(ctx.data_dir, "cache", "subs", f"ext_{r['id']}_{tag}.json")
         if os.path.isfile(cache):
@@ -109,8 +109,8 @@ def register(app, ctx, x):
 
     @app.route("GET", f"/api/items/{RK}/subtitles/(?P<sub>\\d{{1,6}})\\.vtt")
     def item_subtitles_vtt(req):
-        """Même piste au format WebVTT, pour les lecteurs natifs (application Android TV). Une piste interne
-        pas encore extraite est attendue (2 min au plus), puis servie en partie si besoin."""
+        """Same track as WebVTT, for native players (Android TV app). An internal track not extracted yet
+        is waited for (2 min at most), then served in part if needed."""
         req.query = {**req.query, "wait": ["1"]}
         resp = item_subtitles(req)
         if resp.status == 202:
@@ -130,7 +130,7 @@ def register(app, ctx, x):
                 out += [f"{ts(c.get('s', 0))} --> {ts(c.get('e', 0))}" + (" line:10%" if c.get("top") else ""), text, ""]
         return Response("\n".join(out).encode(), 200, "text/vtt; charset=utf-8", {"Cache-Control": "private, max-age=600"})
 
-    # -- ASS d'origine (rendu fidèle par libass dans le navigateur) et polices jointes au MKV
+    # -- original ASS (faithful rendering by libass in the browser) and fonts attached to the MKV
     ASS_FN = re.compile(rb"\\fn([^\\}]{1,100})")
 
     def ass_fonts(raw):
@@ -234,7 +234,7 @@ def register(app, ctx, x):
     @app.route("GET", f"/api/items/{RK}/chapters/(?P<n>\\d{{1,4}})\\.jpg")
     def item_chapter_image(req):
         r = require_item(req.user, req.params["rk"])
-        db.release()  # la fabrication de l'image peut prendre un moment (partage réseau)
+        db.release()  # making the picture can take a while (network share)
         path = ctx.chapter_images.get(r, int(req.params["n"]))
         if not path:
             raise HTTPError(404, "Image indisponible")
@@ -250,14 +250,14 @@ def register(app, ctx, x):
         elif uid is None:
             ctx.transcoder.stop(sid)
 
-    # ----------------------------------------------------------- débit de l'appareil
-    BW_CHUNK = os.urandom(256 * 1024)  # incompressible : un proxy ne fausse pas la mesure
+    # ----------------------------------------------------------- device bandwidth
+    BW_CHUNK = os.urandom(256 * 1024)  # incompressible: a proxy does not skew the measurement
     BW_KEEP = 3600
-    bandwidths = {}  # (compte, adresse IP) -> (kbit/s, instant) : dernière mesure de cet appareil
+    bandwidths = {}  # (account, IP address) -> (kbit/s, time): latest measurement of this device
 
     @app.route("GET", "/api/bandwidth")
     def bandwidth_probe(req):
-        """Octets à télécharger : l'appareil mesure son débit depuis le serveur (qualité automatique)."""
+        """Bytes to download: the device measures its bandwidth from the server (automatic quality)."""
         size = req.int_arg("size", 1 << 20, 1 << 16, 32 << 20)
         db.release()
 
@@ -271,14 +271,14 @@ def register(app, ctx, x):
                         headers={"Cache-Control": "no-store", "Content-Encoding": "identity"})
 
     def measured_bandwidth(req, b):
-        """Débit (kbit/s) mesuré par l'appareil, envoyé avec la demande de lecture ; sinon la dernière mesure
-        du même compte depuis la même adresse (moins d'une heure)."""
+        """Bandwidth (kbit/s) measured by the device, sent with the play request; otherwise the latest measurement
+        of the same account from the same address (less than an hour old)."""
         key = (req.user["id"], req.client_ip)
         v = b.get("bandwidth")
         now = time.time()
         if isinstance(v, (int, float)) and 50 <= v <= 10_000_000:
             if b.get("capped"):
-                return int(v)  # plafond pour ce titre (conversion trop lente) : pas une mesure, rien à retenir
+                return int(v)  # cap for this title (conversion too slow): not a measurement, nothing to remember
             bandwidths[key] = (int(v), now)
             if len(bandwidths) > 2000:
                 for k in [k for k, (_, t) in bandwidths.items() if now - t > BW_KEEP]:
@@ -299,11 +299,11 @@ def register(app, ctx, x):
             raise HTTPError(400, "Cet élément n'est pas lisible")
         if not media.available():
             raise HTTPError(503, "ffmpeg n'est pas installé sur le serveur")
-        # le fichier, sinon sa copie sur un stockage froid ; « cold » : un administrateur essaie la copie froide
+        # the file, otherwise its copy on cold storage; "cold": an administrator tries the cold copy
         src, cold_probe = ctx.cold.resolve(r, prefer_cold=bool(b.get("cold")) and bool(req.user["is_admin"]))
         if not src:
             raise HTTPError(404, "Fichier introuvable : le partage est-il monté ?")
-        # copie compressée (HEVC) : ses propres pistes et codecs décident de la lecture directe ou de la conversion
+        # compressed copy (HEVC): its own tracks and codecs decide between direct play and conversion
         probe = json.loads(cold_probe or r["probe"] or "{}")
         audio, subs = stream_lists(probe)
         prefs = get_prefs(uid)
@@ -311,11 +311,11 @@ def register(app, ctx, x):
         if quality not in QUALITIES:
             raise HTTPError(400, "Qualité invalide")
         try:
-            ctx.account_limits.check_play(req.user, b.get("replace"))  # temps d'écran, lectures simultanées du compte
+            ctx.account_limits.check_play(req.user, b.get("replace"))  # screen time, simultaneous streams of the account
         except LimitError as e:
             raise HTTPError(e.status, e.message.format(**e.values))
         requested, kbps = quality, measured_bandwidth(req, b)
-        cap = ctx.account_limits.remote_cap(req.user, req)  # débit maximum de ce compte hors du réseau local
+        cap = ctx.account_limits.remote_cap(req.user, req)  # maximum bandwidth of this account outside the local network
         if cap:
             kbps = min(kbps, cap) if kbps else cap
         if quality == "auto":
@@ -338,12 +338,12 @@ def register(app, ctx, x):
             raise HTTPError(400, "Sous-titres invalides")
         sub = sub_map.get(sub_id) if sub_id else None
         caps = parse_caps(b.get("caps"))
-        # PGS : rendu par le navigateur quand il le peut, incrusté sinon
+        # PGS: rendered by the browser when it can, burnt in otherwise
         pgs_client = bool(sub and sub.get("pgs") and caps.get("pgs") and not b.get("burn"))
         burn = sub["id"] if sub and not sub["overlay"] and not pgs_client else None
         if b.get("replace"):
             stop_stream(str(b["replace"]), uid)
-        # son « nuit » choisi par la personne (dialogues renforcés, effets atténués), sinon le mixage du serveur
+        # "night" sound chosen by the person (louder dialogue, softer effects), otherwise the server's mix
         algo = "nightmode" if prefs.get("night_audio") else db.setting("downmix_algo", "none")
         p = plan(probe, audio_id, burn, quality, caps, algo,
                  float(db.setting("downmix_boost", "2") or 2), db.setting("tonemap", "hable"))
@@ -352,16 +352,16 @@ def register(app, ctx, x):
         elif requested == "auto" and p["mode"] == "transcode" and quality != "original" and kbps:
             p["reasons"].append(f"connexion à {kbps / 1000:.1f} Mbit/s")
         if b.get("cast"):
-            p["cast"] = True  # lu par une TV (Chromecast, AirPlay) : adresse du flux utilisable sans session
+            p["cast"] = True  # played by a TV (Chromecast, AirPlay): stream address usable without a session
         if p["mode"] == "direct" and (b.get("no_direct") or media.is_remote(src)):
-            p["mode"] = "copy"  # le navigateur a refusé la lecture directe, ou flux distant (.strm, stockage froid) relayé par Noxa
+            p["mode"] = "copy"  # the browser refused direct play, or remote stream (.strm, cold storage) relayed by Noxa
         if src != r["key"]:
-            p["cold"] = True  # lu depuis le stockage froid
+            p["cold"] = True  # played from cold storage
             p["reasons"].append("lu depuis le stockage froid")
             if media.is_remote(src):
-                ctx.cold.prefetch(r)  # ramené en local, avec les épisodes suivants : les prochaines lectures sont immédiates
+                ctx.cold.prefetch(r)  # brought back locally, with the next episodes: the next playbacks start right away
             if p["mode"] == "direct" and b.get("cold"):
-                p["mode"] = "copy"  # essai de la copie froide : la lecture directe relirait le fichier de la bibliothèque
+                p["mode"] = "copy"  # trying the cold copy: direct play would read the library file
         sid = secrets.token_urlsafe(12)
         try:
             kf = keyframes_for(r) if p["mode"] == "copy" and src == r["key"] else None
@@ -381,7 +381,7 @@ def register(app, ctx, x):
         if b.get("playlist"):
             nxt = x.playlist_next(req.user, b["playlist"], r["id"]) if str(b["playlist"]).isdigit() else None
         elif b.get("shuffle") and r["type"] == "episode" and str(b["shuffle"]) == str(r["show_id"]):
-            # lecture aléatoire d'une série : un autre épisode au hasard, de préférence pas encore vu
+            # shuffle of a show: another random episode, preferably not watched yet
             pick = x.ITEM_SQL + "WHERE i.show_id=? AND i.type='episode' AND i.id<>? {} ORDER BY random() LIMIT 1"
             nxt = db.one(pick.format("AND NOT EXISTS (SELECT 1 FROM progress pr WHERE pr.user_id=? AND "
                                      "pr.rating_key=CAST(i.id AS TEXT) AND pr.watched=1)"), (r["show_id"], r["id"], uid)) \
@@ -389,9 +389,9 @@ def register(app, ctx, x):
         if ctx.subtitles.missing(r):
             ctx.subtitles.ensure_now(r)
         elif ctx.subtitles.needs_trick(r):
-            ctx.subtitles.enqueue(r["id"])  # vignettes : en tâche de fond, après la lecture
+            ctx.subtitles.enqueue(r["id"])  # thumbnails: in the background, after the playback
         if nxt and ctx.subtitles.missing(nxt):
-            ctx.subtitles.enqueue(nxt["id"], urgent=True)  # débit plafonné pour ne pas gêner ce flux
+            ctx.subtitles.enqueue(nxt["id"], urgent=True)  # capped rate so as not to disturb this stream
         url = f"/api/stream/{sid}/file" if p["mode"] == "direct" else f"/api/stream/{sid}/main.m3u8"
         return {
             "stream": sid, "mode": p["mode"], "reasons": [i18n.tr(r) for r in p["reasons"]], "url": url, "offset": actual,
@@ -409,13 +409,13 @@ def register(app, ctx, x):
     CONTAINER_CAPS = {"mp4", "mov", "webm", "matroska", "mpegts"}
 
     def parse_caps(c):
-        """Profil de décodage déclaré par le navigateur."""
+        """Decoding profile declared by the browser."""
         if not isinstance(c, dict):
             return {"video": {"h264"}, "audio": {"aac", "mp3"}, "containers": {"mp4", "mov"}, "pgs": False}
         pick = lambda key, allowed: {x for x in (c.get(key) or []) if isinstance(x, str) and x in allowed}
         return {"video": pick("video", VIDEO_CAPS) or {"h264"}, "audio": pick("audio", AUDIO_CAPS) or {"aac"},
                 "containers": pick("containers", CONTAINER_CAPS) or {"mp4"}, "pgs": bool(c.get("pgs")),
-                # application native (Android TV) : lecture directe des MKV, son multicanal transmis tel quel
+                # native app (Android TV): direct play of MKV, multichannel sound passed through as is
                 "native": c.get("native") is True, "multichannel": c.get("multichannel") is True}
 
     kf_cache = {}
@@ -429,9 +429,9 @@ def register(app, ctx, x):
         return kf_cache[key]
 
     def own_stream(req, sid):
-        """Flux de la personne connectée ; ou, sans session, un flux lancé pour une TV (Chromecast, AirPlay) : la TV
-        va chercher la vidéo elle-même, sans le cookie du navigateur. Son adresse (identifiant aléatoire de 96 bits,
-        valable le temps de la lecture) suffit alors."""
+        """Stream of the signed-in person; or, without a session, a stream started for a TV (Chromecast, AirPlay): the TV
+        fetches the video itself, without the browser's cookie. Its address (random 96-bit id, valid for
+        the duration of the playback) is then enough."""
         if req.user:
             st = db.one("SELECT * FROM streams WHERE id=? AND user_id=?", (sid, req.user["id"]))
         else:
@@ -456,7 +456,7 @@ def register(app, ctx, x):
         return cast_cors(st, Response(text, 200, "application/vnd.apple.mpegurl", {"Cache-Control": "no-store"}))
 
     def cast_cors(st, resp):
-        """Flux lancé pour une TV : le lecteur du Chromecast le lit depuis une page de Google (autre origine)."""
+        """Stream started for a TV: the Chromecast's player reads it from a Google page (another origin)."""
         if json.loads(st["params"] or "{}").get("cast"):
             resp.headers["Access-Control-Allow-Origin"] = "*"
             resp.headers["Access-Control-Expose-Headers"] = "Content-Length, Content-Range"
@@ -471,7 +471,7 @@ def register(app, ctx, x):
     def stream_init(req):
         sid = req.params["sid"]
         st = own_stream(req, sid)
-        db.release()  # l'attente peut durer : on ne garde pas la connexion SQLite
+        db.release()  # the wait can be long: the SQLite connection is not kept
         try:
             return cast_cors(st, segment_response(ctx.transcoder.init(sid), "video/mp4"))
         except StreamError as e:
@@ -550,10 +550,10 @@ def register(app, ctx, x):
                         on_close=f.close)
 
     def record_progress(user, r, pos, dur, state="playing", sid="", ended=False):
-        """Position de lecture d'un utilisateur (interface de Noxa et applications). -> vu à l'instant ?"""
+        """Playback position of a user (Noxa interface and apps). -> watched just now?"""
         uid = user["id"]
         rk = str(r["id"])
-        if r["type"] == "extra":  # les bonus ne laissent ni reprise ni historique
+        if r["type"] == "extra":  # extras leave neither a resume point nor history
             if sid and state == "stopped":
                 stop_stream(sid, uid)
             elif sid:
@@ -602,16 +602,16 @@ def register(app, ctx, x):
         out = {"ok": True, "watched": watched}
         conv = ctx.transcoder.get(str(b.get("stream") or "")) if b.get("stream") else None
         if conv is not None and conv.speed is not None:
-            # vitesse de la conversion (x temps réel) : sous ×1, une saccade vient du serveur et pas de la connexion
+            # conversion speed (× real time): below ×1, stuttering comes from the server, not the connection
             out["speed"] = conv.speed
         screen = ctx.account_limits.count(req.user, str(b.get("stream") or ""), state)
         if screen:
-            # temps d'écran : le lecteur prévient quelques minutes avant, puis s'arrête
+            # screen time: the player warns a few minutes before, then stops
             out["screen"] = {"left": screen["left"], "blocked": screen["blocked"], "reason": screen["reason"],
                              "bedtime": screen["bedtime"]}
         return out
 
-    # ------------------------------------------------------------ téléchargements (hors ligne)
+    # ------------------------------------------------------------ downloads (offline)
     JID = r"(?P<jid>[A-Za-z0-9_-]{8,20})"
 
     def own_job(req):
@@ -623,7 +623,7 @@ def register(app, ctx, x):
     DL_QUALITIES = ("auto", "1080p", "720p", "480p")
 
     def download_plan(req, b, quality):
-        """Plan de préparation d'un téléchargement pour CET appareil : on ne convertit que ce qu'il ne sait pas lire."""
+        """Preparation plan of a download for THIS device: only what it cannot play is converted."""
         if db.setting("downloads", "1") != "1":
             raise HTTPError(403, "Les téléchargements sont désactivés par l'administrateur")
         rk = str(b.get("id") or "")
@@ -635,9 +635,9 @@ def register(app, ctx, x):
         src, cold_probe = ctx.cold.resolve(r)
         if not src:
             raise HTTPError(404, "Fichier introuvable : le partage est-il monté ?")
-        r = {**dict(r), "key": src}  # préparation depuis le fichier, ou depuis sa copie froide
+        r = {**dict(r), "key": src}  # prepared from the file, or from its cold copy
         if cold_probe:
-            r["probe"] = cold_probe  # copie compressée : ses pistes
+            r["probe"] = cold_probe  # compressed copy: its tracks
             r["file_size"] = os.path.getsize(src) if not media.is_remote(src) else r["file_size"]
         probe = json.loads(r["probe"] or "{}")
         audio, subs = stream_lists(probe)
@@ -646,28 +646,28 @@ def register(app, ctx, x):
         audio_id = b.get("audio")
         if audio_id is not None and audio_id not in {a["id"] for a in audio}:
             raise HTTPError(400, "Piste audio invalide")
-        burn = b.get("burn")  # sous-titres image (PGS, VobSub) : incrustés dans la vidéo téléchargée
+        burn = b.get("burn")  # picture subtitles (PGS, VobSub): burnt into the downloaded video
         if burn is not None and burn not in {s["id"] for s in subs if not s["overlay"]}:
             raise HTTPError(400, "Sous-titres à incruster invalides")
         caps = parse_caps(b.get("caps"))
-        caps["containers"] = {"mp4"}  # le fichier gardé est un MP4
+        caps["containers"] = {"mp4"}  # the kept file is an MP4
         p = plan(probe, audio_id, burn, "original" if quality == "auto" else quality, caps,
                  db.setting("downmix_algo", "none"), float(db.setting("downmix_boost", "2") or 2),
                  db.setting("tonemap", "hable"))
         if p["mode"] == "direct" and media.is_remote(r["key"]):
-            p["mode"] = "copy"  # flux distant (.strm, stockage froid) : on en fait un fichier
+            p["mode"] = "copy"  # remote stream (.strm, cold storage): turned into a file
         duration = probe.get("duration") or (r["duration_ms"] or 0) / 1000
         if p["mode"] == "direct":
             size = r["file_size"] or 0
-        elif p["mode"] == "copy":  # vidéo recopiée, son en AAC stéréo
-            size = int((r["file_size"] or 0) * 0.95) if not media.is_strm(r["key"]) else 0  # copie froide : même taille
+        elif p["mode"] == "copy":  # video copied, sound in stereo AAC
+            size = int((r["file_size"] or 0) * 0.95) if not media.is_strm(r["key"]) else 0  # cold copy: same size
         else:
             size = int((p["kbps"] + 192) * 1000 / 8 * duration)
         return r, p, duration, size
 
     @app.route("POST", "/api/downloads/options")
     def download_options(req):
-        """Pour chaque qualité : taille et conversion nécessaire ou non (le dialogue de téléchargement l'affiche)."""
+        """For each quality: size and whether a conversion is needed (shown by the download dialog)."""
         b = req.json()
         out = []
         for q in DL_QUALITIES:
@@ -700,14 +700,14 @@ def register(app, ctx, x):
         job = own_job(req)
         path = job.path
         if job.state != "ready":
-            # transfert pendant la préparation : seulement une partie déjà écrite (plage demandée explicitement)
+            # transfer during the preparation: only a part already written (range explicitly requested)
             m = re.match(r"^bytes=(\d+)-(\d+)$", (req.headers.get("Range") or "").strip())
             if not (job.progressive and job.state == "preparing" and job.part and m and int(m.group(2)) < job.ready):
                 raise HTTPError(409, "Pas encore prêt")
             path = job.part
         if not os.path.isfile(path) and job.state == "ready":
-            path = job.path  # préparation finie entre-temps : le fichier a pris son nom définitif
-        db.release()  # transfert long : pas de connexion à la base pendant ce temps
+            path = job.path  # preparation finished meanwhile: the file got its final name
+        db.release()  # long transfer: no database connection meanwhile
         resp = file_response(req, path)
         resp.headers["Content-Type"] = "video/mp4"
         return resp
@@ -719,7 +719,7 @@ def register(app, ctx, x):
 
     @app.route("POST", "/api/progress/offline")
     def progress_offline(req):
-        """Positions enregistrées sans réseau, renvoyées au retour de la connexion (la plus récente gagne)."""
+        """Positions saved offline, sent back when the connection returns (the most recent wins)."""
         items = req.json().get("items")
         if not isinstance(items, list) or len(items) > 500:
             raise HTTPError(400, "Liste invalide")
@@ -732,7 +732,7 @@ def register(app, ctx, x):
                 continue
             row = db.one("SELECT updated_at FROM progress WHERE user_id=? AND rating_key=?", (req.user["id"], rk))
             if row and row["updated_at"] > at:
-                continue  # regardé depuis sur un autre appareil : on ne recule pas
+                continue  # watched since on another device: no going back
             record_progress(req.user, r, pos, dur, "stopped", "", bool(it.get("ended")))
             done += 1
         return {"ok": True, "applied": done}

@@ -1,1 +1,1 @@
-"""Routes HTTP de Noxa, regroupées par thème."""
+"""Noxa's HTTP routes, grouped by topic."""
