@@ -27,6 +27,8 @@ python3 tests/ui_features.py ./captures video.webm  # chapters, tasks, live TV, 
 python3 tests/hls_real.py path/to/hls.min.js        # real hls.js playback (VP9/Opus): resume, seeking, PGS
 ```
 
+`tools/benchmark` compares Noxa, Jellyfin and Plex on the same machine (scan, idle, response times, direct play, conversion), in one command: see its [README](../tools/benchmark/README.md).
+
 The suite builds a small library with ffmpeg (H.264, HEVC, 10-bit, multi-audio, subtitles, chapters) and fakes the external services (TMDB, Seerr, OpenSubtitles, Trakt, S3, WebDAV, SFTP, Radarr / Sonarr…), so it runs offline. CI (`.github/workflows/tests.yml`) runs it on Ubuntu 24.04 with the same ffmpeg as the Docker image, checks the shell scripts and the JavaScript syntax, and builds the `.deb`.
 
 ## Code layout
