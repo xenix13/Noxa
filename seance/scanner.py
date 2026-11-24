@@ -153,6 +153,7 @@ class Scanner:
         self.ctx = ctx
         self.lock = threading.Lock()
         self.thread = None
+        self.queued = set()
         self.state = {"running": False, "phase": "", "library": None, "done": 0, "total": 0,
                       "added": 0, "removed": 0, "unrecognized": [], "errors": [], "finished_at": None}
 
@@ -164,10 +165,14 @@ class Scanner:
         with self.lock:
             self.state.update(kw)
 
-    def start(self, library_ids=None, refresh_metadata=False, scope=None):
-        """scope : {id de bibliothèque: dossiers à revoir} pour un scan partiel (nouveautés détectées)."""
+    def start(self, library_ids=None, refresh_metadata=False, scope=None, queue=False):
+        """scope : {id de bibliothèque: dossiers à revoir} pour un scan partiel (nouveautés détectées).
+        queue: when a scan is already running, these libraries are scanned right after it (a library added
+        while the first one is still being scanned used to stay empty)."""
         with self.lock:
             if self.state["running"]:
+                if queue and library_ids:
+                    self.queued.update(library_ids)
                 return False
             self.state.update(running=True, phase="Préparation", library=None, done=0, total=0, added=0, deferred=0,
                               removed=0, unrecognized=[], errors=[], finished_at=None, partial=bool(scope))
@@ -202,6 +207,10 @@ class Scanner:
             self._set(running=False, phase="Terminé", finished_at=int(time.time()))
             self.ctx.on_library_changed()
             db.release()
+            with self.lock:
+                waiting, self.queued = sorted(self.queued), set()
+            if waiting:
+                self.start(waiting, queue=True)
 
     def _err(self, msg):
         with self.lock:

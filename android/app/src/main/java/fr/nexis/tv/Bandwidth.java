@@ -15,6 +15,10 @@ final class Bandwidth {
     private static final long MAX_MS = 3000;
     private static final long WARMUP = 1 << 20;
     private static long kbps, at;
+    // throughput seen by the player itself while it downloads the video: on a slow TV the short probe can read far
+    // below the real link (it measured ×0.25 in one case), and the server then converts videos for nothing
+    private static long seen, seenAt;
+    private static final long SEEN_KEEP_MS = 60 * 60 * 1000;
 
     private Bandwidth() {}
 
@@ -29,6 +33,7 @@ final class Bandwidth {
             return;
         }
         Api.run(Bandwidth::measure, v -> {
+            if (seen > v && SystemClock.elapsedRealtime() - seenAt < SEEN_KEEP_MS) v = seen;
             if (v > 0) {
                 kbps = v;
                 at = SystemClock.elapsedRealtime();
@@ -40,6 +45,20 @@ final class Bandwidth {
     static void lower(long value) {
         kbps = value;
         at = SystemClock.elapsedRealtime();
+        seen = 0;  // playback stalled: what the player saw before no longer holds
+    }
+
+    /** Estimate from the player (kbit/s), once it has downloaded enough to be meaningful. Only raises the value:
+     *  lowering is left to stalls (see PlayerActivity.onStall). */
+    static void observe(long value, long bytesLoaded) {
+        if (value <= 0 || bytesLoaded < (8L << 20)) return;
+        long now = SystemClock.elapsedRealtime();
+        seen = value;
+        seenAt = now;
+        if (value > kbps) {
+            kbps = value;
+            at = now;
+        }
     }
 
     private static long measure() throws Exception {
