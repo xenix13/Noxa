@@ -7,7 +7,7 @@ For each server, in turn:
   1. start it in a container (--cpus / --memory limits, read-only test library, host network);
   2. set it up through its own API (admin account, one movie and one show library, online metadata off);
   3. scan: time until every title is listed, with the CPU / memory peak;
-  4. wait until its background work is over (CPU under 3 % for 30 s, at most 15 minutes);
+  4. wait until its background work is over (CPU under 5 % on average over 60 s, at most 15 minutes);
   5. idle: CPU and memory for a few minutes;
   6. response time of two equivalent requests (library page of 60 movies, one movie's details);
   7. direct play: 3 clients reading 3 different 8 Mbit/s files at playback speed;
@@ -612,14 +612,16 @@ def bench_server(cls, args, outdir):
         log(f"  scan: {res['scan']['duration_s']} s")
 
         limit = args.settle
-        log(f"  waiting for background work to finish (CPU under 3 % for 30 s, at most {limit // 60} min)")
+        log(f"  waiting for background work to finish (CPU under 5 % on average over 60 s, at most {limit // 60} min)")
         t2 = time.time()
         while time.time() - t2 < limit:
             time.sleep(5)
-            w = sampler.window(time.time() - 30, time.time())
-            if len(w) >= 20 and max(c for c, _ in w) < 3:
+            # an average, not a maximum: every server wakes up now and then (Plex sits at ~4 % when idle),
+            # so "never above 3 %" was never reached and every server waited the full 15 minutes
+            w = sampler.window(time.time() - 60, time.time())
+            if len(w) >= 45 and statistics.mean(c for c, _ in w) < 5:
                 break
-        res["background_work_s"] = round(max(0, time.time() - t2 - 30), 1) if time.time() - t2 < limit \
+        res["background_work_s"] = round(max(0, time.time() - t2 - 60), 1) if time.time() - t2 < limit \
             else f"> {limit}"
 
         log(f"  idle for {args.idle} s")

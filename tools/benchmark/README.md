@@ -55,7 +55,7 @@ Each server runs alone, in a container limited with `--cpus` and `--memory` (2 C
 | Image | Size of the Docker image |
 | Start and setup | Time until the server answers and is set up |
 | Scan | Time until every title is listed; CPU and memory peak |
-| Background work | Time until the CPU stays under 3 % for 30 s after the scan (at most 15 minutes) |
+| Background work | Time until the CPU averages under 5 % over 60 s after the scan (at most 15 minutes) |
 | Idle | Average CPU and memory over 5 minutes |
 | Response times | Median and 95th percentile of 50 requests: a library page of 60 movies, one movie's details |
 | Direct play | 3 clients reading 3 different 8 Mbit/s files at playback speed for 90 s: CPU and memory |
