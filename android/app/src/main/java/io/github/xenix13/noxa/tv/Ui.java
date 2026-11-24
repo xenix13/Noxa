@@ -20,7 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/** Couleurs, tailles et petits composants partagés par tous les écrans (pensés pour la télécommande). */
+/** Colours, sizes and small components shared by all the screens (designed for the remote). */
 final class Ui {
     static final int BG = Color.rgb(11, 11, 14);
     static final int SURFACE = Color.rgb(24, 24, 29);
@@ -71,7 +71,7 @@ final class Ui {
         return d;
     }
 
-    /** Fond qui change quand l'élément a le focus de la télécommande. */
+    /** Background that changes when the element has the remote's focus. */
     static Drawable focusable(Context c, int normal, int focused, float radiusDp) {
         StateListDrawable s = new StateListDrawable();
         s.addState(new int[]{android.R.attr.state_focused}, rounded(c, focused, radiusDp));
@@ -80,7 +80,7 @@ final class Ui {
         return s;
     }
 
-    /** Cadre orange affiché par-dessus un élément sélectionné. */
+    /** Orange frame shown over a selected element. */
     static Drawable focusRing(Context c, float radiusDp) {
         StateListDrawable s = new StateListDrawable();
         s.addState(new int[]{android.R.attr.state_focused}, outline(c, ACCENT, radiusDp, 3));
@@ -89,7 +89,7 @@ final class Ui {
         return s;
     }
 
-    /** Bouton principal (orange) ou secondaire (gris), lisible avec la télécommande. */
+    /** Main (orange) or secondary (grey) button, readable with the remote. */
     static Button button(Context c, String label, boolean primary) {
         Button b = new Button(c);
         b.setText(label);
@@ -167,7 +167,7 @@ final class Ui {
         Toast.makeText(c, msg, Toast.LENGTH_LONG).show();
     }
 
-    /** 3725000 ms -> « 1:02:05 », 125000 -> « 2:05 ». */
+    /** 3725000 ms -> "1:02:05", 125000 -> "2:05". */
     static String clock(long ms) {
         long s = Math.max(0, ms / 1000);
         long h = s / 3600, m = (s % 3600) / 60, sec = s % 60;
@@ -175,7 +175,7 @@ final class Ui {
                 : String.format(java.util.Locale.ROOT, "%d:%02d", m, sec);
     }
 
-    /** 5400000 ms -> « 1 h 30 », 2700000 -> « 45 min ». */
+    /** 5400000 ms -> "1 h 30", 2700000 -> "45 min". */
     static String duration(long ms) {
         long min = Math.round(ms / 60000.0);
         if (min <= 0) return "";

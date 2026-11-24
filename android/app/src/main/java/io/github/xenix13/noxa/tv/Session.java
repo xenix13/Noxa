@@ -3,13 +3,13 @@ package io.github.xenix13.noxa.tv;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Profil connecté, ses préférences et ses bibliothèques (réponse de /api/me), partagés par les écrans. */
+/** Signed-in profile, its preferences and its libraries (answer of /api/me), shared by the screens. */
 final class Session {
     static JSONObject user = new JSONObject();
     static JSONObject prefs = new JSONObject();
     static JSONArray libraries = new JSONArray();
     static JSONObject features = new JSONObject();
-    /** Chaînes de la TV en direct, pour passer de l'une à l'autre dans le lecteur. */
+    /** Live TV channels, to move from one to the next in the player. */
     static JSONArray channels = new JSONArray();
 
     private Session() {}

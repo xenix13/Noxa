@@ -7,8 +7,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Débit entre la TV et le serveur, pour la qualité automatique : quelques mégaoctets téléchargés au premier
- * lancement d'une vidéo, et la mesure gardée 10 minutes. Le serveur en déduit l'original ou une qualité convertie.
+ * Bandwidth between the TV and the server, for automatic quality: a few megabytes downloaded at the first
+ * start of a video, and the measurement kept 10 minutes. The server deduces the original or a converted quality.
  */
 final class Bandwidth {
     private static final long KEEP_MS = 10 * 60 * 1000;
@@ -22,10 +22,10 @@ final class Bandwidth {
 
     private Bandwidth() {}
 
-    /** Débit connu (kbit/s), sinon mesuré maintenant ; 0 si la mesure échoue (le serveur garde la dernière). */
+    /** Known bandwidth (kbit/s), otherwise measured now; 0 when the measurement fails (the server keeps the last one). */
     static void get(Api.Ok<Long> done) {
         if (!"auto".equals(Session.pref("quality", "auto"))) {
-            done.run(0L);  // qualité fixée par le compte : rien à mesurer
+            done.run(0L);  // quality set by the account: nothing to measure
             return;
         }
         if (kbps > 0 && SystemClock.elapsedRealtime() - at < KEEP_MS) {
@@ -70,8 +70,8 @@ final class Bandwidth {
             String ck = Api.cookieHeader();
             if (!ck.isEmpty()) c.setRequestProperty("Cookie", ck);
             if (c.getResponseCode() != 200) return 0;
-            // le premier mégaoctet n'est pas compté : la connexion TCP monte encore en régime (sinon une
-            // connexion rapide paraît lente, et un fichier à fort débit est converti sans raison)
+            // the first megabyte is not counted: the TCP connection is still ramping up (otherwise a
+            // fast connection looks slow, and a high-bitrate file is converted for no reason)
             long got = 0, timed = 0, t1 = SystemClock.elapsedRealtime(), t0 = 0;
             byte[] buf = new byte[65536];
             try (InputStream in = c.getInputStream()) {

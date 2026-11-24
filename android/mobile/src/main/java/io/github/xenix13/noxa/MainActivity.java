@@ -50,9 +50,9 @@ import java.net.URL;
 import java.util.Locale;
 
 /**
- * Noxa pour téléphones et tablettes : affiche l'interface du serveur Noxa choisi (elle suit donc chaque mise à jour
- * du serveur), avec le plein écran vidéo, l'envoi de fichiers, les téléchargements de fichiers et la mise à jour de
- * l'application depuis le serveur (/api/apps, /apps/android).
+ * Noxa for phones and tablets: shows the interface of the chosen Noxa server (so it follows each update
+ * of the server), with video fullscreen, file upload, file downloads and the app update
+ * from the server (/api/apps, /apps/android).
  */
 public class MainActivity extends Activity {
     private static final String PREFS = "noxa";
@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> pendingFiles;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private long lastUpdateCheck = 0;
-    private boolean downloading = false; // service de téléchargement en arrière-plan lancé
+    private boolean downloading = false; // background download service started
     private boolean fr;
 
     private SharedPreferences prefs() { return getSharedPreferences(PREFS, MODE_PRIVATE); }
@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         Bridge bridge = new Bridge();
         web.addJavascriptInterface(bridge, "NoxaAndroid");
         web.addJavascriptInterface(bridge, "NexisAndroid");  // name read by servers older than 4.5
-        // moteur de la page gardé prioritaire même application quittée (téléchargements en cours)
+        // page engine kept at high priority even with the app left (downloads in progress)
         web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
 
         web.setWebViewClient(new WebViewClient() {
@@ -108,7 +108,7 @@ public class MainActivity extends Activity {
                 Uri u = req.getUrl();
                 String scheme = u.getScheme() == null ? "" : u.getScheme();
                 if (scheme.equals("file") || sameOrigin(u)) return false;
-                openOutside(u); // autre site, mailto:, intent: … : hors de l'application
+                openOutside(u); // other site, mailto:, intent: …: outside the app
                 return true;
             }
 
@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
         });
 
         web.setWebChromeClient(new WebChromeClient() {
-            // vidéo en plein écran (bouton du lecteur) : la vue est posée par-dessus, barres système masquées
+            // fullscreen video (player button): the view is placed on top, system bars hidden
             @Override
             public void onShowCustomView(View view, CustomViewCallback done) {
                 if (fullscreen != null) { done.onCustomViewHidden(); return; }
@@ -142,7 +142,7 @@ public class MainActivity extends Activity {
                 immersive(false);
             }
 
-            // <input type="file"> : photo du profil, fond d'écran, sauvegarde à restaurer, thème à importer
+            // <input type="file">: profile picture, wallpaper, backup to restore, theme to import
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (pendingFiles != null) pendingFiles.onReceiveValue(null);
@@ -157,7 +157,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        // fichiers à enregistrer (export Letterboxd, sauvegarde…) : gestionnaire de téléchargements d'Android
+        // files to save (Letterboxd export, backup…): Android's download manager
         web.setDownloadListener((url, userAgent, disposition, mime, length) -> {
             try {
                 DownloadManager.Request r = new DownloadManager.Request(Uri.parse(url));
@@ -176,7 +176,7 @@ public class MainActivity extends Activity {
         });
 
         NotifyJob.channel(this);
-        if (prefs().getString("push_token", null) != null) NotifyJob.schedule(this); // remise en route après une mise à jour
+        if (prefs().getString("push_token", null) != null) NotifyJob.schedule(this); // started again after an update
 
         String open = opened(getIntent());
         if (open != null && server() != null) web.loadUrl(server() + "/" + open);
@@ -185,7 +185,7 @@ public class MainActivity extends Activity {
         else showSetup("");
     }
 
-    // notification touchée : la page qu'elle annonce (adresse de l'interface, « #/item/12 »)
+    // notification tapped: the page it announces (interface address, "#/item/12")
     private static String opened(Intent i) {
         String u = i == null ? null : i.getStringExtra("open");
         return u != null && u.startsWith("#/") ? u : null;
@@ -286,20 +286,20 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
-        CookieManager.getInstance().flush(); // session gardée si Android ferme l'application
-        if (!downloading) web.onPause(); // téléchargement en cours : la page continue de travailler
+        CookieManager.getInstance().flush(); // session kept if Android closes the app
+        if (!downloading) web.onPause(); // download in progress: the page keeps working
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
-        // sans la page, plus rien ne télécharge : la notification « Noxa télécharge » disparaît
+        // without the page, nothing downloads anymore: the "Noxa is downloading" notification disappears
         if (downloading) stopService(new Intent(this, DownloadService.class));
         downloading = false;
         super.onDestroy();
     }
 
-    // ------------------------------------------------------------------ téléchargements en arrière-plan
+    // ------------------------------------------------------------------ background downloads
     private void downloadsChanged(String json) {
         int count = 0, percent = 0;
         String title = "", text = "";
@@ -321,11 +321,11 @@ public class MainActivity extends Activity {
                     .putExtra("count", count).putExtra("title", title).putExtra("text", text).putExtra("percent", percent));
             downloading = true;
         } catch (Exception e) {
-            // Android refuse de lancer le service depuis l'arrière-plan : le téléchargement reprendra au retour
+            // Android refuses to start the service from the background: the download will resume on return
         }
     }
 
-    // ------------------------------------------------------------------ choix du serveur
+    // ------------------------------------------------------------------ server choice
     private static String probe(String base) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(base + "/api/status").openConnection();
         c.setConnectTimeout(8000);
@@ -370,7 +370,7 @@ public class MainActivity extends Activity {
         }, "noxa-server").start();
     }
 
-    // ------------------------------------------------------------------ mise à jour de l'application
+    // ------------------------------------------------------------------ app update
     private void checkUpdate(boolean manual) {
         String srv = server();
         if (srv == null) return;
@@ -390,7 +390,7 @@ public class MainActivity extends Activity {
                     ui.post(() -> Toast.makeText(this, getString(R.string.up_to_date, BuildConfig.VERSION_NAME), Toast.LENGTH_LONG).show());
                 }
             } catch (Exception ignored) {
-                // hors ligne, ou serveur sans applications publiées : on réessaiera
+                // offline, or server without published apps: will try again
             }
         }, "noxa-update").start();
     }
@@ -427,7 +427,7 @@ public class MainActivity extends Activity {
                 c.setConnectTimeout(15000);
                 c.setReadTimeout(60000);
                 int code = c.getResponseCode();
-                if (code / 100 == 3) { // le serveur renvoie vers GitHub tant qu'il n'a pas sa copie
+                if (code / 100 == 3) { // the server redirects to GitHub until it has its copy
                     String loc = c.getHeaderField("Location");
                     c.disconnect();
                     c = (HttpURLConnection) new URL(loc).openConnection();
@@ -463,7 +463,7 @@ public class MainActivity extends Activity {
         }, "noxa-apk").start();
     }
 
-    // ------------------------------------------------------------------ textes de l'écran de choix du serveur
+    // ------------------------------------------------------------------ texts of the server choice screen
     private String str(String key) {
         try { return new JSONObject(strings()).getString(key); } catch (Exception e) { return key; }
     }
@@ -487,7 +487,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ------------------------------------------------------------------ passerelle vue par la page (window.NoxaAndroid)
+    // ------------------------------------------------------------------ bridge seen by the page (window.NoxaAndroid)
     private class Bridge {
         @JavascriptInterface
         public String info() {
@@ -521,8 +521,8 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void checkUpdate() { ui.post(() -> MainActivity.this.checkUpdate(true)); }
 
-        // notifications : inscrit (jeton du serveur) et autorisées par Android ?
-        /** État de la file de téléchargement (JSON : active, title, text, percent) ; active = 0 : plus rien en cours. */
+        // notifications: subscribed (server token) and allowed by Android?
+        /** State of the download queue (JSON: active, title, text, percent); active = 0: nothing running anymore. */
         @JavascriptInterface
         public void downloads(String json) { ui.post(() -> downloadsChanged(json)); }
 
@@ -553,7 +553,7 @@ public class MainActivity extends Activity {
             });
         }
 
-        /** Désinscrit cet appareil ; rend le jeton pour que la page le retire aussi du serveur. */
+        /** Unsubscribes this device; returns the token so that the page removes it from the server too. */
         @JavascriptInterface
         public String pushDisable() {
             String token = prefs().getString("push_token", null);
@@ -562,7 +562,7 @@ public class MainActivity extends Activity {
             return token;
         }
 
-        // notification d'essai : on va la chercher tout de suite (le serveur l'a déjà en attente)
+        // test notification: fetch it right away (the server already has it waiting)
         @JavascriptInterface
         public void pushCheck() {
             new Thread(() -> {

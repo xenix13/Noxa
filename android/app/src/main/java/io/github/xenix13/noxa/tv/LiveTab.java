@@ -22,7 +22,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-/** TV en direct : liste des chaînes avec le programme en cours ; OK lance la chaîne en plein écran. */
+/** Live TV: list of channels with the current programme; OK starts the channel in fullscreen. */
 final class LiveTab extends BrowseScreen.Tab {
     private RecyclerView list;
     private TextView message;

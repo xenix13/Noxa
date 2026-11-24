@@ -8,7 +8,7 @@ import android.graphics.PixelFormat;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 
-/** Icônes dessinées (loupe, réglages, lecture…) : nettes à toutes les tailles, sans fichier d'image. */
+/** Drawn icons (magnifier, settings, play…): sharp at every size, without an image file. */
 final class Icons extends Drawable {
     static final int SEARCH = 0, SETTINGS = 1, PLAY = 2, PAUSE = 3, CHECK = 4;
 
@@ -43,7 +43,7 @@ final class Icons extends Drawable {
             case SETTINGS: {
                 paint.setStyle(Paint.Style.FILL);
                 float cx = s / 2f, cy = s / 2f;
-                // roue dentée dessinée dans un calque pour pouvoir y percer le trou central
+                // cog drawn in a layer so that the central hole can be punched
                 Paint hole = new Paint(Paint.ANTI_ALIAS_FLAG);
                 hole.setColor(0xFF000000);
                 hole.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR));

@@ -9,7 +9,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Lancement du lecteur et choix des pistes (mêmes règles que le lecteur web : static/js/tracks.js). */
+/** Starting the player and choosing the tracks (same rules as the web player: static/js/tracks.js). */
 final class Player {
     private Player() {}
 
@@ -26,7 +26,7 @@ final class Player {
         return out;
     }
 
-    /** Piste audio : langue retenue pour ce film / cette série, sinon langue préférée, sinon piste par défaut. */
+    /** Audio track: language remembered for this movie / show, otherwise preferred language, otherwise default track. */
     static JSONObject pickAudio(List<JSONObject> audio, JSONObject trackPrefs) {
         if (audio.isEmpty()) return null;
         String want = trackPrefs != null && !trackPrefs.optString("audio_lang").isEmpty()
@@ -74,7 +74,7 @@ final class Player {
         return null;
     }
 
-    /** Piste « forcée » (panneaux seulement) avec un audio d'une autre langue -> piste complète de la même langue. */
+    /** "Forced" track (signs only) with audio in another language -> full track of the same language. */
     static JSONObject fixForced(JSONObject sub, JSONObject audio, List<JSONObject> subs) {
         if (sub == null || !signsOnly(sub, subs) || (audio != null && audio.optString("lang").equals(sub.optString("lang")))) return sub;
         for (JSONObject x : subs) if (!x.optBoolean("forced") && x.optString("lang").equals(sub.optString("lang")) && x.optBoolean("overlay")) return x;
@@ -88,7 +88,7 @@ final class Player {
         return false;
     }
 
-    /** Sous-titres proposés dans le menu : les pistes « panneaux seulement » d'une autre langue sont masquées. */
+    /** Subtitles offered in the menu: the "signs only" tracks of another language are hidden. */
     static List<JSONObject> menuSubs(List<JSONObject> subs, JSONObject audio) {
         List<JSONObject> out = new ArrayList<>();
         String audioLang = audio == null ? "" : audio.optString("lang");

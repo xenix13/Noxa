@@ -46,17 +46,17 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Lecteur natif (ExoPlayer). Le serveur décide pour chaque fichier : lecture directe (MKV, HEVC, 10 bits, son
- * multicanal transmis à l'ampli), remux HLS, ou conversion si l'appareil ne sait pas décoder.
- * Télécommande : OK lecture/pause, gauche/droite pour avancer ou reculer, haut/bas pour les commandes.
+ * Native player (ExoPlayer). The server decides for each file: direct play (MKV, HEVC, 10-bit, multichannel
+ * audio passed to the amplifier), HLS remux, or conversion when the device cannot decode.
+ * Remote: OK play/pause, left/right to seek forward or back, up/down for the controls.
  */
 @OptIn(markerClass = UnstableApi.class)
 public class PlayerActivity extends Activity {
     private static final String SIDECAR = "noxa-subtitles";
     private static final long REPORT_EVERY = 10000;
-    // lecture directe qui ne démarre pas : on passe par un flux préparé par le serveur
+    // direct play that does not start: go through a stream prepared by the server
     private static final long DIRECT_PATIENCE = 20000;
-    // plus rien à l'écran qu'une roue : on dit ce qui se passe et on propose de réessayer
+    // nothing on screen but a spinner: say what is happening and offer to try again
     private static final long STALL_AFTER = 60000;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -77,12 +77,12 @@ public class PlayerActivity extends Activity {
     private JSONObject audioSel, subSel;
     private boolean burning, forceHls, tracksApplied, introSkipped, upNextDismissed, ended, leaving;
     private boolean everReady, stallShown;
-    private final java.util.ArrayList<Long> stalls = new java.util.ArrayList<>();  // arrêts en cours de lecture
+    private final java.util.ArrayList<Long> stalls = new java.util.ArrayList<>();  // stalls during playback
     private long seekedAt;
     private int startSeq, retries, countdown;
     private long lastReport, lastPosition;
-    private double convSpeed = -1;   // vitesse de la conversion du serveur (x temps réel), -1 : inconnue
-    private long titleKbps;          // débit retenu pour ce titre seulement (conversion trop lente du serveur)
+    private double convSpeed = -1;   // speed of the server's conversion (x real time), -1: unknown
+    private long titleKbps;          // bandwidth kept for this title only (server conversion too slow)
     private boolean slowHinted;
     private long waitSince = SystemClock.elapsedRealtime(), preparedAt;
 
@@ -132,7 +132,7 @@ public class PlayerActivity extends Activity {
                 if (s == androidx.media3.common.Player.STATE_READY) {
                     retries = 0;
                     everReady = true;
-                    // le message « ne démarre pas » ne doit pas rester si la lecture a fini par démarrer
+                    // the "does not start" message must not stay if playback finally started
                     if (stallShown && errorBox.getVisibility() == View.VISIBLE) {
                         errorBox.setVisibility(View.GONE);
                         root.requestFocus();
@@ -192,7 +192,7 @@ public class PlayerActivity extends Activity {
         loader = new ProgressBar(this);
         root.addView(loader, new FrameLayout.LayoutParams(Ui.dp(this, 64), Ui.dp(this, 64), Gravity.CENTER));
 
-        // ce que fait le serveur pendant l'attente (lecture directe, remux, conversion) et depuis combien de temps
+        // what the server is doing during the wait (direct play, remux, conversion) and for how long
         status = Ui.text(this, "", 18, Ui.MUTED);
         status.setGravity(Gravity.CENTER);
         status.setVisibility(View.GONE);
@@ -201,7 +201,7 @@ public class PlayerActivity extends Activity {
         stp.topMargin = Ui.dp(this, 96);
         root.addView(status, stp);
 
-        // commandes (bas de l'écran)
+        // controls (bottom of the screen)
         panel = Ui.column(this);
         panel.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.TRANSPARENT, Color.argb(200, 0, 0, 0), Color.argb(235, 0, 0, 0)}));
@@ -255,7 +255,7 @@ public class PlayerActivity extends Activity {
         panel.setVisibility(View.GONE);
         root.addView(panel, new FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
 
-        // « Passer le générique », « Épisode suivant » : en bas à droite, hors des commandes
+        // "Skip credits", "Next episode": bottom right, outside the controls
         floating = Ui.row(this);
         skipButton = Ui.button(this, Tr.t("Passer le générique"), true);
         skipButton.setOnClickListener(v -> skipIntro());
@@ -335,7 +335,7 @@ public class PlayerActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
     }
 
-    // ------------------------------------------------------------------ chargement et flux
+    // ------------------------------------------------------------------ loading and stream
     private void loadItem(long offset) {
         loader.setVisibility(View.VISIBLE);
         errorBox.setVisibility(View.GONE);
@@ -364,7 +364,7 @@ public class PlayerActivity extends Activity {
         }, e -> showError(e.getMessage()));
     }
 
-    /** Demande un flux au serveur (et remplace le précédent) à la position donnée. */
+    /** Asks the server for a stream (and replaces the previous one) at the given position. */
     private void startStream(long offset, boolean burn) {
         int seq = ++startSeq;
         loader.setVisibility(View.VISIBLE);
@@ -375,7 +375,7 @@ public class PlayerActivity extends Activity {
         waitSince = SystemClock.elapsedRealtime();
         lastPosition = offset;
         convSpeed = -1;
-        // qualité automatique (réglage du compte) : le serveur choisit selon le débit mesuré de la TV
+        // automatic quality (account setting): the server chooses according to the TV's measured bandwidth
         Bandwidth.get(measured -> {
             long kbps = titleKbps > 0 && (measured <= 0 || titleKbps < measured) ? titleKbps : measured;
             if (seq != startSeq || leaving) return;
@@ -393,7 +393,7 @@ public class PlayerActivity extends Activity {
         return loader.getVisibility() == View.VISIBLE && preparedAt == 0;
     }
 
-    /** Lecture qui s'arrête pour charger, deux fois en trois minutes, en qualité automatique : un cran plus bas. */
+    /** Playback that stops to load, twice in three minutes, in automatic quality: one notch lower. */
     private void onStall() {
         long now = SystemClock.elapsedRealtime();
         for (java.util.Iterator<Long> it = stalls.iterator(); it.hasNext(); ) {
@@ -403,8 +403,8 @@ public class PlayerActivity extends Activity {
         if (stalls.size() < 2 || session == null || !"auto".equals(session.optString("quality"))) return;
         String q = session.optString("auto_quality", "original");
         if ("transcode".equals(session.optString("mode")) && convSpeed > 0 && convSpeed < 1.0) {
-            // c'est le serveur qui ne convertit pas assez vite, pas la connexion : le débit mesuré reste valable
-            // (les titres suivants n'en pâtissent pas) ; ce titre seul descend en 720p, pas plus bas
+            // it is the server that does not convert fast enough, not the connection: the measured bandwidth stays valid
+            // (the next titles do not suffer from it); only this title goes down to 720p, no lower
             stalls.clear();
             String speed = String.format(java.util.Locale.FRANCE, "×%.1f", convSpeed);
             if ("original".equals(q) || "1080p".equals(q)) {
@@ -437,7 +437,7 @@ public class PlayerActivity extends Activity {
             ended = false;
             boolean imageSub = subSel != null && !subSel.optBoolean("overlay");
             if (imageSub && !burn && !"direct".equals(s.optString("mode"))) {
-                // sous-titres en image (PGS…) hors lecture directe : le serveur les incruste dans l'image
+                // picture subtitles (PGS…) outside direct play: the server burns them into the picture
                 startStream(s.optLong("offset", offset), true);
                 return;
             }
@@ -452,7 +452,7 @@ public class PlayerActivity extends Activity {
         return session != null && "direct".equals(session.optString("mode"));
     }
 
-    /** Charge le flux dans ExoPlayer, avec les sous-titres texte du serveur (WebVTT) si besoin. */
+    /** Loads the stream in ExoPlayer, with the server's text subtitles (WebVTT) when needed. */
     private void prepare(long startMs) {
         tracksApplied = false;
         preparedAt = SystemClock.elapsedRealtime();
@@ -479,7 +479,7 @@ public class PlayerActivity extends Activity {
         return out;
     }
 
-    /** Pistes choisies : audio (lecture directe : le fichier les contient toutes) et sous-titres. */
+    /** Chosen tracks: audio (direct play: the file holds them all) and subtitles. */
     private void applyTracks(Tracks tracks) {
         TrackSelectionParameters.Builder b = player.getTrackSelectionParameters().buildUpon();
         if (direct() && audioSel != null) {
@@ -497,7 +497,7 @@ public class PlayerActivity extends Activity {
         if (text == null && subSel != null && !subSel.optBoolean("overlay") && direct() && !burning) {
             text = embeddedImageSub(tracks);
             if (text == null) {
-                // piste introuvable dans le fichier : on repasse par le serveur, qui l'incruste
+                // track not found in the file: go back through the server, which burns it in
                 handler.post(() -> startStream(player.getCurrentPosition(), true));
                 return;
             }
@@ -520,7 +520,7 @@ public class PlayerActivity extends Activity {
         return false;
     }
 
-    /** Sous-titres en image du fichier (lecture directe) : même langue, même rang que dans la liste du serveur. */
+    /** Picture subtitles of the file (direct play): same language, same rank as in the server's list. */
     private Tracks.Group embeddedImageSub(Tracks tracks) {
         String lang = subSel.optString("lang");
         String norm = lang.isEmpty() ? null : Util.normalizeLanguageCode(lang);
@@ -545,7 +545,7 @@ public class PlayerActivity extends Activity {
         return Math.max(0, d);
     }
 
-    // ------------------------------------------------------------------ suivi de lecture
+    // ------------------------------------------------------------------ playback tracking
     private void update() {
         if (player == null || session == null) return;
         long pos = player.getCurrentPosition(), dur = duration();
@@ -586,8 +586,8 @@ public class PlayerActivity extends Activity {
         }
     }
 
-    // ------------------------------------------------------------------ attente du premier affichage
-    /** Pourquoi le serveur ne lit pas le fichier tel quel (« vidéo HEVC illisible par cet appareil »…). */
+    // ------------------------------------------------------------------ waiting for the first frame
+    /** Why the server does not play the file as is ("HEVC video not playable by this device"…). */
     private String reasons() {
         JSONArray r = session == null ? null : session.optJSONArray("reasons");
         if (r == null || r.length() == 0) return "";
@@ -604,8 +604,8 @@ public class PlayerActivity extends Activity {
     }
 
     /**
-     * Tant que rien ne s'affiche : indique ce qui est en cours, bascule une lecture directe qui n'aboutit pas sur
-     * un flux préparé par le serveur, et finit par afficher un message avec « Réessayer » au lieu d'une roue sans fin.
+     * As long as nothing shows: tells what is in progress, switches a direct play that does not succeed to
+     * a stream prepared by the server, and ends up showing a message with "Try again" instead of an endless spinner.
      */
     private void watch() {
         boolean waiting = !everReady && !leaving && !ended && errorBox.getVisibility() != View.VISIBLE;
@@ -637,7 +637,7 @@ public class PlayerActivity extends Activity {
         }
     }
 
-    /** Cause technique d'une erreur ExoPlayer (ex. « Response code: 404 »), pour savoir quoi corriger. */
+    /** Technical cause of an ExoPlayer error (e.g. "Response code: 404"), to know what to fix. */
     private static String cause(Throwable e) {
         Throwable c = e == null ? null : e.getCause();
         if (c == null) return "";
@@ -659,7 +659,7 @@ public class PlayerActivity extends Activity {
             try {
                 b.put("ended", true);
             } catch (JSONException ignored) {
-                // clé littérale
+                // literal key
             }
         }
         Api.send("POST", "/api/progress", b, r -> {
@@ -727,10 +727,10 @@ public class PlayerActivity extends Activity {
         skipButton.setVisibility(View.GONE);
         hidePanel();
         player.stop();
-        loadItem(0);  // le flux en cours est remplacé (« replace ») par celui de l'épisode suivant
+        loadItem(0);  // the current stream is replaced ("replace") by the next episode's
     }
 
-    // ------------------------------------------------------------------ pistes audio et sous-titres
+    // ------------------------------------------------------------------ audio tracks and subtitles
     private void tracksMenu() {
         handler.removeCallbacks(hidePanel);
         String audioLabel = audioSel == null ? "—" : audioSel.optString("title");
@@ -778,14 +778,14 @@ public class PlayerActivity extends Activity {
             saveTrackPrefs();
             long pos = player.getCurrentPosition();
             boolean image = s != null && !s.optBoolean("overlay");
-            if (burning) startStream(pos, false);  // l'ancienne piste est incrustée : nouveau flux
+            if (burning) startStream(pos, false);  // the old track is burnt in: new stream
             else if (image && !direct()) startStream(pos, true);
             else if (image) applyTracks(player.getCurrentTracks());
-            else prepare(pos);  // sous-titres texte : même flux, nouveau fichier WebVTT
+            else prepare(pos);  // text subtitles: same stream, new WebVTT file
         }).show();
     }
 
-    /** Choix retenu pour ce film ou cette série (comme dans l'interface web). */
+    /** Choice remembered for this movie or show (as in the web interface). */
     private void saveTrackPrefs() {
         JSONObject b = Api.json("audio_lang", audioSel == null ? null : audioSel.optString("lang"),
                 "sub_lang", subSel == null ? "off" : subSel.optString("lang"),
@@ -797,7 +797,7 @@ public class PlayerActivity extends Activity {
     private void playbackError(PlaybackException e) {
         long pos = Math.max(lastPosition, player.getCurrentPosition());
         if (direct() && !forceHls) {
-            // fichier refusé par les décodeurs de l'appareil : on passe par un flux préparé par le serveur
+            // file refused by the device's decoders: go through a stream prepared by the server
             forceHls = true;
             startStream(pos, burning);
             return;
@@ -826,7 +826,7 @@ public class PlayerActivity extends Activity {
         else startStream(lastPosition, burning);
     }
 
-    /** Fin de la lecture : position enregistrée, flux arrêté sur le serveur. */
+    /** End of playback: position saved, stream stopped on the server. */
     private void leave() {
         if (leaving) return;
         leaving = true;
@@ -835,7 +835,7 @@ public class PlayerActivity extends Activity {
         finish();
     }
 
-    // ------------------------------------------------------------------ télécommande
+    // ------------------------------------------------------------------ remote control
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         int code = e.getKeyCode();
@@ -927,7 +927,7 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onStop() {
         super.onStop();
-        // bouton Accueil de la télécommande, mise en veille : la lecture s'arrête proprement
+        // Home button of the remote, sleep: playback stops cleanly
         if (!leaving) {
             if (player != null) player.pause();
             leave();

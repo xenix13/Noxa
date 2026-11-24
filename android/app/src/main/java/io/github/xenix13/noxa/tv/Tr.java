@@ -5,10 +5,10 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Langue de l'appli, comme dans l'interface web : le texte du code est en français et sert de clé,
- * Tr.t("Paramètres") renvoie la traduction de la langue choisie (ou le français s'il n'y en a pas).
- * La langue est celle du compte (réponse de /api/me), gardée pour l'écran suivant le prochain lancement ;
- * avant la première connexion, c'est celle de l'appareil.
+ * App language, as in the web interface: the text in the code is in French and serves as the key,
+ * Tr.t("Paramètres") returns the translation in the chosen language (or the French when there is none).
+ * The language is the account's (answer of /api/me), kept for the first screen at the next launch;
+ * before the first sign-in, it is the device's.
  */
 final class Tr {
     static String lang = "fr";
@@ -16,20 +16,20 @@ final class Tr {
 
     private Tr() {}
 
-    /** Au lancement : la langue du dernier compte connecté, sinon celle de l'appareil. */
+    /** At launch: the language of the last signed-in account, otherwise the device's. */
     static void init() {
         String saved = Api.store().getString("lang", null);
         lang = saved != null ? saved : "fr".equals(Locale.getDefault().getLanguage()) ? "fr" : "en";
     }
 
-    /** Langue du compte connecté. */
+    /** Language of the signed-in account. */
     static void use(String l) {
         if (!"fr".equals(l) && !"en".equals(l)) return;
         lang = l;
         Api.store().edit().putString("lang", l).apply();
     }
 
-    /** Un même mot français peut demander deux traductions : la clé porte alors un contexte (« réglages|Lecture »). */
+    /** The same French word can need two translations: the key then carries a context ("réglages|Lecture"). */
     static String t(String fr) {
         String s = "en".equals(lang) ? EN.get(fr) : null;
         return s != null ? s : fr.substring(fr.indexOf('|') + 1);

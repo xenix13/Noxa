@@ -26,8 +26,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Accès à l'API du serveur Noxa : adresse, cookie de session (gardé entre deux lancements), requêtes JSON.
- * Les appels réseau passent par un petit groupe de fils ; les réponses reviennent sur le fil principal.
+ * Access to the Noxa server API: address, session cookie (kept between two launches), JSON requests.
+ * Network calls go through a small pool of threads; the answers come back on the main thread.
  */
 final class Api {
     static final String VERSION_HEADER = "NoxaApp/" + BuildConfig.VERSION_NAME + " (Android TV)";
@@ -46,7 +46,7 @@ final class Api {
         void run(Error e);
     }
 
-    /** Erreur renvoyée par le serveur (code HTTP + message en français) ou réseau (code 0). */
+    /** Error returned by the server (HTTP code + message in French) or network error (code 0). */
     static final class Error extends Exception {
         final int code;
 
@@ -127,7 +127,7 @@ final class Api {
         }
     }
 
-    /** Requête synchrone (à appeler hors du fil principal). -> JSONObject, JSONArray ou null. */
+    /** Synchronous request (to call off the main thread). -> JSONObject, JSONArray or null. */
     static Object call(String method, String path, JSONObject body) throws Error {
         HttpURLConnection c = null;
         try {
@@ -137,8 +137,8 @@ final class Api {
             c.setReadTimeout(60000);
             c.setRequestProperty("Accept", "application/json");
             c.setRequestProperty("User-Agent", VERSION_HEADER);
-            c.setRequestProperty("X-Noxa", "1");  // exigé par le serveur pour toute requête qui modifie
-            c.setRequestProperty("X-Lang", Tr.lang);  // messages d'erreur du serveur dans la langue de l'appli
+            c.setRequestProperty("X-Noxa", "1");  // required by the server for any request that changes something
+            c.setRequestProperty("X-Lang", Tr.lang);  // server error messages in the app's language
             String ck = cookieHeader();
             if (!ck.isEmpty()) c.setRequestProperty("Cookie", ck);
             if (body != null || !"GET".equals(method)) {
@@ -185,7 +185,7 @@ final class Api {
         return out.toString("UTF-8");
     }
 
-    /** Travail en arrière-plan, résultat (ou erreur) rendu sur le fil principal. */
+    /** Background work, result (or error) handed back on the main thread. */
     static <T> void run(Callable<T> work, Ok<T> ok, Fail fail) {
         IO.execute(() -> {
             try {
@@ -215,13 +215,13 @@ final class Api {
         run(() -> asObj(call(method, path, body)), ok, fail);
     }
 
-    /** Envoi sans attendre la réponse (position de lecture, arrêt d'un flux). */
+    /** Send without waiting for the answer (playback position, stream stop). */
     static void fire(String method, String path, JSONObject body) {
         IO.execute(() -> {
             try {
                 call(method, path, body);
             } catch (Error ignored) {
-                // sans conséquence : la prochaine mise à jour rattrapera
+                // harmless: the next update will catch up
             }
         });
     }
@@ -239,12 +239,12 @@ final class Api {
         try {
             for (int i = 0; i + 1 < kv.length; i += 2) o.put((String) kv[i], kv[i + 1] == null ? JSONObject.NULL : kv[i + 1]);
         } catch (JSONException ignored) {
-            // clés littérales : impossible
+            // literal keys: impossible
         }
         return o;
     }
 
-    /** Vérifie qu'une adresse répond comme un serveur Noxa. -> null si oui, sinon le message à afficher. */
+    /** Checks that an address answers like a Noxa server. -> null if so, otherwise the message to show. */
     static String probe(String url) {
         HttpURLConnection c = null;
         try {
@@ -266,7 +266,7 @@ final class Api {
         String s = raw == null ? "" : raw.trim();
         if (s.isEmpty()) return null;
         if (!s.startsWith("http://") && !s.startsWith("https://")) {
-            // adresse locale sans protocole : http ; nom de domaine : https (reverse proxy)
+            // local address without protocol: http; domain name: https (reverse proxy)
             s = (s.matches("^[0-9.]+(:\\d+)?(/.*)?$") || s.contains(":") ? "http://" : "https://") + s;
         }
         while (s.endsWith("/")) s = s.substring(0, s.length() - 1);

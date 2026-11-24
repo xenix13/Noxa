@@ -20,8 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Navigation principale : barre du haut (Accueil, une entrée par bibliothèque, puis Rechercher, TV en direct et
- * Paramètres) et la page choisie en dessous. Une entrée sélectionnée à la télécommande s'ouvre d'elle-même.
+ * Main navigation: top bar (Home, one entry per library, then Search, Live TV and
+ * Settings) and the chosen page underneath. An entry selected with the remote opens by itself.
  */
 final class BrowseScreen extends Screen {
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -36,7 +36,7 @@ final class BrowseScreen extends Screen {
         super(act);
     }
 
-    /** Une page de la navigation (accueil, bibliothèque…). Sa vue est créée à la première ouverture. */
+    /** A navigation page (home, library…). Its view is created the first time it opens. */
     abstract static class Tab {
         final BrowseScreen browse;
         final MainActivity act;
@@ -49,10 +49,10 @@ final class BrowseScreen extends Screen {
 
         abstract View create();
 
-        /** Ouverture (et retour sur la page) : rafraîchir ce qui peut avoir changé. */
+        /** Opening (and coming back to the page): refresh what may have changed. */
         void onShow() {}
 
-        /** Élément à sélectionner quand on descend depuis la barre du haut (null : le plus proche). */
+        /** Element to select when going down from the top bar (null: the closest). */
         View entry() {
             return null;
         }
@@ -70,7 +70,7 @@ final class BrowseScreen extends Screen {
             @Override
             public View focusSearch(View focused, int direction) {
                 View result = super.focusSearch(focused, direction);
-                // monter depuis la page : retour sur l'entrée ouverte de la barre, pas sur la plus proche
+                // going up from the page: back to the open entry of the bar, not the closest one
                 if (direction == View.FOCUS_UP && inside(focused, content) && inside(result, bar) && selected >= 0) {
                     return tabViews.get(selected);
                 }
@@ -84,7 +84,7 @@ final class BrowseScreen extends Screen {
         page.setOrientation(LinearLayout.VERTICAL);
         root.addView(page, new FrameLayout.LayoutParams(-1, -1));
 
-        // barre réduite à l'essentiel : Accueil, une entrée par bibliothèque, et « Plus » (recherche, TV, paramètres)
+        // bar reduced to the essentials: Home, one entry per library, and "More" (search, TV, settings)
         bar = Ui.row(act);
         bar.setPadding(dp(40), dp(18), dp(40), dp(6));
         ImageView logo = new ImageView(act);
@@ -96,7 +96,7 @@ final class BrowseScreen extends Screen {
         addTab(Tr.t("Accueil"), new HomeTab(this));
         for (int i = 0; i < Session.libraries.length(); i++) {
             JSONObject lib = Session.libraries.optJSONObject(i);
-            // photothèques : sur le site et en DLNA (l'appli TV ne lit que les films et séries)
+            // photo libraries: on the website and over DLNA (the TV app only plays movies and shows)
             if (lib != null && !"photo".equals(lib.optString("type")) && !"audiobook".equals(lib.optString("type"))) addTab(lib.optString("title"), new LibraryTab(this, lib));
         }
         View spacer = new View(act);
@@ -105,8 +105,8 @@ final class BrowseScreen extends Screen {
         addTab(Tr.t("Rechercher"), new SearchTab(this));
         if (Session.live()) addTab(Tr.t("TV en direct"), new LiveTab(this));
         addTab(Tr.t("Paramètres"), new SettingsTab(this));
-        // beaucoup de bibliothèques (compte administrateur) : la barre défile, l'entrée sélectionnée reste visible ;
-        // assez de place : elle remplit la largeur comme avant (Rechercher, TV et Paramètres à droite)
+        // many libraries (administrator account): the bar scrolls, the selected entry stays visible;
+        // enough room: it fills the width as before (Search, TV and Settings on the right)
         HorizontalScrollView scroller = new HorizontalScrollView(act);
         scroller.setFillViewport(true);
         scroller.setHorizontalScrollBarEnabled(false);
@@ -140,7 +140,7 @@ final class BrowseScreen extends Screen {
         v.setOnFocusChangeListener((view, has) -> {
             paint(index);
             if (has && index != selected) {
-                // on ouvre la page quand la sélection s'arrête sur l'entrée (pas à chaque passage)
+                // the page opens when the selection stops on the entry (not at each pass)
                 if (pending != null) handler.removeCallbacks(pending);
                 pending = () -> select(index);
                 handler.postDelayed(pending, 260);
@@ -153,7 +153,7 @@ final class BrowseScreen extends Screen {
         });
     }
 
-    /** Apparence d'une entrée : ouverte (soulignée), sélectionnée (fond clair) ou normale. */
+    /** Look of an entry: open (underlined), selected (light background) or normal. */
     private void paint(int index) {
         View v = tabViews.get(index);
         boolean focus = v.hasFocus() || v.isFocused();
@@ -179,7 +179,7 @@ final class BrowseScreen extends Screen {
         tab.onShow();
     }
 
-    /** Ouvre une page de la barre par son type (ex. la recherche depuis un raccourci). */
+    /** Opens a bar page by its type (e.g. the search from a shortcut). */
     void focusBar() {
         if (selected >= 0) tabViews.get(selected).requestFocus();
     }

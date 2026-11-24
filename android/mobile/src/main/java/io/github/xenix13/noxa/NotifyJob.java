@@ -22,15 +22,15 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Notifications de Noxa (nouvel épisode, titre demandé arrivé, alerte du serveur).
- * La vue web d'Android ne gère pas les notifications push des sites : l'application vient donc chercher ses messages
- * sur le serveur (/api/push/device, jeton propre à cet appareil) environ toutes les 15 minutes, quand le réseau est là,
- * même application fermée. Ni Google ni compte développeur : rien ne passe par un service tiers.
+ * Noxa notifications (new episode, requested title arrived, server alert).
+ * Android's web view does not handle websites' push notifications: so the app fetches its messages
+ * from the server (/api/push/device, token specific to this device) about every 15 minutes, when the network is there,
+ * even with the app closed. Neither Google nor a developer account: nothing goes through a third-party service.
  */
 public class NotifyJob extends JobService {
     static final String CHANNEL = "noxa";
     private static final int JOB = 7001;
-    private static final long EVERY = 15 * 60 * 1000L; // le plus court qu'Android accepte pour une tâche périodique
+    private static final long EVERY = 15 * 60 * 1000L; // the shortest Android accepts for a periodic job
 
     static SharedPreferences prefs(Context ctx) { return ctx.getSharedPreferences("noxa", MODE_PRIVATE); }
 
@@ -44,7 +44,7 @@ public class NotifyJob extends JobService {
         JobInfo job = new JobInfo.Builder(JOB, new ComponentName(ctx, NotifyJob.class))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                 .setPeriodic(EVERY)
-                .setPersisted(true) // reprend après un redémarrage du téléphone
+                .setPersisted(true) // resumes after a phone restart
                 .build();
         ctx.getSystemService(JobScheduler.class).schedule(job);
     }
@@ -63,7 +63,7 @@ public class NotifyJob extends JobService {
     @Override
     public boolean onStopJob(JobParameters params) { return true; }
 
-    /** Messages arrivés depuis la dernière visite : affichés. Appareil désinscrit (410) : on arrête. */
+    /** Messages arrived since the last visit: shown. Device unsubscribed (410): stop. */
     static void poll(Context ctx) {
         SharedPreferences p = prefs(ctx);
         String srv = p.getString("server", null), token = p.getString("push_token", null);
@@ -86,7 +86,7 @@ public class NotifyJob extends JobService {
                 show(ctx, m.optString("title", "Noxa"), m.optString("body", ""), m.optString("url", "#/"), m.optString("tag", "noxa"));
             }
         } catch (Exception ignored) {
-            // hors ligne, serveur en cours de mise à jour : on réessaiera au prochain passage
+            // offline, server being updated: will try again at the next pass
         }
     }
 
@@ -105,7 +105,7 @@ public class NotifyJob extends JobService {
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .build();
-        // même sujet (même série…) : la notification est remplacée, pas empilée
+        // same topic (same show…): the notification is replaced, not stacked
         ctx.getSystemService(NotificationManager.class).notify(tag.hashCode(), n);
     }
 

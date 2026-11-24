@@ -14,15 +14,15 @@ import android.os.IBinder;
 import android.os.PowerManager;
 
 /**
- * Téléchargements en arrière-plan. Le transfert lui-même est mené par la page (comme dans le navigateur) ; sans ce
- * service, Android gèle l'application dès qu'on la quitte et le téléchargement s'arrête. Tant qu'un téléchargement est
- * en cours, l'application est donc déclarée « au travail » : notification « Noxa télécharge… » avec la progression,
- * processeur et Wi-Fi gardés éveillés, y compris écran éteint. Le service s'arrête dès que la file est vide.
+ * Background downloads. The transfer itself is driven by the page (as in the browser); without this
+ * service, Android freezes the app as soon as it is left and the download stops. While a download is
+ * in progress, the app is therefore declared "at work": "Noxa is downloading…" notification with the progress,
+ * processor and Wi-Fi kept awake, screen off included. The service stops as soon as the queue is empty.
  */
 public class DownloadService extends Service {
     static final String CHANNEL = "downloads";
     static final int NOTIF = 4201;
-    private static final long MAX_AWAKE = 6 * 3600 * 1000L; // garde-fou : jamais plus de 6 h d'affilée
+    private static final long MAX_AWAKE = 6 * 3600 * 1000L; // safety net: never more than 6 h in a row
 
     private PowerManager.WakeLock cpu;
     private WifiManager.WifiLock wifi;
@@ -52,7 +52,7 @@ public class DownloadService extends Service {
         return b.build();
     }
 
-    /** Mise à jour de la notification (le service tourne déjà : pas besoin de le relancer). */
+    /** Notification update (the service is already running: no need to start it again). */
     static void update(Context ctx, int count, String title, String text, int percent) {
         ctx.getSystemService(NotificationManager.class).notify(NOTIF, build(ctx, count, title, text, percent));
     }
@@ -79,7 +79,7 @@ public class DownloadService extends Service {
                 wifi.acquire();
             }
         }
-        return START_NOT_STICKY; // relancé par la page, pas par Android (sans la page, rien à télécharger)
+        return START_NOT_STICKY; // restarted by the page, not by Android (without the page, nothing to download)
     }
 
     @Override

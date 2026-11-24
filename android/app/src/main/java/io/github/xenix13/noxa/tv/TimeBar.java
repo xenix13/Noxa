@@ -9,8 +9,8 @@ import android.view.KeyEvent;
 import android.view.View;
 
 /**
- * Barre de progression du lecteur, pilotée à la télécommande : gauche / droite reculent ou avancent
- * (de plus en plus vite si la touche reste enfoncée), le saut part quand on relâche.
+ * Player progress bar, driven with the remote: left / right go back or forward
+ * (faster and faster while the key is held), the seek happens on release.
  */
 final class TimeBar extends View {
     interface Listener {
@@ -46,7 +46,7 @@ final class TimeBar extends View {
         return target >= 0;
     }
 
-    /** Pas du saut selon le temps passé touche enfoncée. */
+    /** Seek step according to how long the key has been held. */
     static long step(int repeat) {
         return repeat > 24 ? 120000 : repeat > 10 ? 60000 : repeat > 3 ? 30000 : 10000;
     }

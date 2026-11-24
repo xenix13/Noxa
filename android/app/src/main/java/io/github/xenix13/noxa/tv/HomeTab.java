@@ -16,7 +16,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Accueil : « Reprendre », une rangée par bibliothèque (derniers ajouts) et « Ma liste » si elle n'est pas vide. */
+/** Home: "Continue watching", one row per library (latest additions) and "My list" when it is not empty. */
 final class HomeTab extends BrowseScreen.Tab {
     private ScrollView scroll;
     private Nav.Column list;
@@ -36,7 +36,7 @@ final class HomeTab extends BrowseScreen.Tab {
         scroll.setClipChildren(false);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setSmoothScrollingEnabled(true);
-        list = new Nav.Column(act);  // haut / bas : de rangée en rangée, en retrouvant la carte quittée
+        list = new Nav.Column(act);  // up / down: from row to row, finding the card that was left
         list.setClipChildren(false);
         list.setPadding(0, dp(4), 0, dp(48));
         scroll.addView(list);
@@ -64,7 +64,7 @@ final class HomeTab extends BrowseScreen.Tab {
     }
 
     private void render(JSONObject h) {
-        // on retient la carte sélectionnée pour la retrouver après la mise à jour (retour de lecture)
+        // the selected card is remembered to find it again after the update (back from playback)
         String focusKey = null;
         int focusPos = -1;
         View f = act.getCurrentFocus();

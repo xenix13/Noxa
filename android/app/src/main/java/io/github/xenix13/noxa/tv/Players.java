@@ -26,7 +26,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-/** Lecteur ExoPlayer configuré pour Noxa, et profil de décodage de l'appareil envoyé au serveur. */
+/** ExoPlayer player set up for Noxa, and the device's decoding profile sent to the server. */
 @OptIn(markerClass = UnstableApi.class)
 final class Players {
     private static JSONObject caps;
@@ -37,7 +37,7 @@ final class Players {
         DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
                 .setUserAgent(Api.VERSION_HEADER)
                 .setConnectTimeoutMs(15000)
-                // un segment converti à la volée peut mettre du temps à arriver (relance de ffmpeg après un saut)
+                // a segment converted on the fly can take a while to arrive (ffmpeg restarted after a seek)
                 .setReadTimeoutMs(120000)
                 .setAllowCrossProtocolRedirects(true)
                 .setDefaultRequestProperties(Collections.singletonMap("Cookie", Api.cookieHeader()));
@@ -54,7 +54,7 @@ final class Players {
         return p;
     }
 
-    /** Sous-titres : taille et fond choisis dans les préférences du compte. */
+    /** Subtitles: size and background chosen in the account's preferences. */
     static void styleSubtitles(SubtitleView v) {
         if (v == null) return;
         String bg = Session.pref("sub_bg", "box");
@@ -78,8 +78,8 @@ final class Players {
     }
 
     /**
-     * Ce que l'appareil sait lire : décodeurs vidéo et audio présents, son multicanal transmis tel quel à
-     * l'ampli quand la sortie HDMI l'accepte. Le serveur ne convertit que ce qui manque.
+     * What the device can play: video and audio decoders present, multichannel audio passed as is to
+     * the amplifier when the HDMI output accepts it. The server only converts what is missing.
      */
     @SuppressWarnings("deprecation")
     static synchronized JSONObject caps(Context c) {
@@ -145,7 +145,7 @@ final class Players {
             if (ac.supportsEncoding(C.ENCODING_DTS) || ac.supportsEncoding(C.ENCODING_DTS_HD)) audio.add("dts");
             if (ac.supportsEncoding(C.ENCODING_DOLBY_TRUEHD)) audio.add("truehd");
         } catch (RuntimeException ignored) {
-            // sortie audio inconnue : on s'en tient aux décodeurs
+            // unknown audio output: stick to the decoders
         }
         JSONObject o = new JSONObject();
         try {
@@ -156,7 +156,7 @@ final class Players {
             o.put("multichannel", true);
             o.put("pgs", false);
         } catch (org.json.JSONException ignored) {
-            // clés littérales
+            // literal keys
         }
         caps = o;
         return caps;
@@ -168,7 +168,7 @@ final class Players {
                 if (pl.profile == profile) return true;
             }
         } catch (IllegalArgumentException ignored) {
-            // type non géré par ce décodeur
+            // type not handled by this decoder
         }
         return false;
     }

@@ -2,7 +2,7 @@ package io.github.xenix13.noxa.tv;
 
 import android.view.View;
 
-/** Un écran de l'application (connexion, profils, navigation, fiche…), empilé par MainActivity. */
+/** A screen of the app (sign-in, profiles, navigation, title page…), stacked by MainActivity. */
 abstract class Screen {
     final MainActivity act;
     View view;
@@ -14,10 +14,10 @@ abstract class Screen {
 
     abstract View create();
 
-    /** Revenu au premier plan (après la lecture, une fiche…) : l'écran peut se mettre à jour. */
+    /** Back in the foreground (after playback, a title page…): the screen can update. */
     void onResume() {}
 
-    /** Touche Retour : true si l'écran l'a traitée lui-même. */
+    /** Back key: true when the screen handled it itself. */
     boolean onBack() {
         return false;
     }

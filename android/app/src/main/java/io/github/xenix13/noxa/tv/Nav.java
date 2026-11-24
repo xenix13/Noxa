@@ -12,19 +12,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Navigation à la télécommande par rangées, comme sur les applis de TV : gauche / droite restent dans la rangée,
- * haut / bas passent à la rangée voisine et retrouvent l'élément qu'on y avait quitté. La recherche « au plus
- * proche » d'Android, elle, sautait d'une rangée à l'autre au bout d'une ligne et revenait rarement au même endroit.
+ * Remote navigation by rows, as in TV apps: left / right stay in the row,
+ * up / down move to the neighbouring row and find the element that was left there. Android's "closest"
+ * search, on the other hand, jumped from one row to another at the end of a line and rarely came back to the same place.
  */
 final class Nav {
     private Nav() {}
 
-    /** Choix de l'élément d'arrivée dans un bloc (ex. : la saison ouverte plutôt que la première). */
+    /** Choice of the landing element in a block (e.g. the open season rather than the first). */
     interface Entry {
         View get();
     }
 
-    /** Rangée horizontale de cartes : on n'en sort pas par les côtés, et elle retient la dernière carte choisie. */
+    /** Horizontal row of cards: it is not left through the sides, and it remembers the last chosen card. */
     static final class Row extends RecyclerView {
         private int last;
 
@@ -43,12 +43,12 @@ final class Nav {
         public View focusSearch(View focused, int direction) {
             View result = super.focusSearch(focused, direction);
             if ((direction == FOCUS_LEFT || direction == FOCUS_RIGHT) && !BrowseScreen.inside(result, this)) {
-                return focused;  // bout de la rangée : on reste dessus
+                return focused;  // end of the row: stay on it
             }
             return result;
         }
 
-        /** Carte à sélectionner en arrivant sur la rangée : celle qu'on y avait quittée. */
+        /** Card to select when arriving on the row: the one that was left there. */
         View entry() {
             Adapter<?> a = getAdapter();
             if (a == null || a.getItemCount() == 0) return null;
@@ -60,7 +60,7 @@ final class Nav {
         }
     }
 
-    /** Colonne de blocs (rangées, boutons, liste d'épisodes…) parcourue de bloc en bloc avec haut / bas. */
+    /** Column of blocks (rows, buttons, episode list…) walked block by block with up / down. */
     static final class Column extends LinearLayout {
         private final Map<View, Entry> entries = new HashMap<>();
         private final Map<View, View> remembered = new HashMap<>();
@@ -70,7 +70,7 @@ final class Nav {
             setOrientation(VERTICAL);
         }
 
-        /** Bloc dont l'élément d'arrivée est choisi par le code (sinon : le dernier sélectionné, ou le premier). */
+        /** Block whose landing element is chosen by the code (otherwise: the last selected, or the first). */
         void entry(View block, Entry e) {
             entries.put(block, e);
         }
@@ -93,7 +93,7 @@ final class Nav {
             return -1;
         }
 
-        /** Élément où arriver dans un bloc, ou null s'il n'a rien de sélectionnable. */
+        /** Element to land on in a block, or null when it has nothing selectable. */
         View entryOf(View block) {
             if (block.getVisibility() != VISIBLE) return null;
             Entry e = entries.get(block);
@@ -129,14 +129,14 @@ final class Nav {
             if (direction != FOCUS_UP && direction != FOCUS_DOWN) return result;
             int i = blockOf(focused);
             if (i < 0) return result;
-            // dans un bloc qui est lui-même une liste verticale (épisodes) : on y reste tant qu'on peut
+            // in a block that is itself a vertical list (episodes): stay in it as long as possible
             if (result != null && BrowseScreen.inside(result, getChildAt(i)) && findRow(getChildAt(i)) == null) return result;
             int step = direction == FOCUS_DOWN ? 1 : -1;
             for (int j = i + step; j >= 0 && j < getChildCount(); j += step) {
                 View e = entryOf(getChildAt(j));
                 if (e != null) return e;
             }
-            // plus rien en dessous : on reste ; plus rien au-dessus : la barre du haut (voir BrowseScreen)
+            // nothing more below: stay; nothing more above: the top bar (see BrowseScreen)
             return direction == FOCUS_DOWN ? focused : result;
         }
     }

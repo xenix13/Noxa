@@ -22,11 +22,11 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Écrans de démarrage : attente, adresse du serveur, connexion (avec double authentification), profils. */
+/** Start screens: waiting, server address, sign-in (with two-factor authentication), profiles. */
 final class StartScreens {
     private StartScreens() {}
 
-    /** Colonne centrée sur un fond sombre, avec le logo en tête. */
+    /** Column centred on a dark background, with the logo on top. */
     static LinearLayout centered(Screen s, FrameLayout[] outer) {
         FrameLayout root = new FrameLayout(s.act);
         root.setBackgroundColor(Ui.BG);
@@ -46,7 +46,7 @@ final class StartScreens {
         box.addView(logo, new LinearLayout.LayoutParams(s.dp(84), s.dp(84)));
     }
 
-    /** Pastille de profil : photo si le profil en a une, sinon initiale sur sa couleur. */
+    /** Profile badge: picture when the profile has one, otherwise initial on its colour. */
     static FrameLayout avatar(Screen s, JSONObject u, int sizeDp) {
         FrameLayout f = new FrameLayout(s.act);
         GradientDrawable circle = new GradientDrawable();
@@ -82,7 +82,7 @@ final class StartScreens {
     }
 }
 
-/** Attente (vérification de la session au lancement). */
+/** Waiting (session check at launch). */
 final class LoadingScreen extends Screen {
     private final String message;
 
@@ -105,7 +105,7 @@ final class LoadingScreen extends Screen {
     }
 }
 
-/** Adresse du serveur (premier lancement, ou serveur injoignable). */
+/** Server address (first launch, or server unreachable). */
 final class SetupScreen extends Screen {
     private final String error;
 
@@ -169,7 +169,7 @@ final class SetupScreen extends Screen {
     }
 }
 
-/** Connexion : identifiant et mot de passe, puis code de double authentification si le compte en a une. */
+/** Sign-in: username and password, then two-factor code when the account has it. */
 final class LoginScreen extends Screen {
     private LinearLayout box;
     private TextView status;
@@ -282,7 +282,7 @@ final class LoginScreen extends Screen {
     }
 }
 
-/** « Qui regarde ? » : profils du foyer, avec code PIN, mot de passe ou code de double authentification si besoin. */
+/** "Who's watching?": the household's profiles, with PIN code, password or two-factor code when needed. */
 final class ProfilesScreen extends Screen {
     private final JSONArray profiles;
 
@@ -306,7 +306,7 @@ final class ProfilesScreen extends Screen {
         LinearLayout row = Ui.row(act);
         row.setPadding(dp(24), dp(16), dp(24), dp(16));
         row.setClipChildren(false);
-        row.setClipToPadding(false);  // la pastille sélectionnée, agrandie, déborde dans la marge : pas coupée
+        row.setClipToPadding(false);  // the selected badge, enlarged, spills into the margin: not clipped
         View first = null, current = null;
         for (int i = 0; i < profiles.length(); i++) {
             JSONObject p = profiles.optJSONObject(i);
@@ -382,7 +382,7 @@ final class ProfilesScreen extends Screen {
                         if (s != null) body.put("pin".equals(needs) ? "pin" : "password", s.getText().toString());
                         if (o != null) body.put("code", o.getText().toString().replace(" ", ""));
                     } catch (org.json.JSONException ignored) {
-                        // clés littérales
+                        // literal keys
                     }
                     switchTo(p, body);
                 })

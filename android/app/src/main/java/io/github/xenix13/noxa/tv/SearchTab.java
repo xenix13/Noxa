@@ -18,7 +18,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Recherche dans toutes les bibliothèques : films, séries et épisodes. */
+/** Search in all the libraries: movies, shows and episodes. */
 final class SearchTab extends BrowseScreen.Tab {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private EditText input;

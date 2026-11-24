@@ -22,9 +22,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Cartes du catalogue : affiches (films, séries) ou vignettes larges (reprise, épisodes).
- * L'élément sélectionné grossit légèrement et reçoit un cadre orange ; la rangée laisse assez de marge
- * autour pour que ce cadre ne soit jamais coupé.
+ * Catalogue cards: posters (movies, shows) or wide thumbnails (resume, episodes).
+ * The selected element grows slightly and gets an orange frame; the row leaves enough margin
+ * around it so that this frame is never clipped.
  */
 final class Cards {
     static final int POSTER = 0, WIDE = 1;
@@ -36,8 +36,8 @@ final class Cards {
     private Cards() {}
 
     /**
-     * Grands formats, lisibles à trois mètres : environ 5 affiches (ou 3 vignettes) visibles à la fois quelle que
-     * soit la définition de la TV, la suivante dépassant pour montrer que la rangée défile.
+     * Big formats, readable from three metres: about 5 posters (or 3 thumbnails) visible at once whatever
+     * the TV's resolution, the next one sticking out to show that the row scrolls.
      */
     static int width(Context c, int style) {
         int usable = c.getResources().getDisplayMetrics().widthPixels - Ui.dp(c, 96);
@@ -159,7 +159,7 @@ final class Cards {
                 frame.animate().scaleX(has ? 1.06f : 1f).scaleY(has ? 1.06f : 1f).setDuration(140).start();
                 frame.setElevation(has ? Ui.dp(c, 8) : 0);
                 title.setTextColor(has ? Ui.ACCENT : Ui.TEXT);
-                frame.setSelected(has);  // cadre orange (état « sélectionné » de l'image)
+                frame.setSelected(has);  // orange frame ("selected" state of the picture)
                 if (extraFocus != null) extraFocus.onFocusChange(v, has);
             });
         }
@@ -219,7 +219,7 @@ final class Cards {
         }
     }
 
-    /** Rangée horizontale (titre + cartes) : marges internes pour que la carte agrandie reste entière. */
+    /** Horizontal row (title + cards): inner margins so that the enlarged card stays whole. */
     static Nav.Row row(Context c, Adapter adapter) {
         Nav.Row r = new Nav.Row(c);
         r.setLayoutManager(new LinearLayoutManager(c, LinearLayoutManager.HORIZONTAL, false));

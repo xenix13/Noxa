@@ -30,7 +30,7 @@ import androidx.media3.ui.PlayerView;
 
 import org.json.JSONObject;
 
-/** TV en direct en plein écran : haut / bas (ou CH+ / CH-) changent de chaîne, OK affiche le programme. */
+/** Fullscreen live TV: up / down (or CH+ / CH-) change channel, OK shows the programme. */
 @OptIn(markerClass = UnstableApi.class)
 public class LiveActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -161,7 +161,7 @@ public class LiveActivity extends Activity {
         error.setVisibility(View.VISIBLE);
     }
 
-    /** Démarre la chaîne choisie ; l'ancienne session s'arrête sur le serveur. */
+    /** Starts the chosen channel; the old session stops on the server. */
     private void tune() {
         index = wanted;
         int mine = ++seq;
@@ -196,7 +196,7 @@ public class LiveActivity extends Activity {
         wanted = ((wanted + delta) % n + n) % n;
         retries = 0;
         showInfo();
-        // on attend que la sélection s'arrête avant de lancer la chaîne (zapping rapide)
+        // wait until the selection stops before starting the channel (fast zapping)
         handler.removeCallbacks(tune);
         handler.postDelayed(tune, 700);
     }

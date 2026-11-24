@@ -12,7 +12,7 @@ import java.net.URL;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Affiches, vignettes, avatars et logos : chargés en arrière-plan avec le cookie de session, gardés en mémoire. */
+/** Posters, thumbnails, avatars and logos: loaded in the background with the session cookie, kept in memory. */
 final class Images {
     private static final LruCache<String, Bitmap> CACHE = new LruCache<String, Bitmap>(
             (int) Math.min(64L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 6)) {
@@ -25,7 +25,7 @@ final class Images {
 
     private Images() {}
 
-    /** Image du catalogue (« /library/metadata/… ») redimensionnée par le serveur. */
+    /** Catalogue picture ("/library/metadata/…") resized by the server. */
     static String library(String path, int w, int h) {
         if (path == null || path.isEmpty() || "null".equals(path)) return null;
         return "/api/img?p=" + Api.enc(path) + "&w=" + w + "&h=" + h;
@@ -35,7 +35,7 @@ final class Images {
         load(view, path, 0);
     }
 
-    /** maxSide : réduit les images trop grandes (logos de chaînes), 0 pour garder la taille d'origine. */
+    /** maxSide: shrinks pictures that are too big (channel logos), 0 to keep the original size. */
     static void load(ImageView view, String path, int maxSide) {
         view.setTag(R.id.noxa_image, path);
         if (path == null) {
@@ -67,7 +67,7 @@ final class Images {
             c.setReadTimeout(30000);
             c.setRequestProperty("User-Agent", Api.VERSION_HEADER);
             String ck = Api.cookieHeader();
-            // cookie de session : uniquement vers le serveur Noxa, jamais vers une adresse d'image extérieure
+            // session cookie: only to the Noxa server, never to an outside picture address
             if (!ck.isEmpty() && url.startsWith(Api.server() + "/")) c.setRequestProperty("Cookie", ck);
             if (c.getResponseCode() != 200) return null;
             byte[] data;

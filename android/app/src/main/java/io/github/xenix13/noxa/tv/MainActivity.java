@@ -12,8 +12,8 @@ import android.widget.FrameLayout;
 import java.util.ArrayDeque;
 
 /**
- * Noxa pour Android TV : application native (écrans dessinés par l'appli, lecture par ExoPlayer).
- * Au lancement : adresse du serveur, puis connexion, puis « Qui regarde ? », puis l'accueil.
+ * Noxa for Android TV: native app (screens drawn by the app, playback by ExoPlayer).
+ * At launch: server address, then sign-in, then "Who's watching?", then the home page.
  */
 public class MainActivity extends Activity {
     private FrameLayout root;
@@ -59,7 +59,7 @@ public class MainActivity extends Activity {
         return last > 0 && age >= 0 && age < SAME_SESSION_MS;
     }
 
-    /** Point de départ : serveur connu ? session encore valide ? */
+    /** Starting point: known server? session still valid? */
     void start() {
         if (Api.server() == null) {
             reset(new SetupScreen(this, null));
@@ -76,7 +76,7 @@ public class MainActivity extends Activity {
         });
     }
 
-    /** Connecté : choix du profil s'il y en a plusieurs dans le foyer, sinon accueil. */
+    /** Signed in: profile choice when the household has several, otherwise home. */
     void afterLogin(boolean askProfile) {
         if (!askProfile) {
             openBrowse();
@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
         }, e -> openBrowse());
     }
 
-    /** Recharge le profil (/api/me) puis ouvre la navigation. */
+    /** Reloads the profile (/api/me) then opens the navigation. */
     void openBrowse() {
         Api.obj("/api/me", me -> {
             Session.load(me);
@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
         });
     }
 
-    // ------------------------------------------------------------------ pile d'écrans
+    // ------------------------------------------------------------------ screen stack
     void push(Screen s) {
         Screen top = stack.peek();
         if (top != null) {
@@ -154,7 +154,7 @@ public class MainActivity extends Activity {
         return stack.peek();
     }
 
-    // ------------------------------------------------------------------ télécommande
+    // ------------------------------------------------------------------ remote control
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
@@ -165,7 +165,7 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        // certaines télécommandes envoient Échap au lieu de Retour : même traitement
+        // some remotes send Escape instead of Back: same handling
         if (event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE) {
             if (event.getAction() == KeyEvent.ACTION_UP) onBackPressed();
             return true;
@@ -185,7 +185,7 @@ public class MainActivity extends Activity {
         touch();
         immersive();
         if (started) {
-            // retour du lecteur : reprise et « vu » à jour (le temps que la dernière position arrive au serveur)
+            // back from the player: resume and "watched" up to date (the time for the last position to reach the server)
             root.postDelayed(() -> {
                 Screen top = stack.peek();
                 if (top != null && top.view != null && top.view.isAttachedToWindow()) top.onResume();

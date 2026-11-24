@@ -21,7 +21,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Fiche d'un film, d'une série (saisons et épisodes) ou d'un épisode. */
+/** Page of a movie, a show (seasons and episodes) or an episode. */
 final class Detail extends Screen {
     private final String id;
     private FrameLayout root;
@@ -33,14 +33,14 @@ final class Detail extends Screen {
     private String seasonId;
     private final List<TextView> seasonTabs = new ArrayList<>();
     private boolean loaded;
-    private Object wantFocus;  // épisode à resélectionner une fois la liste rechargée
+    private Object wantFocus;  // episode to select again once the list is reloaded
 
     private Detail(MainActivity act, String id) {
         super(act);
         this.id = id;
     }
 
-    /** Ouvre la fiche qui correspond à une carte (une saison ouvre sa série ; un bonus se lit directement). */
+    /** Opens the page matching a card (a season opens its show; an extra plays directly). */
     static void open(MainActivity act, JSONObject card) {
         String type = card.optString("type");
         if ("extra".equals(type)) {
@@ -66,7 +66,7 @@ final class Detail extends Screen {
         scroll = new ScrollView(act);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setClipChildren(false);
-        // blocs parcourus avec haut / bas : boutons de lecture, saisons, épisodes
+        // blocks walked through with up / down: play buttons, seasons, episodes
         page = new Nav.Column(act);
         page.setClipChildren(false);
         page.setPadding(dp(56), dp(40), dp(56), dp(56));
@@ -80,7 +80,7 @@ final class Detail extends Screen {
 
     @Override
     void onResume() {
-        if (loaded) load(false);  // retour de lecture : reprise et « vu » à jour
+        if (loaded) load(false);  // back from playback: resume and "watched" up to date
     }
 
     private void load(boolean first) {
@@ -158,7 +158,7 @@ final class Detail extends Screen {
         View restore = focusTag == null ? null : page.findViewWithTag(focusTag);
         View target = restore != null ? restore : primary;
         if (episodeFocus && seasonId != null) {
-            // la liste d'épisodes arrive ensuite : en attendant, la saison ouverte garde la sélection
+            // the episode list comes next: meanwhile, the open season keeps the selection
             target = page.findViewWithTag("season:" + seasonId);
         }
         if (target != null) target.requestFocus();
@@ -181,7 +181,7 @@ final class Detail extends Screen {
         return TextUtils.join("   ·   ", parts);
     }
 
-    /** Boutons de lecture : -> le bouton principal (sélectionné à l'ouverture). */
+    /** Play buttons: -> the main button (selected when opening). */
     private View addButtons(LinearLayout row) {
         String type = item.optString("type");
         if ("show".equals(type)) {
@@ -210,7 +210,7 @@ final class Detail extends Screen {
         return play;
     }
 
-    // ------------------------------------------------------------------ séries : saisons et épisodes
+    // ------------------------------------------------------------------ shows: seasons and episodes
     private void seasons() {
         JSONArray list = item.optJSONArray("seasons");
         if (list == null || list.length() == 0) return;
@@ -246,7 +246,7 @@ final class Detail extends Screen {
         }
         hs.addView(tabs);
         page.addView(hs);
-        // en remontant des épisodes : la saison ouverte (une autre saison s'ouvrirait en étant sélectionnée)
+        // going up from the episodes: the open season (another season would open by being selected)
         page.entry(hs, () -> page.findViewWithTag("season:" + seasonId));
         episodes = Ui.column(act);
         page.addView(episodes, new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -332,7 +332,7 @@ final class Detail extends Screen {
         row.addView(text, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         row.setOnFocusChangeListener((v, has) -> t.setTextColor(has ? Ui.ACCENT : Ui.TEXT));
         row.setOnClickListener(v -> Player.play(act, ep, watched ? 0 : pos));
-        // pleine largeur de la page : une largeur fixe dépasserait de l'écran sur une TV 1080p à 960 dp de large
+        // full page width: a fixed width would go off screen on a 1080p TV that is 960 dp wide
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.bottomMargin = dp(6);
         row.setLayoutParams(lp);

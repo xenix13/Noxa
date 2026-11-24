@@ -15,7 +15,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Une bibliothèque : toutes les affiches en grille, chargées par pages au fil du défilement. */
+/** A library: all the posters in a grid, loaded page by page while scrolling. */
 final class LibraryTab extends BrowseScreen.Tab {
 
     private final JSONObject lib;
@@ -42,7 +42,7 @@ final class LibraryTab extends BrowseScreen.Tab {
         count = Ui.text(act, "", 16, Ui.MUTED);
         count.setPadding(dp(14), 0, 0, 0);
         head.addView(count, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        root.addView(head);  // pas de bouton ici : en remontant de la grille, on arrive directement sur la barre
+        root.addView(head);  // no button here: going up from the grid lands directly on the bar
 
         FrameLayout body = new FrameLayout(act);
         body.setClipChildren(false);
@@ -108,7 +108,7 @@ final class LibraryTab extends BrowseScreen.Tab {
         });
     }
 
-    /** Retour sur la page : « vu » et progression des affiches déjà chargées remis à jour. */
+    /** Back on the page: "watched" and progress of the posters already loaded updated. */
     private void refreshVisible() {
         if (adapter.items.isEmpty()) return;
         int gen = generation;

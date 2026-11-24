@@ -1,13 +1,13 @@
-// Noxa pour Windows, macOS et Linux.
-// La fenêtre affiche l'interface du serveur Noxa choisi au premier lancement : elle suit donc chaque mise à jour du
-// serveur. Le moteur est celui de l'application (Chromium), le même partout : pas de différence entre navigateurs.
-// Le programme lui-même se met à jour depuis le serveur (/apps/desktop, fichiers publiés avec chaque version).
+// Noxa for Windows, macOS and Linux.
+// The window shows the interface of the Noxa server chosen at first launch: so it follows each update of the
+// server. The engine is the app's (Chromium), the same everywhere: no difference between browsers.
+// The program itself updates from the server (/apps/desktop, files published with each version).
 const { app, BrowserWindow, Menu, dialog, ipcMain, net, powerSaveBlocker, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { strings, fill } = require('./strings');
 
-// dossier des données de l'ancien nom (Nexis) : serveur choisi et téléchargements hors ligne gardés après le renommage
+// data folder of the former name (Nexis): chosen server and offline downloads kept after the rename
 app.setPath('userData', path.join(app.getPath('appData'), 'Nexis'));
 const CONFIG = path.join(app.getPath('userData'), 'nexis.json');
 const readConfig = () => { try { return JSON.parse(fs.readFileSync(CONFIG, 'utf8')); } catch { return {}; } };
@@ -15,8 +15,8 @@ const writeConfig = (c) => { fs.mkdirSync(path.dirname(CONFIG), { recursive: tru
 let config = readConfig();
 const originOf = (u) => { try { return new URL(u).origin; } catch { return null; } };
 
-// Serveur en http sur le réseau local : traité comme sûr par le moteur (service worker, téléchargements hors ligne),
-// ce qu'aucun navigateur ne fait. Seulement pour ce serveur-là, choisi par la personne.
+// Server over http on the local network: treated as secure by the engine (service worker, offline downloads),
+// which no browser does. Only for that server, chosen by the person.
 if (config.server && config.server.startsWith('http://') && originOf(config.server)) {
   app.commandLine.appendSwitch('unsafely-treat-insecure-origin-as-secure', originOf(config.server));
 }
@@ -36,7 +36,7 @@ function createWindow() {
     width: b.width || 1280, height: b.height || 800, x: b.x, y: b.y, minWidth: 720, minHeight: 480,
     backgroundColor: '#0b0b0e', title: 'Noxa', autoHideMenuBar: true, show: false,
     icon: path.join(__dirname, 'build', 'icon.png'),
-    // backgroundThrottling : fenêtre réduite ou cachée, la page continue au même rythme (téléchargements)
+    // backgroundThrottling: window minimised or hidden, the page keeps the same pace (downloads)
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, spellcheck: false,
       backgroundThrottling: false },
   });
@@ -47,7 +47,7 @@ function createWindow() {
     writeConfig(config);
   });
   const home = originOf(config.server);
-  // liens vers un autre site : dans le navigateur de l'ordinateur ; le reste reste dans l'application
+  // links to another site: in the computer's browser; the rest stays in the app
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (home && originOf(url) === home) return { action: 'allow' };
     if (/^https?:/.test(url)) shell.openExternal(url);
@@ -62,7 +62,7 @@ function createWindow() {
     if (!isMain || code === -3) return; // -3 : chargement interrompu (navigation suivante)
     win.loadFile('setup.html', { query: { offline: config.server || '', error: desc || String(code) } });
   });
-  // F11 / Cmd+Ctrl+F : plein écran ; F5 / Ctrl+R : recharger
+  // F11 / Cmd+Ctrl+F: fullscreen; F5 / Ctrl+R: reload
   win.webContents.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return;
     if (input.key === 'F11') { win.setFullScreen(!win.isFullScreen()); e.preventDefault(); }
@@ -72,7 +72,7 @@ function createWindow() {
   else win.loadFile('setup.html');
 }
 
-// ------------------------------------------------------------------ choix du serveur
+// ------------------------------------------------------------------ server choice
 async function probe(base) {
   const res = await net.fetch(`${base}/api/status`, { headers: { 'X-Noxa': '1' }, signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -93,7 +93,7 @@ async function setServer(raw) {
       const insecureBefore = (config.server || '').startsWith('http://') ? originOf(config.server) : null;
       config = { ...readConfig(), server: originOf(c) + (new URL(c).pathname.replace(/\/+$/, '')) };
       writeConfig(config);
-      // un serveur http doit être déclaré au démarrage du moteur : on relance l'application
+      // an http server must be declared when the engine starts: the app is relaunched
       if (config.server.startsWith('http://') && originOf(config.server) !== insecureBefore) {
         app.relaunch();
         app.exit(0);
@@ -113,7 +113,7 @@ ipcMain.handle('nexis:set-server', (_e, url) => setServer(url));
 ipcMain.handle('nexis:change-server', () => { win.loadFile('setup.html', { query: { change: '1', current: config.server || '' } }); });
 ipcMain.handle('nexis:retry', () => { if (config.server) win.loadURL(config.server); });
 ipcMain.handle('nexis:check-update', () => checkUpdates(true));
-// téléchargement en cours : l'ordinateur ne se met pas en veille (l'écran, lui, peut s'éteindre)
+// download in progress: the computer does not go to sleep (the screen can turn off)
 let blocker = null;
 ipcMain.on('nexis:downloads', (_e, json) => {
   let active = 0;
@@ -125,9 +125,9 @@ ipcMain.on('nexis:downloads', (_e, json) => {
 });
 ipcMain.on('nexis:info', (e) => { e.returnValue = { version: app.getVersion(), os: process.platform, server: config.server || null, strings: T }; });
 
-// ------------------------------------------------------------------ mises à jour du programme
-// Windows (installateur) et Linux (AppImage) : téléchargées depuis le serveur et installées au redémarrage.
-// macOS et .deb : sans signature Apple ou paquet géré par le système, on propose le téléchargement.
+// ------------------------------------------------------------------ program updates
+// Windows (installer) and Linux (AppImage): downloaded from the server and installed at restart.
+// macOS and .deb: without an Apple signature or with a system-managed package, the download is offered.
 let updater = null;
 function canSelfUpdate() {
   return process.platform === 'win32' || (process.platform === 'linux' && !!process.env.APPIMAGE);
@@ -146,7 +146,7 @@ function setupUpdates() {
           message: T.updateReady, detail: T.updateReadyDetail });
         if (r.response === 0) updater.quitAndInstall();
       });
-      updater.on('error', () => { /* serveur sans applications publiées : on réessaiera */ });
+      updater.on('error', () => { /* server without published apps: will try again */ });
     } catch { updater = null; }
   }
   checkUpdates(false);

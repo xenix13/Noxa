@@ -10,9 +10,9 @@ import android.widget.TextView;
 import org.json.JSONObject;
 
 /**
- * Paramètres de la TV réduits au strict nécessaire : profil, langue de l'interface, déconnexion et serveur.
- * Les réglages de lecture (langues audio et sous-titres, qualité, épisode suivant…) suivent le compte : ils se
- * règlent depuis l'interface web, sur le téléphone ou l'ordinateur, et valent aussi ici.
+ * TV settings reduced to the bare minimum: profile, interface language, sign-out and server.
+ * Playback settings (audio and subtitle languages, quality, next episode…) follow the account: they are
+ * set from the web interface, on the phone or the computer, and apply here too.
  */
 final class SettingsTab extends BrowseScreen.Tab {
     private LinearLayout list;
@@ -43,7 +43,7 @@ final class SettingsTab extends BrowseScreen.Tab {
         item(Tr.t("Profil"), Session.user.optString("display_name"), Tr.t("Changer"), () ->
                 Api.arr("/api/profiles", profiles -> act.push(new ProfilesScreen(act, profiles)),
                         e -> Ui.toast(act, e.getMessage())));
-        // langue de l'interface, propre au compte (la même que dans l'interface web)
+        // interface language, specific to the account (the same as in the web interface)
         String[] langKeys = {"fr", "en"};
         String[] langNames = {"Français", "English"};
         item(Tr.t("Langue"), "en".equals(Tr.lang) ? "English" : "Français", Tr.t("Changer"), () -> Ui.dialog(act)
@@ -51,7 +51,7 @@ final class SettingsTab extends BrowseScreen.Tab {
                     d.dismiss();
                     Api.send("PUT", "/api/me/language", Api.json("language", langKeys[which]), r -> {
                         Tr.use(langKeys[which]);
-                        act.openBrowse(); // écrans reconstruits dans la nouvelle langue
+                        act.openBrowse(); // screens rebuilt in the new language
                     }, e -> Ui.toast(act, e.getMessage()));
                 }).show());
         item(Tr.t("Se déconnecter"), "", null, () -> Ui.dialog(act).setTitle(Tr.t("Se déconnecter ?"))
@@ -80,7 +80,7 @@ final class SettingsTab extends BrowseScreen.Tab {
         list.addView(t);
     }
 
-    /** Ligne de réglage : libellé, valeur actuelle, action au clic. */
+    /** Settings row: label, current value, action on click. */
     private TextView[] item(String label, String value, String action, Runnable click) {
         LinearLayout row = Ui.row(act);
         row.setFocusable(true);
