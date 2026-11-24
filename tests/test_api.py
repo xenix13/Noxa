@@ -961,6 +961,43 @@ class SeanceTest(unittest.TestCase):
             c.call("POST", "/api/admin/scan", {"library": lib})
             wait_scan(c)
 
+    def test_replaced_movie_needs_the_same_title(self):
+        """An upgrade keeps the movie; another movie arriving in the same folder as one leaves is a new movie."""
+        lib = self.libs["Films"]
+        src = self.movie("Nuit polaire")
+        src_path = self.ctx.db.scalar("SELECT key FROM items WHERE id=?", (int(src["id"]),))
+        coll = os.path.join(self.media, "films", "Collection")
+        own = os.path.join(self.media, "films", "Gamma (2003)")
+        os.makedirs(coll)
+        os.makedirs(own)
+        alpha, beta = os.path.join(coll, "Alpha (2001).mkv"), os.path.join(coll, "Beta (2002).mkv")
+        gamma1, gamma2 = os.path.join(own, "Gamma (2003) WEBDL-1080p.mkv"), os.path.join(own, "Gamma (2003) Bluray-1080p.mkv")
+        shutil.copy(src_path, alpha)
+        shutil.copy(src_path, gamma1)
+        db, c = self.ctx.db, self.admin
+        try:
+            c.call("POST", "/api/admin/scan", {"library": lib})
+            wait_scan(c)
+            a_id = db.scalar("SELECT id FROM items WHERE key=?", (alpha,))
+            g_id = db.scalar("SELECT id FROM items WHERE key=?", (gamma1,))
+            c.call("POST", f"/api/items/{a_id}/watched", {"watched": True})
+            os.rename(alpha, beta)    # Alpha removed, Beta added: two different movies
+            os.rename(gamma1, gamma2)  # Radarr upgrade of the same movie
+            c.call("POST", "/api/admin/scan", {"library": lib})
+            wait_scan(c)
+            b_id = db.scalar("SELECT id FROM items WHERE key=?", (beta,))
+            self.assertIsNotNone(b_id)
+            self.assertNotEqual(b_id, a_id)
+            self.assertIsNone(db.scalar("SELECT id FROM items WHERE id=?", (a_id,)))  # Alpha is gone
+            st, it = c.call("GET", f"/api/items/{b_id}")
+            self.assertFalse(it["watched"])
+            self.assertEqual(db.scalar("SELECT id FROM items WHERE key=?", (gamma2,)), g_id)  # upgrade: same movie
+        finally:
+            shutil.rmtree(coll, ignore_errors=True)
+            shutil.rmtree(own, ignore_errors=True)
+            c.call("POST", "/api/admin/scan", {"library": lib})
+            wait_scan(c)
+
     def test_prepare_waits_for_all_subtitles(self):
         m = self.movie("Nuit polaire")
         mrow = self.ctx.db.one("SELECT * FROM items WHERE id=?", (int(m["id"]),))
