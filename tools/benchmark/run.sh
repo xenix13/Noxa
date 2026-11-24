@@ -53,13 +53,17 @@ else
   curl -fsSL "$RAW/bench.py" -o "$DIR/bench.py"
 fi
 
-say "Running (about 1 hour; the screen shows each step)"
+case " $* " in
+  *" --prepare "*) say "Preparing (Docker images and test library)" ;;
+  *) say "Running (about 1 hour; the screen shows each step)" ;;
+esac
 cd "$DIR"
 set +e
 python3 bench.py --work "$DIR/work" "$@" 2>&1 | tee "$DIR/last-run.log"
 status=${PIPESTATUS[0]}
 set -e
 
+case " $* " in *" --prepare "*) exit "$status" ;; esac
 latest=$(ls -td "$DIR"/results/*/ 2>/dev/null | head -1)
 say "Done"
 echo "Results: ${latest:-$DIR/results}"

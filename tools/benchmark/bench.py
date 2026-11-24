@@ -740,6 +740,7 @@ def main():
     ap.add_argument("--requests", type=int, default=50)
     ap.add_argument("--settle", type=int, default=900, help="longest wait for background work after the scan (s)")
     ap.add_argument("--quick", action="store_true", help="short run to check that everything works")
+    ap.add_argument("--prepare", action="store_true", help="only download the images and build the test library")
     args = ap.parse_args()
     if args.quick:
         args.idle, args.play, args.requests, args.settle = 20, 20, 10, 120
@@ -758,6 +759,10 @@ def main():
             log(f"Downloading {img}")
             docker("pull", "-q", img)
     build_library(args.media, args.quick)
+    if args.prepare:
+        log("Ready: images downloaded and test library built")
+        shutil.rmtree(outdir, ignore_errors=True)
+        return 0
     all_res = {}
     for n in names:
         all_res[n] = bench_server(SERVERS[n], args, outdir)

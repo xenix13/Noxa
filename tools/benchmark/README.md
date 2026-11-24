@@ -2,7 +2,25 @@
 
 Compares Noxa, Jellyfin and Plex on the same machine, with the same test library and the same limits. The whole run is automatic: it installs what is missing, builds the test library, starts each server in turn, sets it up through its own API, measures it, and removes it.
 
-## Run it
+## Run it on Proxmox VE (simplest)
+
+On the Proxmox host, as root, create a ready-to-use VM. It's a Debian 12 VM with 4 cores, 8 GB and 24 GB, and the script installs Docker, the three servers and the test library in it, which takes 15 to 25 minutes:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/test/tools/benchmark/proxmox-vm.sh -o noxa-bench-vm.sh
+bash noxa-bench-vm.sh
+```
+
+Then run the benchmark. It takes about an hour, keeps going if the window is closed, and copies the results back to `/root/noxa-bench/results/` on the host:
+
+```bash
+bash noxa-bench-vm.sh run      # or "quick" for a 10-minute check
+bash noxa-bench-vm.sh delete   # afterwards: removes the VM
+```
+
+The VM gets its address from DHCP on `vmbr0`. `VMID`, `STORAGE`, `BRIDGE`, `CORES`, `MEMORY` and `DISK` can be set in front of the command, for example `BRIDGE=vmbr1 bash noxa-bench-vm.sh`. If no storage accepts cloud-init *snippets* yet, the script allows them on `local`.
+
+## Run it on any Debian or Ubuntu machine
 
 On a **fresh Debian 12 or Ubuntu 24.04 VM**, as root:
 
