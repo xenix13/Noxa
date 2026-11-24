@@ -94,7 +94,7 @@ jobs:
           echo "version=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("noxa/__init__.py").read()).group(1))')" >> "$GITHUB_OUTPUT"
           OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
           echo "image=ghcr.io/$OWNER/noxa" >> "$GITHUB_OUTPUT"
-          echo "old=ghcr.io/$OWNER/nexis" >> "$GITHUB_OUTPUT"  # ancien nom (Nexis) : les installations existantes continuent de se mettre à jour
+          echo "old=ghcr.io/$OWNER/nexis" >> "$GITHUB_OUTPUT"  # former name (Nexis): existing installations keep updating
       - name: Le docker-compose.yml de main installe la version publiée (pas celle de test)
         if: github.ref == 'refs/heads/main'
         run: |
@@ -198,7 +198,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp "noxa-tv-$V.apk" noxa-tv.apk  # nom fixe : …/releases/latest/download/noxa-tv.apk (adresse /tv du serveur)
+          cp "noxa-tv-$V.apk" noxa-tv.apk  # fixed name: …/releases/latest/download/noxa-tv.apk (the server's /tv address)
           gh release view "v$V" >/dev/null 2>&1 && gh release upload "v$V" "noxa-tv-$V.apk" noxa-tv.apk --clobber || echo "Pas de publication v$V"
       - uses: actions/upload-artifact@v4
         with:
@@ -231,7 +231,7 @@ jobs:
         working-directory: apps/desktop
         shell: bash
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"  # pas de certificat : Windows et macOS demandent une confirmation au 1er lancement
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"  # no certificate: Windows and macOS ask for a confirmation at first launch
         run: |
           npm ci --no-audit --no-fund
           npm run icon

@@ -53,7 +53,7 @@
     $('retry').textContent = T.retry;
     $('retry').onclick = () => A.retry();
   }
-  // réponse du serveur choisi (appelée par l'application)
+  // answer about the chosen server (called by the app)
   window.onServerResult = (ok, error) => {
     if (ok) return;
     $('error').textContent = error;
