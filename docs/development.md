@@ -45,8 +45,9 @@ noxa/                   the server (Python package)
   subcache.py, subtitles.py, opensubs.py, whisper.py  subtitles
   chapters.py, introdetect.py, markers.py  chapter images, intro detection, skip markers
   tasks.py              scheduled tasks; watcher.py: new content detection
-  federation.py         linked servers (TLS, tunnel, replication)
-  cold.py, coldfree.py  cold storage and freeing up space
+  federation/           linked servers: links and tunnel, pairing, sync, relay, shared services, routes
+  cold/                 cold storage: storage backends, copies, compression, archiving queue, routes
+  coldfree.py           freeing up space
   backup.py, remote_storage.py  backups and external storages
   livetv.py, dlna.py, photos.py, books.py, syncplay.py  live TV, DLNA, photos, audiobooks, watch together
   downloads.py, push.py, notify.py, stats.py, health.py  offline downloads, notifications, stats, alerts

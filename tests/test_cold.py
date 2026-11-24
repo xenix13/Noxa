@@ -379,12 +379,12 @@ class ColdStorageTest(unittest.TestCase):
         self.exercise(cold_mod.Local({"path": os.path.join(self.work, "usb")}, cold))
         self.assertFalse(os.listdir(os.path.join(self.work, "usb")))  # dossiers vides retirés
         self.exercise(cold_mod.WebDAV(self.dav_conf(), cold))
-        old = cold_mod.PART
-        cold_mod.PART = 1024 * 1024  # envoi en plusieurs parties dès 1 Mo
+        old = cold_mod.storage.PART
+        cold_mod.storage.PART = 1024 * 1024  # envoi en plusieurs parties dès 1 Mo
         try:
             self.exercise(cold_mod.S3(self.s3_conf(), cold))
         finally:
-            cold_mod.PART = old
+            cold_mod.storage.PART = old
         self.assertEqual(FakeS3.uploads, {})  # parties assemblées
         self.exercise(cold_mod.Rclone({"remote": "pcloud:Noxa"}, cold))
         # mauvais mot de passe WebDAV : message clair
@@ -693,15 +693,15 @@ class ColdStorageTest(unittest.TestCase):
         self.assertIsNone(c["hw"])  # pas de carte graphique : l'interface le signale
         self.assertGreaterEqual(c["todo"]["count"], 1)  # Nuit polaire (H.264) sur WebDAV
         before = self.ctx.db.one("SELECT * FROM cold_copies WHERE item_id=? AND compressed=0", (mid,))
-        old_gain = cold_mod.MIN_GAIN
-        cold_mod.MIN_GAIN = 5  # vidéo de test minuscule : on accepte tout gain
+        old_gain = cold_mod.compression.MIN_GAIN
+        cold_mod.compression.MIN_GAIN = 5  # vidéo de test minuscule : on accepte tout gain
         try:
             self.admin.call("PUT", "/api/admin/cold/settings", {"compress": True, "compress_quality": "small"})
             st, r = self.admin.call("POST", "/api/admin/cold/compress", {})
             self.assertGreaterEqual(r["queued"], 1, r)
             self.wait_jobs(300)
         finally:
-            cold_mod.MIN_GAIN = old_gain
+            cold_mod.compression.MIN_GAIN = old_gain
         after = self.ctx.db.one("SELECT * FROM cold_copies WHERE item_id=? AND store_id=?", (mid, before["store_id"]))
         self.assertEqual(after["compressed"], 1, after)
         self.assertTrue(after["name"].endswith(".mkv"))
