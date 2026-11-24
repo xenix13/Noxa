@@ -238,7 +238,7 @@ def register(app, ctx, x):
         lid = db.run("INSERT INTO libraries(name,kind,paths,position,created_at) VALUES(?,?,?,?,?)",
                      (name, kind, json.dumps(paths), pos, int(time.time()))).lastrowid
         db.release()
-        ctx.scanner.start([lid])
+        ctx.scanner.start([lid], queue=True)
         return library_view(db.one("SELECT * FROM libraries WHERE id=?", (lid,)))
 
     @app.route("PUT", r"/api/admin/libraries/(?P<lid>\d{1,6})", auth="admin")
@@ -253,7 +253,7 @@ def register(app, ctx, x):
         db.run("UPDATE libraries SET name=?, kind=?, paths=? WHERE id=?", (name, kind, json.dumps(paths), lid))
         ctx.fed.relink_all()  # une fusion avec une bibliothèque d'un autre type ne vaut plus
         db.release()
-        ctx.scanner.start([lid])
+        ctx.scanner.start([lid], queue=True)
         return library_view(db.one("SELECT * FROM libraries WHERE id=?", (lid,)))
 
     @app.route("DELETE", r"/api/admin/libraries/(?P<lid>\d{1,6})", auth="admin")
