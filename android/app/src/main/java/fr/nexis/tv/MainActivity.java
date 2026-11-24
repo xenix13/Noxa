@@ -1,6 +1,7 @@
 package fr.nexis.tv;
 
 import android.app.Activity;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
@@ -18,6 +19,7 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private final ArrayDeque<Screen> stack = new ArrayDeque<>();
     private boolean started;
+    private boolean quitting;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -32,6 +34,31 @@ public class MainActivity extends Activity {
         start();
     }
 
+    /** Within this time of the last use, a restart of the app (Android freeing memory during playback, or a crash
+     *  on leaving the player) goes back to the same profile instead of asking "Who's watching?" again. */
+    private static final long SAME_SESSION_MS = 30 * 60 * 1000L;
+
+    /** Marks the app as in use (screens and player call it). */
+    static void touch() {
+        SharedPreferences s = Api.store();
+        if (s != null) s.edit().putLong("last_used", System.currentTimeMillis()).apply();
+    }
+
+    /** Closed on purpose: the next launch asks "Who's watching?" again. */
+    void quit() {
+        quitting = true;
+        SharedPreferences s = Api.store();
+        if (s != null) s.edit().remove("last_used").apply();
+        finish();
+    }
+
+    private static boolean recentlyUsed() {
+        SharedPreferences s = Api.store();
+        long last = s == null ? 0 : s.getLong("last_used", 0);
+        long age = System.currentTimeMillis() - last;
+        return last > 0 && age >= 0 && age < SAME_SESSION_MS;
+    }
+
     /** Point de départ : serveur connu ? session encore valide ? */
     void start() {
         if (Api.server() == null) {
@@ -41,7 +68,7 @@ public class MainActivity extends Activity {
         reset(new LoadingScreen(this, Tr.t("Connexion à ") + Api.server() + "…"));
         Api.obj("/api/me", me -> {
             Session.load(me);
-            afterLogin(true);
+            afterLogin(!recentlyUsed());
         }, e -> {
             if (e.code == 401) reset(new LoginScreen(this));
             else reset(new SetupScreen(this, e.code == 0 ? Tr.t("Le serveur ") + Api.server() + Tr.t(" ne répond pas. ")
@@ -147,8 +174,15 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        if (!quitting) touch();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        touch();
         immersive();
         if (started) {
             // retour du lecteur : reprise et « vu » à jour (le temps que la dernière position arrive au serveur)

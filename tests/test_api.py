@@ -568,6 +568,30 @@ class SeanceTest(unittest.TestCase):
                 c.call("POST", f"/api/items/{m['id']}/watched", {"watched": False})
             c.call("PUT", "/api/me/prefs", {"lib_sorts": {}})
 
+    def test_library_added_during_a_scan_is_scanned(self):
+        """A library added while another one is being scanned is scanned right after, not left empty."""
+        sc = self.ctx.scanner
+        with sc.lock:
+            sc.state["running"] = True  # as if the first library were still being scanned
+        try:
+            st, lib = self.admin.call("POST", "/api/admin/libraries",
+                                      {"name": "Later", "kind": "movie", "paths": [os.path.join(self.media, "films")]})
+            self.assertEqual(st, 200)
+            self.assertIn(int(lib["id"]), sc.queued)
+        finally:
+            with sc.lock:
+                sc.state["running"] = False
+        try:
+            self.admin.call("POST", "/api/admin/scan", {"library": self.libs["Films"]})  # the running scan ends…
+            wait_scan(self.admin)
+            time.sleep(0.5)
+            wait_scan(self.admin)  # … then the queued library is scanned
+            n = self.ctx.db.scalar("SELECT COUNT(*) FROM items WHERE library_id=? AND type='movie'", (int(lib["id"]),))
+            self.assertGreater(n, 0)
+            self.assertEqual(sc.queued, set())
+        finally:
+            self.admin.call("DELETE", f"/api/admin/libraries/{lib['id']}")
+
     def test_library_permissions(self):
         show, d, eps = self.episodes("Les Veilleurs", "Séries")
         self.assertEqual(self.lea.call("GET", f"/api/libraries/{self.libs['Séries']}/items")[0], 404)

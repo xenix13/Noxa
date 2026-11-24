@@ -33,6 +33,7 @@ import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.common.util.Util;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.analytics.AnalyticsListener;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
@@ -116,6 +117,12 @@ public class PlayerActivity extends Activity {
         immersive();
         player = Players.create(this);
         video.setPlayer(player);
+        player.addAnalyticsListener(new AnalyticsListener() {
+            @Override
+            public void onBandwidthEstimate(@NonNull EventTime t, int loadMs, long bytes, long bitrate) {
+                Bandwidth.observe(bitrate / 1000, bytes);
+            }
+        });
         player.addListener(new androidx.media3.common.Player.Listener() {
             @Override
             public void onPlaybackStateChanged(int s) {
@@ -643,6 +650,7 @@ public class PlayerActivity extends Activity {
         long now = SystemClock.elapsedRealtime();
         if (!force && now - lastReport < REPORT_EVERY) return;
         lastReport = now;
+        MainActivity.touch();
         long pos = player.getCurrentPosition();
         if (pos < 1000 && !"stopped".equals(state) && !finished) return;
         JSONObject b = Api.json("id", itemId, "position", pos, "duration", duration(),
