@@ -1,13 +1,13 @@
-"""Statistiques de l'administration : qui regarde quoi, combien de temps, avec quel débit (estimé), comment
-(lecture directe, copie, conversion), et les titres que personne n'a jamais regardés (pour faire de la place).
+"""Administration statistics: who watches what, for how long, with what bandwidth (estimated), how
+(direct play, copy, conversion), and the titles nobody has ever watched (to make room).
 
-Les lectures viennent du journal play_log, rempli par la base elle-même à la fin de chaque lecture (déclencheur sur
-la table streams). Débit estimé = débit de la vidéo envoyée (source, ou cible d'une conversion) + 192 kbit/s de son.
+Playbacks come from the play_log journal, filled by the database itself at the end of each playback (trigger on
+the streams table). Estimated bandwidth = bitrate of the video sent (source, or target of a conversion) + 192 kbit/s of audio.
 """
 import time
 
 AUDIO_KBPS = 192
-NEVER_AFTER_DAYS = 90  # « jamais regardé » : seulement les titres ajoutés il y a plus de 3 mois
+NEVER_AFTER_DAYS = 90  # "never watched": only the titles added more than 3 months ago
 
 
 def register(app, ctx, x):
@@ -32,7 +32,7 @@ def register(app, ctx, x):
             "FROM play_log l JOIN users u ON u.id = l.user_id WHERE l.ended >= ? GROUP BY u.id ORDER BY seconds DESC", (since,))]
         for u in users:
             u["id"] = str(u["id"])
-        # heures par jour (jours sans lecture compris), à l'heure du serveur
+        # hours per day (days without playback included), in server time
         per_day = {r["d"]: r["s"] for r in db.all(
             "SELECT date(ended, 'unixepoch', 'localtime') AS d, SUM(seconds) AS s FROM play_log WHERE ended >= ? GROUP BY d", (since,))}
         chart_days = min(days, 90)
@@ -40,7 +40,7 @@ def register(app, ctx, x):
         for i in range(chart_days - 1, -1, -1):
             d = time.strftime("%Y-%m-%d", time.localtime(now - i * 86400))
             series.append({"day": d, "seconds": per_day.get(d, 0)})
-        # titres les plus regardés : un épisode compte pour sa série
+        # most watched titles: an episode counts for its show
         raw = db.all("SELECT rating_key, MAX(title) AS title, COUNT(*) AS plays, SUM(seconds) AS seconds "
                      "FROM play_log WHERE ended >= ? GROUP BY rating_key", (since,))
         who = {}
@@ -56,7 +56,7 @@ def register(app, ctx, x):
         top = {}
         for r in raw:
             if r["rating_key"] == "private":
-                continue  # lectures en mode privé : comptées dans les totaux, jamais nommées
+                continue  # playbacks in private mode: counted in the totals, never named
             it = info.get(str(r["rating_key"]))
             key = str(it["show_id"]) if it and it["show_id"] else str(r["rating_key"])
             title = (it["show"] if it and it["show_id"] else it["title"] if it else r["title"]) or "?"
@@ -72,8 +72,8 @@ def register(app, ctx, x):
                 "top": top_list, "never": never_watched(now)}
 
     def never_watched(now):
-        """Films et séries de ce serveur que personne n'a commencés, ajoutés il y a plus de 3 mois, les plus gros
-        d'abord (place à récupérer sur le NAS)."""
+        """Movies and shows of this server nobody has started, added more than 3 months ago, the biggest
+        first (space to reclaim on the NAS)."""
         seen = set()
         for r in db.all("SELECT DISTINCT rating_key AS k FROM progress WHERE watched = 1 OR position_ms > 0 OR view_count > 0"):
             seen.add(str(r["k"]))
@@ -83,7 +83,7 @@ def register(app, ctx, x):
             seen.add(str(r["k"]))
         for r in db.all("SELECT DISTINCT rating_key AS k FROM play_log"):
             seen.add(str(r["k"]))
-        # un épisode vu : sa série aussi
+        # an episode watched: its show too
         ep_ids = [int(k) for k in seen if k.isdigit()]
         for i in range(0, len(ep_ids), 900):
             chunk = ep_ids[i:i + 900]

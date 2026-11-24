@@ -1,4 +1,4 @@
-"""Classifications (FR, US, …) -> âge minimal, pour le contrôle parental."""
+"""Ratings (FR, US, …) -> minimum age, for parental control."""
 import re
 
 AGES = {
@@ -9,7 +9,7 @@ AGES = {
 
 
 def age_of(rating):
-    """« 12 », « FR-16 », « PG-13 », « TV-MA », « FSK 12 »… -> âge, ou None si inconnu."""
+    """"12", "FR-16", "PG-13", "TV-MA", "FSK 12"… -> age, or None when unknown."""
     if not rating:
         return None
     r = str(rating).strip().lower()

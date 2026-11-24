@@ -1,4 +1,4 @@
-"""Métadonnées : fichiers .nfo locaux et TMDB (The Movie Database)."""
+"""Metadata: local .nfo files and TMDB (The Movie Database)."""
 import json
 import logging
 import os
@@ -91,14 +91,14 @@ class TMDB:
         if not res and year:
             res = self.search(kind, title, None)
         if not res:
-            # « Titre - Sous-titre » ou titre japonais romanisé : on essaie la première partie
+            # "Title - Subtitle" or romanised Japanese title: the first part is tried
             short = re.split(r"\s[-:–]\s", title)[0]
             if short != title:
                 res = self.search(kind, short, year) or self.search(kind, short, None)
         if not res:
             return None
         t = fold(title)
-        for r in res:  # titre identique + année identique d'abord
+        for r in res:  # same title + same year first
             if year and r["year"] == year and t in (fold(r["title"] or ""), fold(r["original_title"] or "")):
                 return r["tmdb_id"]
         if year:
@@ -173,7 +173,7 @@ class Metadata:
         key, lang, country = db.setting("tmdb_key"), db.setting("meta_language", "fr-FR"), db.setting("meta_country", "FR")
         if not key:
             fed = getattr(self.ctx, "fed", None)
-            shared = fed.shared_tmdb(lang, country) if fed else None  # clé d'un serveur lié
+            shared = fed.shared_tmdb(lang, country) if fed else None  # key of a linked server
             if shared:
                 return shared
         return TMDB(key, lang, country)
@@ -213,7 +213,7 @@ class Metadata:
     def process_pending(self, progress=None):
         db = self.ctx.db
         tmdb = self.tmdb()
-        # éléments d'un serveur lié : leurs métadonnées sont cherchées par ce serveur
+        # items of a linked server: their metadata is looked up by that server
         roots = db.all("SELECT * FROM items WHERE meta_state='pending' AND type IN ('movie','show') AND peer_id IS NULL "
                        "ORDER BY id")
         pending_eps = db.scalar("SELECT COUNT(*) FROM items WHERE meta_state='pending' AND type IN ('season','episode') "
@@ -232,7 +232,7 @@ class Metadata:
             except Exception:
                 log.exception("Métadonnées de %s", item["title"])
                 db.run("UPDATE items SET meta_state='error' WHERE id=?", (item["id"],))
-        # nouveaux épisodes de séries déjà identifiées
+        # new episodes of shows already identified
         shows = db.all("SELECT DISTINCT show_id FROM items WHERE meta_state='pending' AND type IN ('season','episode') "
                        "AND peer_id IS NULL")
         for r in shows:
@@ -246,7 +246,7 @@ class Metadata:
             progress(total, total)
 
     def refresh(self, item, tmdb=None, tmdb_id=None):
-        """(Re)charge les métadonnées d'un film ou d'une série (et de ses épisodes)."""
+        """(Re)loads the metadata of a movie or a show (and of its episodes)."""
         db = self.ctx.db
         tmdb = tmdb or self.tmdb()
         nfo = nfo_for(item)
@@ -302,13 +302,13 @@ class Metadata:
         self._fulfil_wishes(item, "movie", tid)
 
     def _fulfil_wishes(self, item, media_type, tid):
-        """Un titre attendu (« À regarder » hors bibliothèque) vient d'arriver : il rejoint la vraie liste."""
+        """An awaited title ("Watchlist" outside the library) just arrived: it joins the real list."""
         db = self.ctx.db
         for w in db.all("SELECT user_id, added_at FROM wishlist WHERE media_type=? AND tmdb_id=?", (media_type, tid)):
             db.run("INSERT OR IGNORE INTO watchlist(user_id,item_id,added_at) VALUES(?,?,?)",
                    (w["user_id"], item["id"], w["added_at"]))
             push = getattr(self.ctx, "push", None)
-            if push:  # titre demandé (Découvrir) arrivé : prévenir la personne
+            if push:  # requested title (Discover) arrived: tell the person
                 from .i18n import tr
                 push.notify(w["user_id"], tr("Disponible sur Noxa"), item["title"], f"#/item/{item['id']}", f"item-{item['id']}")
         db.run("DELETE FROM wishlist WHERE media_type=? AND tmdb_id=?", (media_type, tid))
@@ -324,7 +324,7 @@ class Metadata:
             self.ctx.db.run("UPDATE items SET trailer=? WHERE id=?", (key, item["id"]))
 
     def _collection(self, item, coll, tmdb):
-        """Collection automatique (saga TMDB) dans la bibliothèque du film."""
+        """Automatic collection (TMDB saga) in the movie's library."""
         db = self.ctx.db
         lib = item["library_id"]
         row = db.one("SELECT id FROM collections WHERE library_id=? AND tmdb_id=?", (lib, coll["id"]))
@@ -346,7 +346,7 @@ class Metadata:
         db.run("INSERT OR IGNORE INTO collection_items(collection_id,item_id) VALUES(?,?)", (cid, item["id"]))
 
     def _images(self, item, poster=None, backdrop=None, still=None):
-        """Les images locales (poster.jpg…) gardent la priorité sur celles de TMDB."""
+        """Local pictures (poster.jpg…) keep priority over TMDB's."""
         db = self.ctx.db
         cur = db.one("SELECT poster, backdrop, still FROM items WHERE id=?", (item["id"],))
         f = {}
@@ -420,7 +420,7 @@ class Metadata:
                                                            "AND type='season' AND peer_id IS NULL", (show["id"],))}
             for e in eps:
                 sn, en = e["season_idx"], e["idx"]
-                # numérotation absolue (animes) : « Episode 1071 » dans une seule saison 1
+                # absolute numbering (anime): "Episode 1071" in a single season 1
                 if sn == 1 and our_seasons <= {0, 1} and en > counts.get(1, 10 ** 6):
                     rest = en
                     for n in sorted(k for k in counts if k >= 1):

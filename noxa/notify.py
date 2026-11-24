@@ -1,8 +1,8 @@
-"""Notifications de nouveaux épisodes et bilan de visionnage, par utilisateur.
+"""New episode notifications and viewing summary, per user.
 
-Une série est « suivie » dès qu'un de ses épisodes a été regardé (ou commencé), ou qu'elle est dans « À regarder ».
-Ses épisodes ajoutés depuis moins de NEW_DAYS jours et pas encore vus font l'objet d'une notification ; elle est
-« non lue » tant que l'utilisateur n'a pas ouvert la liste après l'ajout.
+A show is "followed" as soon as one of its episodes was watched (or started), or when it is in the "Watchlist".
+Its episodes added less than NEW_DAYS days ago and not watched yet get a notification; it is
+"unread" as long as the user has not opened the list after the addition.
 """
 import collections
 import datetime
@@ -31,10 +31,10 @@ def register(app, ctx, x):
         return sorted(ids)
 
     def new_episodes(user):
-        """[(série, [épisodes nouveaux non vus])] pour les séries suivies, du plus récent au plus ancien."""
+        """[(show, [new unwatched episodes])] for the followed shows, from the most recent to the oldest."""
         uid = user["id"]
         muted = {int(m) for m in x.get_prefs(uid).get("muted_shows") or [] if str(m).isdigit()}
-        shows = [s for s in followed(uid) if s not in muted]  # séries dont on ne veut plus être prévenu
+        shows = [s for s in followed(uid) if s not in muted]  # shows one no longer wants to hear about
         if not shows:
             return []
         since = int(time.time()) - NEW_DAYS * 86400
@@ -78,7 +78,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/me/muted")
     def muted_list(req):
-        """Séries dont on ne veut plus être prévenu (pour les réactiver)."""
+        """Shows one no longer wants to hear about (to turn them back on)."""
         ids = [int(i) for i in x.get_prefs(req.user["id"]).get("muted_shows") or [] if str(i).isdigit()]
         if not ids:
             return []
@@ -93,7 +93,7 @@ def register(app, ctx, x):
     # ------------------------------------------------------------------ bilan
     @app.route("GET", "/api/history/recap")
     def recap(req):
-        """Bilan d'une année (ou d'un mois) : temps passé, titres, genres, jour préféré."""
+        """Summary of a year (or a month): time spent, titles, genres, favourite day."""
         now = datetime.datetime.now()
         year = req.int_arg("year", now.year, 2000, 2100)
         month = req.int_arg("month", 0, 0, 12)
@@ -106,7 +106,6 @@ def register(app, ctx, x):
             return {"year": year, "month": month, "empty": True}
         ms = films = episodes = 0
         per_title = collections.Counter()
-        title_card = {}
         per_month = [0] * 12
         per_weekday = [0] * 7
         days = set()
@@ -129,7 +128,7 @@ def register(app, ctx, x):
                 key = m.get("id") or r["rating_key"]
             if key:
                 per_title[str(key)] += max(dur, 1)
-        # titres les plus regardés (encore visibles pour cet utilisateur)
+        # most watched titles (still visible to this user)
         top = []
         for key, _ in per_title.most_common(12):
             if not str(key).isdigit():
@@ -141,7 +140,7 @@ def register(app, ctx, x):
                 top.append(c)
             if len(top) == 5:
                 break
-        # genres : ceux des titres regardés, pondérés par le temps passé
+        # genres: those of the watched titles, weighted by the time spent
         genres = collections.Counter()
         keys = [k for k in per_title if str(k).isdigit()]
         for chunk in range(0, len(keys), 900):
@@ -154,7 +153,7 @@ def register(app, ctx, x):
                 for g in gs[:3]:
                     if isinstance(g, str):
                         genres[g] += per_title[str(r["id"])]
-        # plus longue série de jours consécutifs avec au moins un visionnage
+        # longest series of consecutive days with at least one viewing
         streak = best = 0
         prev = None
         for d in sorted(days):

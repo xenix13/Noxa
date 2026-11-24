@@ -1,12 +1,12 @@
-"""Serveur DLNA / UPnP : les téléviseurs, consoles et box du réseau local voient Noxa et lisent ses fichiers.
+"""DLNA / UPnP server: the TVs, consoles and boxes of the local network see Noxa and play its files.
 
-- Annonce (SSDP) : multidiffusion sur 239.255.255.250:1900, réponse aux recherches des appareils.
-- Description et services (ContentDirectory, ConnectionManager) sur le port web de Noxa, sous /dlna/.
-- Contenu : les bibliothèques choisies par l'administrateur (films, séries > saisons > épisodes, photos >
-  albums), servies telles quelles (le téléviseur lit le fichier d'origine ; pas de conversion).
+- Announcement (SSDP): multicast on 239.255.255.250:1900, answers to the devices' searches.
+- Description and services (ContentDirectory, ConnectionManager) on Noxa's web port, under /dlna/.
+- Content: the libraries chosen by the administrator (movies, shows > seasons > episodes, photos >
+  albums), served as they are (the TV plays the original file; no conversion).
 
-Le DLNA ne connaît pas de comptes : tout appareil du réseau local voit les bibliothèques partagées. Le service
-est désactivé par défaut et refuse les adresses qui ne sont pas locales.
+DLNA knows no accounts: any device of the local network sees the shared libraries. The service
+is off by default and refuses addresses that are not local.
 """
 import http.client
 import ipaddress
@@ -56,7 +56,7 @@ def is_local(ip):
 
 
 def local_ip(towards=GROUP):
-    """Adresse de ce serveur vue depuis `towards` (aucun paquet envoyé)."""
+    """Address of this server as seen from `towards` (no packet sent)."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect((towards, SSDP_PORT))
@@ -84,7 +84,7 @@ class DLNA:
         self.error = None
         self.lock = threading.Lock()
 
-    # ------------------------------------------------------------ réglages
+    # ------------------------------------------------------------ settings
     def enabled(self):
         return self.ctx.db.setting("dlna_enabled", "0") == "1"
 
@@ -102,7 +102,7 @@ class DLNA:
         return db.setting("dlna_name") or f"Noxa ({db.setting('server_name') or (socket.gethostname() or 'serveur')[:40]})"
 
     def library_ids(self):
-        """Bibliothèques partagées (celles de ce serveur ; toutes si l'administrateur n'a rien choisi)."""
+        """Shared libraries (those of this server; all of them when the administrator chose nothing)."""
         db = self.ctx.db
         local = [r["id"] for r in db.all("SELECT id FROM libraries WHERE peer_id IS NULL AND kind<>'audiobook' "
                                          "ORDER BY position, name")]
@@ -140,8 +140,8 @@ class DLNA:
                         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
                     except OSError:
                         pass
-                # toutes les interfaces : voulu (annonce SSDP en multidiffusion et réponses aux M-SEARCH) ; les
-                # demandes venant d'hors du réseau local sont refusées (is_local), et le service est coupé par défaut
+                # all interfaces: on purpose (SSDP multicast announcement and answers to M-SEARCH); the
+                # requests from outside the local network are refused (is_local), and the service is off by default
                 s.bind(("", SSDP_PORT))
                 s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
                              struct.pack("4s4s", socket.inet_aton(GROUP), socket.inet_aton("0.0.0.0")))
@@ -169,7 +169,7 @@ class DLNA:
             sock.close()
 
     def apply(self):
-        """Réglages changés : (ré)annonce ou arrêt."""
+        """Settings changed: (re)announcement or stop."""
         self.stop()
         if self.thread:
             self.thread.join(3)
@@ -243,7 +243,7 @@ class DLNA:
         return item and item["peer_id"] is None and item["library_id"] in self.library_ids()
 
     def children(self, oid):
-        """-> (lignes des enfants, objet parent) pour un identifiant d'objet, ou None s'il n'existe pas."""
+        """-> (rows of the children, parent object) for an object id, or None when it does not exist."""
         db = self.ctx.db
         if oid == "0":
             ids = self.library_ids()
@@ -319,7 +319,7 @@ class DLNA:
         key = r["key"] or ""
         if not key or media.is_strm(key):
             return ""
-        if t == "photo" and photos.is_clip(key):  # vidéo d'un album photo : lue telle quelle
+        if t == "photo" and photos.is_clip(key):  # video of a photo album: played as is
             info = json.loads(r["probe"] or "{}")
             url = f'{escape(base)}/dlna/media/{r["id"]}{escape(os.path.splitext(key)[1].lower())}'
             dur = f' duration="{hms(info["dur"])}"' if info.get("dur") else ""
@@ -550,7 +550,7 @@ def register(app, ctx, x):
 
     @app.route("SUBSCRIBE", r"/dlna/event/(?P<svc>cd|cm)", auth="dlna")
     def dlna_subscribe(req):
-        """Abonnement aux événements (certains téléviseurs l'exigent) : accepté, avec l'état initial."""
+        """Event subscription (some TVs require it): accepted, with the initial state."""
         sid = req.headers.get("SID") or f"uuid:{secrets.token_hex(16)}"
         callback = (req.headers.get("CALLBACK") or "").strip("<> ")
         if callback and not req.headers.get("SID"):
@@ -563,7 +563,7 @@ def register(app, ctx, x):
 
     def initial_event(callback, sid, client_ip, svc):
         u = urllib.parse.urlsplit(callback)
-        if u.scheme != "http" or u.hostname != client_ip:  # on ne prévient que l'appareil qui s'abonne
+        if u.scheme != "http" or u.hostname != client_ip:  # only the subscribing device is told
             return
         props = ([("SystemUpdateID", dlna.update_id()), ("ContainerUpdateIDs", "")] if svc == "cd"
                  else [("SourceProtocolInfo", ""), ("SinkProtocolInfo", ""), ("CurrentConnectionIDs", "0")])
@@ -635,7 +635,7 @@ def register(app, ctx, x):
 
     @app.route("GET", r"/dlna/photo/(?P<rk>\d{1,12})\.jpg", auth="dlna")
     def dlna_photo(req):
-        """Photo en JPEG 1920 px, remise à l'endroit : ce que tous les téléviseurs savent afficher (HEIC compris)."""
+        """Photo as 1920 px JPEG, turned the right way up: what every TV can show (HEIC included)."""
         r = exposed_item(req.params["rk"], ("photo",))
         db.release()
         path = photos.render(ctx, r, 1920, 1920, crop=False)

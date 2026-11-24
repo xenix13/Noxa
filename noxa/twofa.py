@@ -1,11 +1,11 @@
-"""Double authentification : codes à usage unique (TOTP, RFC 6238), compatibles avec Google Authenticator,
+"""Two-factor authentication: one-time codes (TOTP, RFC 6238), compatible with Google Authenticator,
 Aegis, 2FAS, Microsoft Authenticator, Bitwarden…
 
-- Chaque utilisateur qui se connecte avec un mot de passe peut l'activer pour son compte ; un profil géré
-  (sans mot de passe, ouvert depuis « Changer de profil ») ne le peut pas.
-- 10 codes de secours (usage unique, stockés hachés) permettent de se connecter sans le téléphone.
-- Un administrateur peut la désactiver pour un autre compte ; en dernier recours, la commande
-  `noxa reset-2fa <identifiant>` sur le serveur (voir __main__.py).
+- Each user who signs in with a password can turn it on for their account; a managed profile
+  (without a password, opened from "Switch profile") cannot.
+- 10 recovery codes (single use, stored hashed) allow signing in without the phone.
+- An administrator can turn it off for another account; as a last resort, the command
+  `noxa reset-2fa <username>` on the server (see __main__.py).
 """
 import base64
 import hashlib
@@ -19,7 +19,7 @@ import urllib.parse
 
 STEP = 30            # secondes par code
 DIGITS = 6
-WINDOW = 1           # tolérance : un code d'avance ou de retard (horloge du téléphone décalée)
+WINDOW = 1           # tolerance: one code ahead or behind (phone clock off)
 TICKET_SECONDS = 300
 TICKET_TRIES = 5
 RECOVERY_COUNT = 10
@@ -43,7 +43,7 @@ def code_at(secret, step):
 
 
 def check_code(secret, code, last_step=0, now=None):
-    """-> pas de temps du code s'il est valide (et pas déjà utilisé), sinon None."""
+    """-> time step of the code when it is valid (and not already used), otherwise None."""
     code = "".join(c for c in str(code or "") if c.isdigit())
     if len(code) != DIGITS or not secret:
         return None
@@ -59,22 +59,22 @@ def otpauth_uri(secret, account):
     return f"otpauth://totp/{label}?secret={secret}&issuer={ISSUER}&algorithm=SHA1&digits={DIGITS}&period={STEP}"
 
 
-# ------------------------------------------------------------------ codes de secours
+# ------------------------------------------------------------------ recovery codes
 def _hash_recovery(code):
     return hashlib.sha256(code.replace("-", "").strip().lower().encode()).hexdigest()
 
 
 def new_recovery_codes():
-    """-> (codes à montrer une fois, hachés à enregistrer)"""
+    """-> (codes to show once, hashes to save)"""
     codes = []
     for _ in range(RECOVERY_COUNT):
-        raw = base64.b32encode(secrets.token_bytes(5)).decode().lower()  # 8 caractères
+        raw = base64.b32encode(secrets.token_bytes(5)).decode().lower()  # 8 characters
         codes.append(f"{raw[:4]}-{raw[4:]}")
     return codes, json.dumps([_hash_recovery(c) for c in codes])
 
 
 def use_recovery_code(stored_json, code):
-    """-> nouvelle liste (JSON) si le code de secours est valide, sinon None"""
+    """-> new list (JSON) when the recovery code is valid, otherwise None"""
     cleaned = "".join(c for c in str(code or "") if c.isalnum())
     if len(cleaned) != 8:
         return None
@@ -96,9 +96,9 @@ def recovery_left(stored_json):
         return 0
 
 
-# ------------------------------------------------------------------ connexion en deux étapes
+# ------------------------------------------------------------------ two-step sign-in
 class Tickets:
-    """Mot de passe vérifié, code attendu : un jeton court (5 min, 5 essais) remplace la session."""
+    """Password checked, code expected: a short token (5 min, 5 tries) replaces the session."""
 
     def __init__(self):
         self.items = {}
@@ -133,7 +133,7 @@ class Tickets:
 
 
 def verify_second_factor(db, user, code):
-    """Code TOTP ou code de secours pour ce compte. -> 'totp' | 'recovery' | None (et l'enregistre)."""
+    """TOTP code or recovery code for this account. -> 'totp' | 'recovery' | None (and records it)."""
     step = check_code(user.get("totp_secret"), code, user.get("totp_last_step") or 0)
     if step:
         db.run("UPDATE users SET totp_last_step=? WHERE id=?", (step, user["id"]))

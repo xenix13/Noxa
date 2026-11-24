@@ -1,7 +1,7 @@
-"""Noms de famille des polices TrueType / OpenType (table « name »), sans dépendance.
+"""Family names of TrueType / OpenType fonts ("name" table), without dependency.
 
-Le moteur de sous-titres du navigateur (libass) demande les polices par nom de famille : on indexe
-les polices jointes au MKV pour ne télécharger que celles qu'un sous-titre utilise vraiment.
+The browser's subtitle engine (libass) asks for fonts by family name: the fonts attached to the
+MKV are indexed so that only those a subtitle really uses are downloaded.
 """
 import struct
 
@@ -45,7 +45,7 @@ def _names_at(buf, offset):
 
 
 def font_names(buf):
-    """-> ensemble de noms (en minuscules) déclarés par la police ou la collection."""
+    """-> set of names (lower case) declared by the font or the collection."""
     try:
         if buf[:4] == b"ttcf":
             n = struct.unpack_from(">I", buf, 8)[0]

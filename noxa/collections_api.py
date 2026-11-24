@@ -1,4 +1,4 @@
-"""Collections, playlists et liste « À regarder »."""
+"""Collections, playlists and "Watchlist"."""
 import re
 import time
 
@@ -15,7 +15,7 @@ def coll_img(c, kind):
 
 
 def register(app, ctx, x):
-    """x : outils partagés de l'API (card, attach_state, require_item, visible, age_filter…)."""
+    """x: shared API tools (card, attach_state, require_item, visible, age_filter…)."""
     db = ctx.db
 
     # ------------------------------------------------------------ collections
@@ -44,7 +44,7 @@ def register(app, ctx, x):
         out = []
         for c in db.all("SELECT * FROM collections WHERE library_id=? ORDER BY sort_title", (int(sid),)):
             n = len(coll_items(req.user, c["id"]))
-            if n:  # une collection vide (ou entièrement masquée pour ce profil) n'est pas affichée
+            if n:  # an empty collection (or one fully hidden for this profile) is not shown
                 out.append(coll_card(c, n))
         return out
 
@@ -60,7 +60,7 @@ def register(app, ctx, x):
         return out
 
     def collections_of(user, item_id):
-        """Collections contenant cet élément, avec les autres éléments (pour la fiche)."""
+        """Collections holding this item, with the other items (for the title page)."""
         out = []
         for c in db.all("SELECT c.* FROM collections c JOIN collection_items ci ON ci.collection_id=c.id "
                         "WHERE ci.item_id=? ORDER BY c.title", (int(item_id),)):
@@ -74,7 +74,7 @@ def register(app, ctx, x):
 
     def collection_image(req, m):
         c = require_collection(req.user, m.group(1))
-        if not coll_items(req.user, c["id"]):  # collection entièrement masquée pour ce profil (âge)
+        if not coll_items(req.user, c["id"]):  # collection fully hidden for this profile (age)
             raise HTTPError(404, "Collection introuvable")
         w = max(40, min(1920, round(req.int_arg("w", 300) / 20) * 20))
         h = max(40, min(1920, round(req.int_arg("h", 450) / 20) * 20))
@@ -147,8 +147,8 @@ def register(app, ctx, x):
 
     # -------------------------------------------------------------- playlists
     def own_playlist(req, pid, owner=False):
-        """Playlist de la personne, ou partagée par quelqu'un du foyer (owner=True : seulement la sienne, pour la
-        renommer, la partager ou la supprimer ; une playlist partagée se complète et se réordonne à plusieurs)."""
+        """Playlist of the person, or shared by someone in the household (owner=True: only their own, to
+        rename, share or delete it; a shared playlist is filled and reordered by several people)."""
         p = db.one("SELECT p.*, u.display_name AS owner_name FROM playlists p JOIN users u ON u.id=p.user_id "
                    "WHERE p.id=? AND (p.user_id=? OR (p.shared=1 AND ?=0))", (int(pid), req.user["id"], 1 if owner else 0))
         if not p:
@@ -266,7 +266,7 @@ def register(app, ctx, x):
         return {"ok": True}
 
     def playlist_next(user, pid, item_id):
-        """Élément suivant dans une playlist (pour l'enchaînement dans le lecteur)."""
+        """Next item in a playlist (for chaining in the player)."""
         p = db.one("SELECT id FROM playlists WHERE id=? AND (user_id=? OR shared=1)", (int(pid), user["id"]))
         if not p:
             return None
@@ -278,7 +278,7 @@ def register(app, ctx, x):
         return entries[i + 1] if i + 1 < len(entries) else None
     x.playlist_next = playlist_next
 
-    # -------------------------------------------------------------- À regarder
+    # -------------------------------------------------------------- Watchlist
     def watch_target(r):
         if r["type"] in ("episode", "season", "extra"):
             return db.one("SELECT * FROM items WHERE id=?", (r["show_id"],))

@@ -329,7 +329,7 @@ def register(app, ctx, x):
         for typ, bucket, limit in (("movie", "movies", 30), ("show", "shows", 30), ("episode", "episodes", 20)):
             match = "i.search LIKE ? ESCAPE '\\'" + (" OR i.year=?" if year and typ != "episode" else "")
             rows = db.all(CARD_SQL + f"WHERE i.type=? AND i.library_id IN ({marks}) AND ({match})"
-                          + af + f" ORDER BY (i.search LIKE ? ESCAPE '\\') DESC, i.sort_title LIMIT ?",
+                          + af + " ORDER BY (i.search LIKE ? ESCAPE '\\') DESC, i.sort_title LIMIT ?",
                           [typ, *allowed, like, *([year] if year and typ != "episode" else []), *aa, q + "%", limit])
             out[bucket] = attach_state(req.user["id"], [card(r) for r in rows])
         # people (cast, directors) and genres whose name matches

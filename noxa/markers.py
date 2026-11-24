@@ -1,9 +1,9 @@
-"""Opening (OP) et générique de fin déduits des chapitres du fichier.
+"""Opening (OP) and end credits deduced from the file's chapters.
 
-Dans les sorties d'animes, « Intro » / « Prologue » désigne souvent l'avant-générique (la scène qui précède
-l'OP) et « OP » / « Opening » la chanson. Le bouton « Passer » doit viser la chanson : un chapitre OP l'emporte
-toujours sur un chapitre « Intro », et un « Intro » qui n'a pas la durée d'une chanson cède la place au
-chapitre suivant s'il en a la durée.
+In anime releases, "Intro" / "Prologue" often means the cold open (the scene before
+the OP) and "OP" / "Opening" the song. The "Skip" button must aim at the song: an OP chapter always wins
+over an "Intro" chapter, and an "Intro" that does not have the length of a song gives way to the
+next chapter when that one has it.
 """
 import re
 
@@ -20,8 +20,8 @@ GENERIC = re.compile(r"^\s*(?:(?:chapter|chapitre|ch\.?|kapitel|cap[ií]tulo|cap
                      r"\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)?\s*$", re.I)
 RECAP = re.compile(r"^\s*(?:recap|r[ée]cap(?:itulatif)?|r[ée]sum[ée](?:\s+des\s+[ée]pisodes)?|previously(?:\s+on)?|"
                    r"pr[ée]c[ée]demment|dans\s+les\s+[ée]pisodes\s+pr[ée]c[ée]dents|last\s+time|story\s+so\s+far)", re.I)
-RECAP_LEN = (8, 6 * 60)  # un récapitulatif dure de quelques secondes à quelques minutes
-SONG = (70, 115)  # durée typique d'un opening / ending d'anime (secondes)
+RECAP_LEN = (8, 6 * 60)  # a recap lasts from a few seconds to a few minutes
+SONG = (70, 115)  # typical length of an anime opening / ending (seconds)
 
 
 def _len(c):
@@ -42,13 +42,13 @@ def _pick_opening(chapters, duration):
             continue
         if _songlike(c) or _len(c) > 30 and i + 1 < len(chapters) and not _songlike(chapters[i + 1]):
             return c
-        # « Intro » trop court : c'est l'avant-générique, l'OP est le chapitre suivant s'il a la bonne durée
+        # "Intro" too short: it is the cold open, the OP is the next chapter when it has the right length
         nxt = chapters[i + 1] if i + 1 < len(chapters) else None
         if nxt and _songlike(nxt) and not CREDITS.match(nxt.get("title") or "") \
                 and not PREVIEW.match(nxt.get("title") or ""):
             return nxt
         return c
-    # avant-générique nommé suivi d'un chapitre sans nom de la durée d'une chanson
+    # named cold open followed by an unnamed chapter the length of a song
     for i, c in enumerate(early[:-1]):
         nxt = chapters[i + 1]
         if PROLOGUE.match(c.get("title") or "") and _songlike(nxt) and GENERIC.match(nxt.get("title") or ""):
@@ -65,13 +65,13 @@ def _pick_credits(chapters, duration):
 
 
 def _pick_recap(chapters, duration):
-    """« Précédemment dans… » : chapitre nommé ainsi dans le premier tiers de l'épisode."""
+    """"Previously on…": chapter named so in the first third of the episode."""
     return next((c for c in chapters if c["start"] < duration * 0.35 and RECAP.match(c.get("title") or "")
                  and RECAP_LEN[0] <= _len(c) <= RECAP_LEN[1]), None)
 
 
 def from_chapters(chapters, duration):
-    """-> {'intro': {start, end, source}, 'recap': {...}, 'credits': {...}} en millisecondes ('intro' = l'OP à passer)."""
+    """-> {'intro': {start, end, source}, 'recap': {...}, 'credits': {...}} in milliseconds ('intro' = the OP to skip)."""
     out = {}
     if not chapters or not duration:
         return out
@@ -89,7 +89,7 @@ def from_chapters(chapters, duration):
             out["credits"] = {"start": ms(ed["start"]), "end": ms(ed["end"]), "source": "chapters"}
         if op and ed:
             return out
-    # chapitres sans nom (ou sans OP/ED nommé) : repère les blocs de la durée d'une chanson (animes)
+    # unnamed chapters (or no named OP/ED): spot the blocks the length of a song (anime)
     songs = [c for c in chapters if SONG[0] <= _len(c) <= SONG[1] and not PREVIEW.match(c.get("title") or "")]
     if "intro" not in out:
         op = next((c for c in songs if c["start"] < min(duration * 0.4, 600)

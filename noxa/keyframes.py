@@ -1,9 +1,9 @@
-"""Images clés d'un MKV lues dans son index (« Cues »), sans parcourir le fichier.
+"""Keyframes of an MKV read from its index ("Cues"), without going through the file.
 
-En remux (vidéo copiée), les segments HLS ne peuvent être
-coupés que sur des images clés. Connaître leurs instants permet d'annoncer au lecteur une playlist
-exacte, où chaque segment correspond vraiment à ce que ffmpeg produira.
-Seuls l'en-tête et l'index sont lus (quelques Ko), même sur un partage réseau.
+In remux (video copied), HLS segments can only be
+cut on keyframes. Knowing their instants lets the player be given an
+exact playlist, where each segment really matches what ffmpeg will produce.
+Only the header and the index are read (a few KB), even on a network share.
 """
 import struct
 
@@ -79,7 +79,7 @@ def _element_at(r, pos, max_size):
 
 
 def mkv_keyframes(path):
-    """-> (durée en secondes, [instants des images clés de la piste vidéo, en secondes]) ou None."""
+    """-> (duration in seconds, [instants of the keyframes of the video track, in seconds]) or None."""
     try:
         with open(path, "rb") as f:
             return _parse(Reader(f))
@@ -101,7 +101,7 @@ def _parse(r):
         return None
     _, n2, _ = _vint(seg_head, n)
     seg_data = pos + n + n2
-    # premiers Ko du segment : SeekHead, Info, Tracks (souvent avant le premier Cluster)
+    # first KB of the segment: SeekHead, Info, Tracks (often before the first Cluster)
     first = r.read(seg_data, 256 * 1024)
     positions, scale, duration, video_track = {}, 1000000, None, None
     for eid, i, size in _elements(first):
@@ -181,14 +181,14 @@ def _video_track(buf, start, end):
 
 
 def segments_from_keyframes(keyframes, duration, target=6.0):
-    """Découpage : on coupe sur la première image clé qui dépasse chaque multiple de `target`.
-    -> liste de (début, durée)."""
+    """Cutting: cut on the first keyframe past each multiple of `target`.
+    -> list of (start, duration)."""
     out, last, cut = [], 0.0, target
     for k in keyframes:
         if k >= cut:
             out.append((last, k - last))
             last = k
-            cut += target  # comme ffmpeg : une cible par segment, sans rattrapage
+            cut += target  # like ffmpeg: one target per segment, no catching up
     if duration and duration > last:
         out.append((last, duration - last))
     return out

@@ -1,8 +1,8 @@
-"""Images des chapitres (sélection de chapitre du lecteur et de la fiche).
+"""Chapter pictures (chapter selection in the player and on the title page).
 
-Une image par chapitre, prise un peu après son début : le tout début d'un chapitre est souvent un
-fondu au noir. Si l'image obtenue est presque uniforme (noir, carton), on en reprend une plus loin.
-Les images suivent le FICHIER (taille + date), comme les sous-titres : un fichier déplacé les retrouve.
+One picture per chapter, taken a little after its start: the very start of a chapter is often a
+fade to black. When the picture obtained is almost uniform (black, title card), another one is taken further on.
+Pictures follow the FILE (size + date), like the subtitles: a moved file finds them again.
 """
 import json
 import logging
@@ -14,7 +14,7 @@ from . import media
 log = logging.getLogger("noxa.chapters")
 
 W, H = 400, 225
-FLAT_BYTES = 4500   # un JPEG 400x225 plus petit que ça est presque uni (écran noir, fondu)
+FLAT_BYTES = 4500   # a 400x225 JPEG smaller than this is almost uniform (black screen, fade)
 
 
 def chapter_list(item):
@@ -40,7 +40,7 @@ class ChapterImages:
         return os.path.join(self.folder(item), f"{int(n)}.jpg")
 
     def done(self, item, n):
-        """Image faite, ou impossible à faire (chapitre après la fin de la vidéo…) : rien à refaire."""
+        """Picture made, or impossible to make (chapter after the end of the video…): nothing to redo."""
         dest = self.path(item, n)
         return os.path.isfile(dest) or os.path.isfile(dest + ".none")
 
@@ -53,7 +53,7 @@ class ChapterImages:
             return self.locks.setdefault(item["id"], threading.Lock())
 
     def get(self, item, n):
-        """Chemin de l'image du chapitre n (fabriquée à la demande si besoin), ou None."""
+        """Path of the picture of chapter n (made on demand if needed), or None."""
         chapters = chapter_list(item)
         if not 0 <= n < len(chapters):
             return None
@@ -68,7 +68,7 @@ class ChapterImages:
         return dest if os.path.isfile(dest) else None
 
     def extract_all(self, item, cancelled=None):
-        """Toutes les images d'un fichier ; renvoie le nombre d'images fabriquées."""
+        """All the pictures of a file; returns the number of pictures made."""
         chapters = chapter_list(item)
         if len(chapters) < 2:
             return 0
@@ -93,7 +93,7 @@ class ChapterImages:
         probe = (json.loads(probe or "{}") if isinstance(probe, str) else probe) or {}
         duration = float(probe.get("duration") or 0) or (item.get("duration_ms") or 0) / 1000
         if duration > 2:
-            # chapitres annoncés au-delà de la fin réelle de la vidéo (fréquent en fin de fichier)
+            # chapters announced beyond the real end of the video (frequent at the end of a file)
             end = min(end, duration - 1.0)
             start = min(start, max(0.0, end - 1.0))
         length = max(0.0, end - start)
@@ -118,7 +118,7 @@ class ChapterImages:
             if best_size >= FLAT_BYTES:
                 break
         if not best:
-            # aucune image possible : noté, pour ne pas réessayer à chaque passage de la tâche
+            # no picture possible: noted, so as not to try again at each pass of the task
             open(dest + ".none", "w").close()
             log.info("Pas d'image pour un chapitre de %s (%.0f s)", item["key"], start)
             return False

@@ -1,9 +1,9 @@
-"""Télécommande : un appareil qui lit une vidéo (ordinateur, TV, tablette) se pilote depuis un autre appareil
-du même compte, typiquement le téléphone.
+"""Remote control: a device playing a video (computer, TV, tablet) is driven from another device
+of the same account, typically the phone.
 
-Le lecteur s'annonce par une connexion « Server-Sent Events » (il y reçoit les commandes) et envoie son état
-(titre, position, lecture ou pause, pistes) quelques fois par minute et à chaque changement. La télécommande
-liste les appareils du compte qui lisent quelque chose et leur envoie des commandes. Tout vit en mémoire.
+The player announces itself through a "Server-Sent Events" connection (it receives the commands there) and sends its state
+(title, position, playing or paused, tracks) a few times a minute and at each change. The remote
+lists the account's devices that are playing something and sends them commands. Everything lives in memory.
 """
 import json
 import queue
@@ -13,7 +13,7 @@ import time
 
 DEVICE = re.compile(r"^[A-Za-z0-9_-]{8,40}$")
 ACTIONS = {"play", "pause", "toggle", "seek", "seekby", "next", "audio", "subtitle", "volume", "mute", "stop", "speed"}
-GONE_AFTER = 45  # s sans nouvelles : l'appareil n'est plus listé
+GONE_AFTER = 45  # s without news: the device is no longer listed
 PING = 15
 
 
@@ -21,7 +21,7 @@ class Remote:
     def __init__(self):
         self.lock = threading.Lock()
         self.devices = {}   # (compte, appareil) -> {"name", "state", "queues", "seen"}
-        self.watchers = {}  # compte -> files des télécommandes ouvertes (liste des appareils en direct)
+        self.watchers = {}  # account -> queues of the open remotes (live device list)
 
     def _wake(self, uid):
         for q in list(self.watchers.get(uid, ())):
@@ -104,7 +104,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/remote/events")
     def remote_events(req):
-        """Le lecteur s'annonce et reçoit ici les commandes de la télécommande."""
+        """The player announces itself and receives the remote's commands here."""
         uid = req.user["id"]
         dev = device_arg(req, req.arg("device"))
         name = str(req.arg("name") or "")[:60] or "Noxa"
@@ -148,7 +148,7 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/remote/watch")
     def remote_watch(req):
-        """Liste en direct des appareils qui lisent quelque chose (page Télécommande)."""
+        """Live list of the devices playing something (Remote page)."""
         uid = req.user["id"]
         exclude = req.arg("exclude")
         q = remote.watch(uid)
@@ -164,7 +164,7 @@ def register(app, ctx, x):
                     last = data
                     yield ("data: " + data + "\n\n").encode()
                 try:
-                    q.get(timeout=5)  # changement signalé, sinon un coup d'œil toutes les 5 s (appareils disparus)
+                    q.get(timeout=5)  # change signalled, otherwise a look every 5 s (devices gone)
                 except queue.Empty:
                     yield b": ping\n\n"
 

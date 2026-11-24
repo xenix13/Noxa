@@ -1,11 +1,11 @@
-"""Limites par compte, réglées par un administrateur (Paramètres → Utilisateurs) :
+"""Per-account limits, set by an administrator (Settings → Users):
 
-- lectures simultanées : au-delà, une nouvelle lecture est refusée (les autres continuent) ;
-- débit hors du réseau local : depuis l'extérieur, la qualité est réduite pour tenir dans ce débit (utile
-  pour ménager l'envoi de sa box, ou un compte prêté) ; à la maison, rien ne change ;
-- temps d'écran (profils enfants surtout) : minutes par jour et heure du coucher. Le temps de lecture est
-  compté pendant la lecture ; à la limite, la vidéo s'arrête avec un message, et une nouvelle lecture est
-  refusée jusqu'au lendemain (ou jusqu'à la fin de la nuit).
+- simultaneous streams: beyond, a new playback is refused (the others go on);
+- bandwidth outside the local network: from outside, the quality is lowered to fit this bandwidth (useful
+  to spare the upload of one's router, or a lent account); at home, nothing changes;
+- screen time (children's profiles mostly): minutes per day and bedtime. Playback time is
+  counted during playback; at the limit, the video stops with a message, and a new playback is
+  refused until the next day (or until the end of the night).
 """
 import re
 import threading
@@ -14,13 +14,13 @@ import time
 from . import dlna, transcoder
 
 BEDTIME = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$")
-ACTIVE = 90          # un flux dont le lecteur a donné signe de vie dans les 90 s est en cours
-MAX_GAP = 60         # au plus 60 s comptées entre deux comptes rendus de lecture (pause, veille…)
+ACTIVE = 90          # a stream whose player gave a sign of life in the last 90 s is running
+MAX_GAP = 60         # at most 60 s counted between two playback reports (pause, sleep…)
 WARN_MINUTES = 5
 
 
 def valid_limits(b):
-    """Champs de limites envoyés par l'administration -> {colonne: valeur} (None : pas de limite)."""
+    """Limit fields sent by the administration -> {column: value} (None: no limit)."""
     out = {}
     for k, lo, hi in (("max_streams", 1, 20), ("remote_kbps", 500, 200000), ("daily_minutes", 10, 1440)):
         if k in b:
@@ -47,7 +47,7 @@ def _minutes(hhmm):
 
 
 def in_bedtime(bedtime, now=None):
-    """« 21:00-07:00 » : vrai de 21 h à 7 h (la plage peut passer minuit)."""
+    """"21:00-07:00": true from 9 pm to 7 am (the range can go past midnight)."""
     if not bedtime or not BEDTIME.match(bedtime):
         return False
     t = time.localtime(now or time.time())
@@ -64,14 +64,14 @@ class Limits:
     def __init__(self, ctx):
         self.ctx = ctx
         self.lock = threading.Lock()
-        self.last_report = {}  # (compte, flux) -> instant du dernier compte rendu de lecture
+        self.last_report = {}  # (account, stream) -> instant of the last playback report
 
-    # ------------------------------------------------------------ temps d'écran
+    # ------------------------------------------------------------ screen time
     def used_today(self, uid):
         return self.ctx.db.scalar("SELECT seconds FROM screen_time WHERE user_id=? AND day=?", (uid, today())) or 0
 
     def screen(self, user):
-        """État du temps d'écran d'un compte -> {limit, used, left, bedtime, blocked, reason} (minutes)."""
+        """Screen time state of an account -> {limit, used, left, bedtime, blocked, reason} (minutes)."""
         limit = user.get("daily_minutes")
         bedtime = user.get("bedtime")
         used = self.used_today(user["id"]) // 60 if limit else 0
@@ -84,8 +84,8 @@ class Limits:
         return out
 
     def count(self, user, stream, state):
-        """Compte rendu de lecture : ajoute le temps écoulé depuis le précédent -> état du temps d'écran, ou None
-        (compte sans limite de temps)."""
+        """Playback report: adds the time elapsed since the previous one -> screen time state, or None
+        (account without a time limit)."""
         if not user.get("daily_minutes") and not user.get("bedtime"):
             return None
         now = time.time()
@@ -104,9 +104,9 @@ class Limits:
                                 "DO UPDATE SET seconds=seconds+excluded.seconds", (user["id"], today(now), delta))
         return self.screen(user)
 
-    # ------------------------------------------------------------ au lancement d'une lecture
+    # ------------------------------------------------------------ when a playback starts
     def check_play(self, user, replace=None):
-        """Lève LimitError si ce compte ne peut pas lancer de lecture maintenant."""
+        """Raises LimitError when this account cannot start a playback now."""
         s = self.screen(user)
         if s["blocked"]:
             if s["reason"] == "bedtime":
@@ -123,7 +123,7 @@ class Limits:
                                       "l'administrateur. Arrêtez une autre lecture pour lancer celle-ci.", n=n)
 
     def remote_cap(self, user, req):
-        """Débit maximum (kbit/s) pour cette lecture, ou None : seulement hors du réseau local."""
+        """Maximum bandwidth (kbit/s) for this playback, or None: only outside the local network."""
         cap = user.get("remote_kbps")
         if not cap or dlna.is_local(req.client_ip):
             return None
@@ -142,6 +142,6 @@ ORDER = ("original", "1080p", "720p", "480p")
 
 
 def cap_quality(quality, probe, cap, file_size=0, duration_ms=0):
-    """La plus haute des deux qualités ne doit pas dépasser ce que permet le débit maximum."""
+    """The higher of the two qualities must not exceed what the maximum bandwidth allows."""
     allowed = transcoder.auto_quality(probe, cap, file_size, duration_ms)
     return quality if ORDER.index(quality) >= ORDER.index(allowed) else allowed

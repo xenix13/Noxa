@@ -43,12 +43,12 @@ USERNAME_RULE = "Identifiant : 2 à 32 caractères (lettres, accents compris, ch
 
 
 def normalize_username(name):
-    """Single form of a username (« é » typed as one or two characters depending on the keyboard)."""
+    """Single form of a username ("é" typed as one or two characters depending on the keyboard)."""
     return unicodedata.normalize("NFC", str(name or "")).strip()
 
 
 def find_user(db, username):
-    """Account by username, ignoring case, accents included (« Léa » = « LÉA »)."""
+    """Account by username, ignoring case, accents included ("Léa" = "LÉA")."""
     username = normalize_username(username)
     if not username:
         return None

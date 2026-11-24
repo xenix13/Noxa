@@ -1,14 +1,14 @@
-"""Thèmes de couleurs partagés : ceux fournis avec Noxa et le magasin de thèmes (dossier static/themes du dépôt
-GitHub, enrichi par les contributions de chacun).
+"""Shared colour themes: those shipped with Noxa and the theme store (static/themes folder of the GitHub
+repository, enriched by everyone's contributions).
 
-Un thème n'est jamais du code : c'est une description vérifiée — des couleurs, un fond en dégradé, des effets choisis
-dans une liste fixe, une police, un arrondi. Pas de CSS libre, pas d'image ni d'adresse : un thème venu d'ailleurs ne
-peut ni imiter un écran de connexion, ni envoyer quoi que ce soit hors du serveur. Les couleurs doivent rester
-lisibles (contraste minimal vérifié ici, à l'identique dans l'intégration continue du dépôt).
+A theme is never code: it is a checked description — colours, a gradient background, effects picked
+from a fixed list, a font, a corner radius. No free CSS, no picture or address: a theme from elsewhere can
+neither imitate a sign-in screen nor send anything off the server. Colours must stay
+readable (minimum contrast checked here, identically in the repository's continuous integration).
 
-    python3 -m noxa.themes check-files static/themes  # vérifie chaque thème (demande de fusion d'un contributeur)
-    python3 -m noxa.themes check static/themes        # et que index.json est à jour
-    python3 -m noxa.themes build static/themes        # régénère index.json (fait par l'intégration continue sur main)
+    python3 -m noxa.themes check-files static/themes  # checks each theme (a contributor's pull request)
+    python3 -m noxa.themes check static/themes        # and that index.json is up to date
+    python3 -m noxa.themes build static/themes        # rebuilds index.json (done by continuous integration on main)
 """
 import glob
 import json
@@ -61,7 +61,7 @@ def contrast(a, b):
 
 
 def _label(v, field, problems, required=True, size=60):
-    """Texte en plusieurs langues : {"fr": …, "en": …} (ou une simple chaîne, prise pour les deux)."""
+    """Text in several languages: {"fr": …, "en": …} (or a plain string, taken for both)."""
     if v is None and not required:
         return None
     if isinstance(v, str):
@@ -83,7 +83,7 @@ def _label(v, field, problems, required=True, size=60):
 
 
 def validate(t):
-    """Thème reçu (fichier du dépôt, import, préférences) -> thème normalisé, ou ThemeError (liste des problèmes)."""
+    """Theme received (repository file, import, preferences) -> normalised theme, or ThemeError (list of problems)."""
     problems = []
     if not isinstance(t, dict):
         raise ThemeError(["un thème est un objet JSON"])
@@ -178,7 +178,7 @@ def validate(t):
 
 
 def load_dir(path):
-    """Thèmes d'un dossier (un fichier .json par thème, index.json mis à part) -> [thèmes], [(fichier, erreur)]."""
+    """Themes of a folder (one .json file per theme, index.json aside) -> [themes], [(file, error)]."""
     themes, errors, seen = [], [], set()
     for f in sorted(glob.glob(os.path.join(path, "*.json"))):
         if os.path.basename(f) == "index.json":
@@ -209,7 +209,7 @@ def index_text(themes):
 
 
 def parse_index(raw):
-    """Index du magasin (téléchargé) -> thèmes valides (les autres sont ignorés, un à un)."""
+    """Store index (downloaded) -> valid themes (the others are ignored, one by one)."""
     data = json.loads(raw)
     if not isinstance(data, dict) or not isinstance(data.get("themes"), list):
         raise ValueError("index de thèmes invalide")
@@ -226,7 +226,7 @@ def parse_index(raw):
 
 
 class Store:
-    """Thèmes fournis (dossier static/themes) et magasin en ligne (index.json du dépôt GitHub, relu toutes les 6 h)."""
+    """Shipped themes (static/themes folder) and online store (index.json of the GitHub repository, read again every 6 h)."""
 
     def __init__(self, ctx, static_dir):
         self.ctx = ctx
@@ -256,7 +256,7 @@ class Store:
         if not force and time.time() - self.fetched_at < REFRESH:
             return
         if not self.lock.acquire(blocking=False):
-            return  # déjà en cours
+            return  # already running
         try:
             self.ctx.db.release()
             req = urllib.request.Request(conf["index_url"], headers={"User-Agent": "Noxa-themes/1", "Accept": "application/json"})
@@ -275,11 +275,11 @@ class Store:
             self.error = str(e)[:200]
             log.info("Magasin de thèmes injoignable : %s", e)
         finally:
-            self.fetched_at = time.time()  # même en cas d'échec : pas de nouvel essai avant 6 h (sauf « Actualiser »)
+            self.fetched_at = time.time()  # even on failure: no new try before 6 h (except "Refresh")
             self.lock.release()
 
     def refresh_later(self):
-        """Index à relire : en arrière-plan, la page s'affiche tout de suite avec ce qui est connu."""
+        """Index to read again: in the background, the page shows right away with what is known."""
         if not self.config()["enabled"] or time.time() - self.fetched_at < REFRESH or self.lock.locked():
             return
 
@@ -294,7 +294,7 @@ class Store:
         conf = self.config()
         bundled = {t["id"] for t in self.bundled}
         store = [dict(t, source="store") for t in (self.remote or []) if t["id"] not in bundled] if conf["enabled"] else []
-        # un thème fourni dont le magasin a une version plus récente : on montre la plus récente
+        # a shipped theme of which the store has a more recent version: the most recent is shown
         newer = {t["id"]: t for t in (self.remote or []) if conf["enabled"]}
         official = [dict(newer[t["id"]] if t["id"] in newer and newer[t["id"]]["version"] > t["version"] else t, source="bundled")
                     for t in self.bundled]
@@ -309,14 +309,14 @@ def register(app, ctx, x):
     @app.route("GET", "/api/themes")
     def themes_list(req):
         if req.arg("refresh") == "1" and req.user.get("is_admin"):
-            store.refresh(force=True)  # « Actualiser » d'un administrateur : on attend le résultat
+            store.refresh(force=True)  # "Refresh" by an administrator: the result is waited for
         else:
             store.refresh_later()
         return store.listing()
 
     @app.route("POST", "/api/themes/check")
     def themes_check(req):
-        """Thème importé ou créé dans l'éditeur : normalisé, ou la liste de ce qui ne va pas."""
+        """Theme imported or created in the editor: normalised, or the list of what is wrong."""
         try:
             return {"theme": validate(req.json().get("theme"))}
         except ThemeError as e:

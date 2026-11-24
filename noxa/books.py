@@ -1,14 +1,14 @@
-"""Livres audio : bibliothèque de type « audiobook ».
+"""Audiobooks: library of type "audiobook".
 
-Rangement reconnu :
-- un dossier par livre (« Auteur/Titre/ » ou « Titre/ »), avec un ou plusieurs fichiers audio (MP3, M4B, M4A,
-  AAC, FLAC, OGG, Opus) lus à la suite : chaque fichier est alors un chapitre, sauf s'il en a lui-même ;
-- un fichier .m4b seul (le format des livres audio), avec ses chapitres intégrés.
-Titre, auteur, narrateur, année et résumé viennent des étiquettes des fichiers (album, artiste, compositeur…),
-à défaut des noms de dossiers. La couverture : cover.jpg / folder.jpg à côté, sinon l'image intégrée au fichier.
+Layout recognised:
+- one folder per book ("Author/Title/" or "Title/"), with one or more audio files (MP3, M4B, M4A,
+  AAC, FLAC, OGG, Opus) played in a row: each file is then a chapter, unless it has its own;
+- a single .m4b file (the audiobook format), with its embedded chapters.
+Title, author, narrator, year and overview come from the files' tags (album, artist, composer…),
+failing that from the folder names. The cover: cover.jpg / folder.jpg next to it, otherwise the picture embedded in the file.
 
-La lecture se fait dans le lecteur audio de l'application (vitesse, minuterie, chapitres), fichier par fichier ;
-la position est gardée comme pour une vidéo, dans la durée totale du livre.
+Playback happens in the app's audio player (speed, sleep timer, chapters), file by file;
+the position is kept as for a video, within the book's total duration.
 """
 import hashlib
 import json
@@ -37,7 +37,7 @@ def natural(name):
 
 
 def probe_audio(path):
-    """-> {dur (ms), tags, chapters [{t, s, e}], pic (index du flux image intégré)}."""
+    """-> {dur (ms), tags, chapters [{t, s, e}], pic (index of the embedded picture stream)}."""
     try:
         out = subprocess.run([media.FFPROBE, "-v", "error", "-print_format", "json", "-show_format", "-show_chapters",
                               "-show_entries", "stream=index,codec_type,disposition", path],
@@ -64,7 +64,7 @@ def probe_audio(path):
 
 
 def describe(folder, files, root):
-    """Livre à partir de ses fichiers (dans l'ordre) -> champs de l'élément et son analyse."""
+    """Book from its files (in order) -> item fields and its analysis."""
     infos = [probe_audio(f) for f in files]
     tags = next((i["tags"] for i in infos if i["tags"]), {})
     rel = os.path.relpath(folder, root)
@@ -118,7 +118,7 @@ def scan(scanner, lib):
     if paths and not reachable:
         return
     scanner._set(phase="Recherche des livres audio", done=0, total=0)
-    books = []  # (racine, clé, dossier, fichiers)
+    books = []  # (root, key, folder, files)
     for root in reachable:
         for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
             dirnames[:] = sorted((d for d in dirnames if not d.startswith(".") and d.lower() not in SKIP_DIRS), key=natural)
@@ -129,7 +129,7 @@ def scan(scanner, lib):
             full = [os.path.join(dirpath, f) for f in audio]
             m4b = [f for f in full if f.lower().endswith(".m4b")]
             if dirpath == root or len(m4b) > 1:
-                # fichiers posés à la racine, ou plusieurs .m4b dans un dossier : un livre par fichier
+                # files placed at the root, or several .m4b in one folder: one book per file
                 for f in full:
                     books.append((root, f, dirpath, [f]))
             else:
@@ -147,7 +147,7 @@ def scan(scanner, lib):
             continue
         size, mtime = sum(s.st_size for s in sts), int(max(s.st_mtime for s in sts))
         if time.time() - mtime < RECENT_SECONDS:
-            continue  # en cours de copie
+            continue  # being copied
         old = existing.get(key)
         if old and old["file_size"] == size and old["file_mtime"] == mtime:
             continue
@@ -177,7 +177,7 @@ def scan(scanner, lib):
 
 
 def cover_path(ctx, item, w, h):
-    """Couverture redimensionnée (JPEG en cache), ou None."""
+    """Resized cover (cached JPEG), or None."""
     info = json.loads(item["probe"] or "{}")
     cov = info.get("cover")
     if not cov:
@@ -209,7 +209,7 @@ def cover_path(ctx, item, w, h):
 # ------------------------------------------------------------------ routes
 def register(app, ctx, x):
     from .catalog import RK
-    from .web import HTTPError, Response
+    from .web import HTTPError
     db = ctx.db
 
     def book_card(r, prog=None):
@@ -281,7 +281,7 @@ def register(app, ctx, x):
         except (TypeError, ValueError):
             raise HTTPError(400, "Position invalide")
         dur = r["duration_ms"] or 0
-        finished = bool(b.get("finished")) or bool(dur and pos >= dur - min(30000, dur // 100))  # générique de fin
+        finished = bool(b.get("finished")) or bool(dur and pos >= dur - min(30000, dur // 100))  # end credits
         now, uid = int(time.time()), req.user["id"]
         meta = json.dumps(book_card(r), ensure_ascii=False)
         db.run("INSERT INTO progress(user_id, rating_key, position_ms, duration_ms, watched, updated_at, last_watched_at, type, "

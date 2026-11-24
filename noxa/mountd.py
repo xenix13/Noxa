@@ -1,11 +1,11 @@
-"""seance-mountd : petit service root qui monte les partages SMB demandés par Noxa.
+"""seance-mountd: small root service that mounts the SMB shares Noxa asks for.
 
-Noxa tourne sans privilèges ; ce service ne sait faire que deux choses : monter des partages
-SMB/CIFS en lecture seule sous /mnt/seance/<nom>, et lancer la mise à jour de Noxa (depuis la source
-notée à l'installation, sans paramètre venant de Noxa). Il écoute sur un socket Unix accessible
-uniquement à l'utilisateur « seance » (vérifié par SO_PEERCRED) et revalide chaque demande.
+Noxa runs without privileges; this service can only do two things: mount
+SMB/CIFS shares read-only under /mnt/seance/<name>, and start the Noxa update (from the source
+written at install time, with no parameter coming from Noxa). It listens on a Unix socket reachable
+only by the "seance" user (checked through SO_PEERCRED) and validates each request again.
 
-Lancement : python3 -m noxa.mountd   (en root, via seance-mountd.service)
+Start: python3 -m noxa.mountd   (as root, through seance-mountd.service)
 """
 import grp
 import json
@@ -34,7 +34,7 @@ MOUNT_ROOT = env("MOUNT_ROOT", "/mnt/seance")
 APP_USER = env("USER", "seance")
 MOUNTINFO = env("MOUNTINFO", "/proc/self/mountinfo")
 MARK = "# seance-smb:"
-COLD = "cold-"  # partages d'un stockage froid : les seuls montés en écriture
+COLD = "cold-"  # shares of a cold storage: the only ones mounted read-write
 RETRY_EVERY = 300
 
 NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
@@ -129,7 +129,7 @@ def write_fstab(lines):
 
 
 def entries():
-    """Partages gérés par Noxa (paires « # seance-smb:nom » + ligne fstab)."""
+    """Shares managed by Noxa (pairs "# seance-smb:name" + fstab line)."""
     lines = read_fstab()
     out = []
     for i, line in enumerate(lines):
@@ -152,8 +152,8 @@ HARDENING = ("nosuid", "nodev", "noexec")
 
 
 def harden_fstab():
-    """Ajoute nosuid,nodev,noexec aux partages créés par une version précédente (pris en compte au prochain
-    montage). Renvoie le nombre de lignes modifiées."""
+    """Adds nosuid,nodev,noexec to the shares created by an earlier version (taken into account at the next
+    mount). Returns the number of lines changed."""
     lines = read_fstab()
     changed = 0
     for i, line in enumerate(lines):
@@ -314,7 +314,7 @@ class Mounts:
             raise MountError("Version SMB inconnue")
         if need_password and not password:
             raise MountError("Mot de passe requis")
-        # écriture : seulement pour un stockage froid de Noxa (« cold-… ») ; les bibliothèques restent en lecture seule
+        # write: only for a Noxa cold storage ("cold-…"); libraries stay read-only
         writable = bool(a.get("writable"))
         if writable and not name.startswith(COLD):
             raise MountError("Seul un stockage froid peut être monté en écriture")
@@ -398,12 +398,12 @@ class Mounts:
             what = f"//{v['host']}/{v['share']}" + (f"/{v['subdir']}" if v["subdir"] else "")
             base_lines = self._without(backup_lines, v["name"])
             os.makedirs(path, exist_ok=True)
-            # En « automatique », on essaie aussi des versions SMB explicites : certains NAS
-            # refusent la négociation par défaut du noyau (erreur 13 ou 95 malgré de bons identifiants).
+            # In "automatic", explicit SMB versions are tried too: some NAS
+            # refuse the kernel's default negotiation (error 13 or 95 despite valid credentials).
             attempts = [VERSIONS[v["version"]]] if VERSIONS[v["version"]] else [None, "3.0", "2.1", "2.0"]
             failures = []
             for vers in attempts:
-                # nosuid/nodev/noexec : rien de ce qui vient du NAS ne peut être exécuté sur le serveur
+                # nosuid/nodev/noexec: nothing coming from the NAS can be run on the server
                 opts = [f"credentials={cred}", "rw" if v["writable"] else "ro", "nosuid", "nodev", "noexec",
                         f"uid={uid}", f"gid={gid}",
                         "file_mode=0644" if v["writable"] else "file_mode=0444",
@@ -420,14 +420,14 @@ class Mounts:
                 log.warning("Montage de %s (vers=%s) refusé : %s", what, vers or "auto", raw)
                 failures.append(raw)
                 if not re.search(r"error\((13|95|22)\)|permission denied|not supported|invalid argument", raw, re.I):
-                    break  # erreur sans rapport avec la version : inutile d'insister
+                    break  # error unrelated to the version: no point insisting
             if code != 0:
                 raw = failures[0] if failures else ""
                 msg = explain_mount(raw, self.env)
                 detail = [l for l in raw.splitlines() if l.strip()]
                 if detail and detail[-1] not in msg:
                     msg += f" (détail : {detail[-1][:200]})"
-                # retour arrière complet
+                # full rollback
                 write_fstab(backup_lines)
                 if old_cred is not None:
                     fd = os.open(cred_path(v["name"]), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -503,7 +503,7 @@ class Mounts:
         return {"ok": True}
 
     def ensure_all(self):
-        """Remonte ce qui n'est pas monté (NAS redémarré, démarrage avant le réseau…)."""
+        """Mounts again what is not mounted (NAS restarted, start before the network…)."""
         for e in entries():
             if not is_mounted(e["path"]):
                 try:
@@ -607,7 +607,7 @@ def main():
         stop.set()
 
 
-# ------------------------------------------------------------------ client (côté Noxa)
+# ------------------------------------------------------------------ client (Noxa side)
 def call(cmd, args=None, timeout=90, sock_path=None):
     path = sock_path or SOCK
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

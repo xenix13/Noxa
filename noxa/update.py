@@ -1,9 +1,9 @@
-"""Mise à jour de Noxa depuis l'interface d'administration.
+"""Updating Noxa from the administration interface.
 
-- Noxa (sans privilèges) regarde sur GitHub s'il existe une version plus récente : check_latest().
-- Le service root seance-mountd lance la mise à jour : la même commande que l'installation à la main
-  (`curl …/deploy/install.sh | bash`), depuis le dépôt et la branche notés par install.sh dans
-  /etc/seance/source. Aucune adresse ni commande ne vient de l'interface.
+- Noxa (without privileges) checks on GitHub whether a newer version exists: check_latest().
+- The root service seance-mountd starts the update: the same command as the manual install
+  (`curl …/deploy/install.sh | bash`), from the repository and branch written by install.sh in
+  /etc/seance/source. No address or command comes from the interface.
 """
 import json
 import os
@@ -29,7 +29,7 @@ class UpdateError(Exception):
 
 
 def read_source():
-    """(propriétaire, dépôt, branche) d'où vient cette installation."""
+    """(owner, repository, branch) this installation comes from."""
     vals = {}
     try:
         with open(SOURCE, encoding="utf-8") as f:
@@ -49,7 +49,7 @@ CHANNELS = {"main": "Stable", "test": "Test"}
 
 
 def set_channel(branch):
-    """Côté root : change la branche suivie (même dépôt). Seules les branches connues sont acceptées."""
+    """Root side: changes the followed branch (same repository). Only known branches are accepted."""
     if branch not in CHANNELS:
         raise UpdateError("Canal inconnu")
     owner, repo, _ = read_source()
@@ -78,7 +78,7 @@ def forget():
 
 
 def check_latest(timeout=8):
-    """Dernière version publiée sur la branche suivie, et ses derniers changements (gardé 30 min)."""
+    """Latest version published on the followed branch, and its latest changes (kept 30 min)."""
     owner, repo, branch = read_source()
     key = (owner, repo, branch)
     hit = _cache.get(key)
@@ -94,7 +94,7 @@ def check_latest(timeout=8):
     if not m:
         raise UpdateError("Version introuvable sur GitHub")
     changes = []
-    try:  # titres des derniers changements ; facultatif (limite de l'API GitHub)
+    try:  # titles of the latest changes; optional (GitHub API limit)
         api = f"https://api.github.com/repos/{owner}/{repo}/commits?sha={branch}&per_page=8"
         with urllib.request.urlopen(urllib.request.Request(api, headers=headers), timeout=timeout) as r:
             for c in json.loads(r.read(400_000)):
@@ -108,23 +108,23 @@ def check_latest(timeout=8):
     return out
 
 
-# ------------------------------------------------------------------ côté root (seance-mountd)
+# ------------------------------------------------------------------ root side (seance-mountd)
 def running():
-    # unité « oneshot » : elle reste « activating » pendant toute l'installation (jamais « active »)
+    # "oneshot" unit: it stays "activating" during the whole installation (never "active")
     p = subprocess.run(["systemctl", "show", "-p", "ActiveState", "--value", UNIT],
                        capture_output=True, text=True, stdin=subprocess.DEVNULL)
     return p.stdout.strip() in ("active", "activating", "reloading", "deactivating")
 
 
 def start():
-    """Lance l'installation à jour dans une unité systemd à part : elle survit au redémarrage de
-    seance-mountd et de Noxa qu'elle provoque."""
+    """Starts the up-to-date installation in a separate systemd unit: it survives the restart of
+    seance-mountd and Noxa that it causes."""
     if running():
         raise UpdateError("Une mise à jour est déjà en cours")
     owner, repo, branch = read_source()
     script = (f"set -o pipefail; curl -fsSL {shlex.quote(f'https://raw.githubusercontent.com/{owner}/{repo}/{branch}/deploy/install.sh')}"
               f" | SEANCE_REPO={shlex.quote(f'https://github.com/{owner}/{repo}.git')} SEANCE_BRANCH={shlex.quote(branch)} bash")
-    # --no-block : sans lui, systemd-run attend la FIN de l'installation (unité oneshot) et la requête expire
+    # --no-block: without it, systemd-run waits for the END of the installation (oneshot unit) and the request times out
     cmd = ["systemd-run", f"--unit={UNIT}", "--collect", "--quiet", "--no-block", "--property=Type=oneshot", "/bin/bash", "-c",
            f"{{ date; {script}; echo \"[terminé, code $?]\"; }} > {shlex.quote(LOG)} 2>&1"]
     try:
@@ -136,8 +136,8 @@ def start():
     return {"started": True}
 
 
-# Étapes affichées par install.sh / setup-system.sh (« ==> … ») : de quoi montrer une progression.
-# Messages en anglais depuis 4.1.3, en français avant (un serveur peut lancer le script d'une autre version).
+# Steps shown by install.sh / setup-system.sh ("==> …"): enough to show a progress.
+# Messages in English since 4.1.3, in French before (a server can start the script of another version).
 STEPS = [(("System packages", "Paquets système"), 10, "Mise à jour des paquets système"),
          (("Fetching the code", "Récupération du code"), 25, "Téléchargement de la nouvelle version"),
          (("Copying the application", "Copie de l'application"), 45, "Installation des fichiers"),
@@ -148,7 +148,7 @@ END = re.compile(r"^\[terminé, code (\d+)\]")
 
 
 def progress(lines):
-    """Où en est l'installation d'après son journal : (pourcentage, étape, terminé, réussi)."""
+    """Where the installation stands according to its log: (percentage, step, finished, succeeded)."""
     percent, label, done, ok = 3, "Démarrage", False, None
     for line in lines:
         m = END.match(line)
@@ -166,7 +166,7 @@ def progress(lines):
 def status():
     try:
         with open(LOG, "rb") as f:
-            data = f.read()[-200_000:]  # journal entier (pour les étapes), on n'en renvoie que la fin
+            data = f.read()[-200_000:]  # whole log (for the steps), only its end is returned
             started = os.fstat(f.fileno()).st_ctime
     except OSError:
         data, started = b"", None

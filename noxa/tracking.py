@@ -1,22 +1,21 @@
-"""Suivi sur Trakt et Letterboxd : ce qu'on a vu, les notes et la liste « À regarder ».
+"""Tracking on Trakt and Letterboxd: what was watched, the ratings and the "Watchlist".
 
-Trakt (api.trakt.tv) :
-- l'administrateur enregistre une fois une application Trakt (identifiant et secret) ;
-- chaque personne relie son compte depuis Paramètres → Mon compte → Trakt et Letterboxd, avec un code à saisir
-  sur trakt.tv (pas de mot de passe à donner à Noxa) ;
-- toutes les 6 heures (et à la demande) : ce qui est vu d'un côté devient vu de l'autre, les notes (1 à 5 étoiles
-  ici, 1 à 10 sur Trakt) et la liste « À regarder » s'ajoutent des deux côtés. Rien n'est jamais retiré : un
-  « non vu » ou une note retirée ne se propage pas.
+Trakt (api.trakt.tv):
+- the administrator registers a Trakt application once (client id and secret);
+- each person links their account from Settings → My account → Trakt and Letterboxd, with a code to type
+  on trakt.tv (no password to give Noxa);
+- every 6 hours (and on demand): what is watched on one side becomes watched on the other, the ratings (1 to 5 stars
+  here, 1 to 10 on Trakt) and the "Watchlist" are added on both sides. Nothing is ever removed: an
+  "unwatched" or a removed rating does not spread.
 
-Letterboxd n'a pas d'API publique : export d'un CSV au format d'import de Letterboxd (films vus, dates, notes),
-et import de l'export de Letterboxd (ZIP ou CSV : films vus, notes, liste « À regarder »), reconnu par titre et
-année.
+Letterboxd has no public API: export of a CSV in Letterboxd's import format (watched movies, dates, ratings),
+and import of Letterboxd's export (ZIP or CSV: watched movies, ratings, "Watchlist"), matched by title and
+year.
 """
 import csv
 import io
 import json
 import logging
-import os
 import threading
 import time
 import urllib.error
@@ -53,7 +52,7 @@ def parse_iso(s):
 
 
 class Library:
-    """Les films et séries qu'une personne voit sur ce serveur, indexés par identifiant TMDB."""
+    """The movies and shows a person sees on this server, indexed by TMDB id."""
 
     def __init__(self, ctx, x, user):
         db = ctx.db
@@ -98,10 +97,10 @@ class Tracking:
     def __init__(self, ctx):
         self.ctx = ctx
         self.lock = threading.Lock()
-        self.pending = {}   # compte -> code d'appareil en attente de validation sur trakt.tv
+        self.pending = {}   # account -> device code waiting for approval on trakt.tv
         self.syncing = set()
 
-    # ------------------------------------------------------------ réglages
+    # ------------------------------------------------------------ settings
     def conf(self):
         db = self.ctx.db
         return {"client_id": db.setting("trakt_client_id") or "", "client_secret": db.setting("trakt_client_secret") or ""}
@@ -140,7 +139,7 @@ class Tracking:
             raise TraktError(f"Trakt : erreur {status} ({what})")
         return data
 
-    # ------------------------------------------------------------ liaison d'un compte (code d'appareil)
+    # ------------------------------------------------------------ linking an account (device code)
     def device_start(self, uid):
         if not self.configured():
             raise TraktError("L'application Trakt n'est pas enregistrée (administrateur)")
@@ -222,7 +221,7 @@ class Tracking:
             self.ctx.db.release()
 
     def sync(self, user):
-        """Échange avec Trakt pour un compte -> résumé {imported, exported, ratings, watchlist}."""
+        """Exchange with Trakt for an account -> summary {imported, exported, ratings, watchlist}."""
         uid = user["id"]
         with self.lock:
             if uid in self.syncing:
@@ -291,7 +290,7 @@ class Tracking:
                 st = lib.tmdb_of_show.get(row["show_id"])
                 if st and (st, row["season"], row["idx"]) not in t_eps:
                     shows.setdefault(st, {}).setdefault(row["season"], []).append({"number": row["idx"], "watched_at": when})
-        if x.get_prefs(uid).get("private_mode"):  # mode privé : rien de ce qu'on regarde ne part vers Trakt
+        if x.get_prefs(uid).get("private_mode"):  # private mode: nothing that is watched goes to Trakt
             movies, shows = [], {}
         out["exported"] = len(movies) + sum(len(e) for s in shows.values() for e in s.values())
         self._post_batches("/sync/history", movies, shows, token)
@@ -317,7 +316,7 @@ class Tracking:
             st, d = self._req("POST", "/sync/ratings", rate, token)
             self._ok(st, d, "notes")
             out["ratings_out"] = len(rate["movies"]) + len(rate["shows"])
-        # --- « À regarder »
+        # --- "Watchlist"
         mine = {r["item_id"] for r in db.all("SELECT item_id FROM watchlist WHERE user_id=?", (uid,))}
         t_list = set()
         for kind, index in (("movies", lib.movies), ("shows", lib.shows)):
@@ -353,7 +352,7 @@ class Tracking:
                 self._ok(st, d, "historique")
 
     def mark_watched(self, uid, item_id, ts):
-        """Vu le … (date venue de Trakt ou de Letterboxd) : même effet que « Marquer comme vu », à cette date."""
+        """Watched on … (date from Trakt or Letterboxd): same effect as "Mark as watched", at that date."""
         x, db = self.ctx.x, self.ctx.db
         from .catalog import CARD_SQL
         row = db.one(CARD_SQL + "WHERE i.id=?", (item_id,))
@@ -367,7 +366,7 @@ class Tracking:
 
     # ------------------------------------------------------------ Letterboxd
     def letterboxd_csv(self, user):
-        """Films vus (et notes) au format d'import de Letterboxd."""
+        """Watched movies (and ratings) in Letterboxd's import format."""
         db, uid = self.ctx.db, user["id"]
         lib = Library(self.ctx, self.ctx.x, user)
         stars = {r["item_id"]: r["stars"] for r in db.all("SELECT item_id, stars FROM stars WHERE user_id=?", (uid,))}
@@ -385,7 +384,7 @@ class Tracking:
         return buf.getvalue().encode("utf-8")
 
     def letterboxd_import(self, user, data):
-        """Export de Letterboxd (ZIP, ou l'un de ses CSV) -> résumé {watched, rated, watchlist, unmatched}."""
+        """Letterboxd export (ZIP, or one of its CSVs) -> summary {watched, rated, watchlist, unmatched}."""
         files = {}
         if data[:2] == b"PK":
             try:

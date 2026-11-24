@@ -1,11 +1,11 @@
-"""Traduction anglaise des messages du serveur (voir noxa/i18n.py).
+"""English translation of the server messages (see noxa/i18n.py).
 
-Clé : le texte français du code ; {} remplace une partie variable (reprise telle quelle dans la traduction,
-dans le même ordre). Vérifiée par tests/test_i18n.py.
+Key: the French text from the code; {} stands for a variable part (kept as is in the translation,
+in the same order). Checked by tests/test_i18n.py.
 """
 
 EN = {
-    # ------------------------------------------------------------------ requêtes, comptes
+    # ------------------------------------------------------------------ requests, accounts
     "Erreur": "Error",
     "Erreur interne du serveur": "Internal server error",
     "Méthode non autorisée": "Method not allowed",
@@ -92,7 +92,7 @@ EN = {
     "Sous-titres invalides": "Invalid subtitles",
     "Sous-titres PGS indisponibles": "PGS subtitles unavailable",
 
-    # ------------------------------------------------------------------ bibliothèques, éléments, listes
+    # ------------------------------------------------------------------ libraries, items, lists
     "Bibliothèque introuvable": "Library not found",
     "Bibliothèque invalide": "Invalid library",
     "Bibliothèques invalides": "Invalid libraries",
@@ -160,7 +160,7 @@ EN = {
     "webhook": "webhook",
     "surveillance": "monitoring",
 
-    # ------------------------------------------------------------------ pistes audio et sous-titres
+    # ------------------------------------------------------------------ audio tracks and subtitles
     "Inconnu": "Unknown",
     "Stéréo": "Stereo",
     "Mono": "Mono",
@@ -232,7 +232,7 @@ EN = {
     "échec de l'extraction": "extraction failed",
     "flux distant (.strm) : pas d'analyse": "remote stream (.strm): no analysis",
 
-    # ------------------------------------------------------------------ téléchargements
+    # ------------------------------------------------------------------ downloads
     "Téléchargement introuvable : relancez-le": "Download not found: start it again",
     "Les téléchargements sont désactivés par l'administrateur": "Downloads are disabled by the administrator",
     "Seuls les films et les épisodes se téléchargent": "Only movies and episodes can be downloaded",
@@ -246,7 +246,7 @@ EN = {
     "ffmpeg introuvable ({})": "ffmpeg not found ({})",
     "Préparation impossible : {}": "Preparation failed: {}",
 
-    # ------------------------------------------------------------------ découvrir, demandes
+    # ------------------------------------------------------------------ discover, requests
     "Seerr n'est pas configuré": "Seerr is not configured",
     "Les demandes ne sont pas configurées (Paramètres → Demandes)": "Requests are not configured (Settings → Requests)",
     "Seerr a répondu {}{}": "Seerr responded {}{}",
@@ -257,7 +257,7 @@ EN = {
     "clé d'API refusée": "API key rejected",
     "accès refusé": "access denied",
 
-    # ------------------------------------------------------------------ TV en direct
+    # ------------------------------------------------------------------ live TV
     "Fichier trop volumineux une fois décompressé": "File too large once decompressed",
     "Fichier trop volumineux": "File too large",
     "le flux s'est arrêté": "the stream stopped",
@@ -289,7 +289,7 @@ EN = {
     "Mode vidéo invalide": "Invalid video mode",
     "{} : guide des programmes": "{}: programme guide",
 
-    # ------------------------------------------------------------------ partages réseau (seance-mountd)
+    # ------------------------------------------------------------------ network shares (seance-mountd)
     "Identifiant ou mot de passe refusé par le NAS": "Username or password rejected by the NAS",
     "Ce partage n'existe pas sur le NAS": "This share does not exist on the NAS",
     "NAS injoignable (adresse, pare-feu ou SMB désactivé ?)": "NAS unreachable (address, firewall or SMB disabled?)",
@@ -332,7 +332,7 @@ EN = {
     "Avec Docker, les partages se montent sur l'hôte puis se transmettent au conteneur (volumes du docker-compose.yml)":
         "With Docker, shares are mounted on the host then passed to the container (volumes in docker-compose.yml)",
 
-    # ------------------------------------------------------------------ mise à jour
+    # ------------------------------------------------------------------ update
     "Mise à jour des paquets système": "Updating system packages",
     "Téléchargement de la nouvelle version": "Downloading the new version",
     "Installation des fichiers": "Installing files",
@@ -368,7 +368,7 @@ EN = {
     "On repart sans attendre {}": "Resuming without waiting for {}",
     "{} recharge la vidéo : pause le temps qu'il soit prêt": "{} is reloading the video: paused until they are ready",
 
-    # ------------------------------------------------------------------ tâches planifiées
+    # ------------------------------------------------------------------ scheduled tasks
     "Bibliothèques": "Libraries",
     "Aucune cochée = toutes": "None ticked = all",
     "Se mettre en pause pendant les lectures": "Pause during playback",
@@ -446,13 +446,13 @@ EN = {
     "planifié": "scheduled",
     "nouveaux fichiers": "new files",
 
-    # ------------------------------------------------------------------ bilan de visionnage
+    # ------------------------------------------------------------------ viewing summary
     "lundi": "Monday", "mardi": "Tuesday", "mercredi": "Wednesday", "jeudi": "Thursday", "vendredi": "Friday",
     "samedi": "Saturday", "dimanche": "Sunday",
     "janvier": "January", "février": "February", "mars": "March", "avril": "April", "mai": "May", "juin": "June",
     "juillet": "July", "août": "August", "septembre": "September", "octobre": "October", "novembre": "November",
     "décembre": "December",
-    # serveurs liés
+    # linked servers
     "Serveur non reconnu": "Unknown server",
     "Adresse invalide : nom ou adresse IP, suivi du port si besoin (ex. 192.168.1.20:8421)": "Invalid address: name or IP address, followed by the port if needed (e.g. 192.168.1.20:8421)",
     "Invitation invalide : copiez-la en entier depuis l'autre serveur": "Invalid invitation: copy all of it from the other server",

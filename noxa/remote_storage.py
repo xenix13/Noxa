@@ -1,11 +1,11 @@
-"""Stockages externes des sauvegardes : S3 (AWS et compatibles : Backblaze B2, Wasabi, Scaleway, OVH, MinIO…),
-Google Drive et OneDrive.
+"""External storages for backups: S3 (AWS and compatibles: Backblaze B2, Wasabi, Scaleway, OVH, MinIO…),
+Google Drive and OneDrive.
 
-- S3 : clé d'accès et secret ; requêtes signées (AWS Signature v4), adressage par chemin (accepté partout).
-- Google Drive et OneDrive : l'administrateur crée une application chez Google (type « TV et appareils à
-  saisie limitée ») ou chez Microsoft (application publique), puis relie le compte par un code saisi sur
-  google.com/device ou microsoft.com/devicelogin. Noxa ne garde qu'un jeton de renouvellement, et n'a accès
-  qu'à ses propres fichiers (Google : drive.file ; OneDrive : dossier de l'application).
+- S3: access key and secret; signed requests (AWS Signature v4), path-style addressing (accepted everywhere).
+- Google Drive and OneDrive: the administrator creates an application at Google (type "TVs and Limited
+  Input devices") or at Microsoft (public client), then links the account with a code typed on
+  google.com/device or microsoft.com/devicelogin. Noxa only keeps a refresh token, and only has access
+  to its own files (Google: drive.file; OneDrive: the app folder).
 """
 import datetime
 import hashlib
@@ -18,7 +18,6 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import uuid
 import xml.etree.ElementTree as ET
 from . import env
 
@@ -31,7 +30,7 @@ MS_GRAPH = env("MS_GRAPH", "https://graph.microsoft.com/v1.0")
 GOOGLE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 MS_SCOPE = "Files.ReadWrite.AppFolder offline_access"
 DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
-CHUNK = 10 * 1024 * 1024  # OneDrive : morceaux multiples de 320 Kio
+CHUNK = 10 * 1024 * 1024  # OneDrive: multiples of 320 KiB chunks
 KINDS = ("s3", "gdrive", "onedrive")
 
 
@@ -71,8 +70,8 @@ class Storage:
     """Interface commune : upload(path, name), files() -> [{id, name, size, modified}], download(f, dest), delete(f)."""
 
     def __init__(self, conf, save):
-        self.conf = conf     # dict gardé dans les réglages (secrets compris, jamais renvoyés à l'interface)
-        self.save = save     # callable(conf) : enregistre une mise à jour (jeton renouvelé…)
+        self.conf = conf     # dict kept in the settings (secrets included, never sent back to the interface)
+        self.save = save     # callable(conf): saves an update (token renewed…)
 
     def check(self):
         self.files()
@@ -170,7 +169,7 @@ def _stream(url, headers, dest, what):
         raise StorageError(f"{what} : {getattr(e, 'reason', e)}")
 
 
-# ------------------------------------------------------------------ comptes reliés par code (Google, Microsoft)
+# ------------------------------------------------------------------ accounts linked by code (Google, Microsoft)
 class OAuthStorage(Storage):
     def device_start(self):
         raise NotImplementedError
@@ -254,7 +253,7 @@ class GoogleDrive(OAuthStorage):
         return {"Authorization": f"Bearer {self.token()}"}
 
     def folder(self):
-        """Dossier « Noxa » du Drive (créé par Noxa : drive.file n'y voit que ses propres fichiers)."""
+        """"Noxa" folder of the Drive (created by Noxa: drive.file only sees its own files there)."""
         if self.conf.get("folder_id"):
             return self.conf["folder_id"]
         name = self.conf.get("folder") or "Noxa"
@@ -372,7 +371,7 @@ def make(kind, conf, save):
 
 
 def valid_conf(kind, b, old=None):
-    """Réglages envoyés par l'administration -> conf (les secrets vides gardent l'ancienne valeur)."""
+    """Settings sent by the administration -> conf (empty secrets keep the old value)."""
     old = dict(old or {})
     def val(k, pattern, limit=300, secret=False):
         v = str(b.get(k) if b.get(k) is not None else "").strip()

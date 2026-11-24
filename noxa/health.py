@@ -1,13 +1,13 @@
-"""Alertes pour les administrateurs : ce qui demande d'intervenir sur le serveur.
+"""Alerts for the administrators: what needs action on the server.
 
-Vérifié toutes les 5 minutes (en tâche de fond, sans gêner les requêtes) :
-- disque presque plein (données de Noxa, sauvegardes, dossiers des bibliothèques) ;
-- dossier d'une bibliothèque inaccessible ou vide alors qu'il contenait des titres (partage réseau démonté) ;
-- serveur lié injoignable depuis plus de 15 minutes ;
-et, au moment où cela arrive : tâche planifiée en échec.
+Checked every 5 minutes (in the background, without disturbing the requests):
+- disk almost full (Noxa's data, backups, library folders);
+- library folder unreachable or empty although it held titles (network share unmounted);
+- linked server unreachable for more than 15 minutes;
+and, when it happens: scheduled task failed.
 
-Chaque alerte part en notification push vers les administrateurs (une fois, puis une fois par jour si le
-problème dure) et s'affiche dans Paramètres → Vue d'ensemble jusqu'à ce que le problème disparaisse.
+Each alert goes out as a push notification to the administrators (once, then once a day if the
+problem lasts) and shows in Settings → Overview until the problem goes away.
 """
 import json
 import logging
@@ -51,14 +51,14 @@ class Health:
                 raise ValueError("disk_gb")
             c["disk_gb"] = v
         self.ctx.db.set_setting("alerts", json.dumps(c))
-        for k in KINDS:  # type d'alerte coupé : ses alertes en cours disparaissent
+        for k in KINDS:  # alert type turned off: its current alerts disappear
             if not c[k]:
                 self.ctx.db.run("UPDATE alerts SET resolved_at=? WHERE kind=? AND resolved_at IS NULL", (int(time.time()), k))
         return c
 
     # ------------------------------------------------------------ alertes
     def raise_alert(self, key, kind, title, body="", url="#/admin/dashboard"):
-        """Problème constaté : enregistré, et notifié aux administrateurs s'il est nouveau (ou rappel quotidien)."""
+        """Problem found: recorded, and notified to the administrators when it is new (or daily reminder)."""
         if not self.conf().get(kind):
             return False
         db = self.ctx.db
@@ -88,9 +88,9 @@ class Health:
         return self.ctx.db.all("SELECT key, kind, title, body, url, created_at FROM alerts WHERE resolved_at IS NULL "
                                "ORDER BY created_at DESC")
 
-    # ------------------------------------------------------------ vérifications
+    # ------------------------------------------------------------ checks
     def tick(self):
-        """Appelé par le nettoyage périodique : vérifie en tâche de fond, au plus toutes les 5 minutes."""
+        """Called by the periodic cleanup: checks in the background, at most every 5 minutes."""
         if time.time() - self.last < EVERY or not self.running.acquire(blocking=False):
             return
         self.last = time.time()
@@ -103,7 +103,7 @@ class Health:
             finally:
                 self.ctx.db.release()
                 self.running.release()
-        # un partage réseau figé peut bloquer longtemps une lecture de dossier : jamais dans le fil du nettoyage
+        # a frozen network share can block a folder read for a long time: never in the cleanup thread
         threading.Thread(target=run, daemon=True, name="health").start()
 
     def check(self):
@@ -136,7 +136,7 @@ class Health:
             seen[dev] = p
             key = f"disk:{dev}"
             free_gb = u.free / 1e9
-            # les bibliothèques sont en lecture seule : un disque de films plein ne gêne pas Noxa, sauf le sien
+            # the libraries are read-only: a full movie disk does not bother Noxa, only its own does
             if label in ("data", "backups") and (free_gb < min_gb or u.free < u.total * 0.03):
                 self.raise_alert(key, "disk", "Disque presque plein",
                                  f"{p} : {free_gb:.1f} Go libres sur {u.total / 1e9:.0f} Go", "#/admin/backups")
@@ -171,7 +171,7 @@ class Health:
                 self.resolve(key)
 
     def task_finished(self, task, status, summary):
-        """Fin d'une tâche planifiée : alerte si elle a échoué, et l'alerte précédente disparaît si elle réussit."""
+        """End of a scheduled task: alert when it failed, and the previous alert disappears when it succeeds."""
         key = f"task:{task.id}"
         if status == "error":
             self.raise_alert(key, "task", "Tâche en échec", f"{tr(task.name)} : {summary}", "#/admin/tasks")
