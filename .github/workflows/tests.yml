@@ -2,12 +2,12 @@ name: Tests
 on:
   push:
   pull_request:
-# droits du jeton par défaut : lecture seule ; les tâches qui publient demandent les leurs
+# default token rights: read only; the jobs that publish ask for their own
 permissions:
   contents: read
 jobs:
   api:
-    # même système que l'image Docker (ubuntu:24.04, ffmpeg 6.1) : on teste ce qui est livré
+    # same system as the Docker image (ubuntu:24.04, ffmpeg 6.1): what ships is what gets tested
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -50,8 +50,8 @@ jobs:
       - run: deploy/build-deb.sh dist && dpkg-deb --info dist/*.deb
       - run: for f in static/js/*.js static/js/views/*.js; do node --check --input-type=module < "$f"; done
 
-  # Magasin de thèmes : chaque thème proposé (dossier static/themes) est vérifié — format, couleurs lisibles —
-  # sans attendre les autres tests ; sur main, l'index lu par les serveurs Noxa est régénéré et enregistré.
+  # Theme store: each proposed theme (static/themes folder) is checked — format, readable colours —
+  # without waiting for the other tests; on main, the index read by Noxa servers is rebuilt and committed.
   themes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -76,9 +76,9 @@ jobs:
             git push
           fi
 
-  # Après les tests, sur main : image Docker (ghcr.io/<propriétaire>/noxa:latest) et, à chaque nouvelle
-  # version, une publication GitHub avec le paquet .deb. Sur test : image ghcr.io/<propriétaire>/noxa:test
-  # (celle du docker-compose.yml de la branche test), sans publication.
+  # After the tests, on main: Docker image (ghcr.io/<owner>/noxa:latest) and, at each new
+  # version, a GitHub release with the .deb package. On test: image ghcr.io/<owner>/noxa:test
+  # (the one in the test branch's docker-compose.yml), without a release.
   release:
     needs: api
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test')
@@ -108,7 +108,7 @@ jobs:
           V=${{ steps.v.outputs.version }}
           if gh release view "v$V" >/dev/null 2>&1; then echo "v$V déjà publiée"; exit 0; fi
           deploy/build-deb.sh dist
-          # notes écrites à la main si docs/releases/v<version>.md existe, suivies de la liste des changements
+          # notes written by hand when docs/releases/v<version>.md exists, followed by the list of changes
           NOTES=()
           [ -f "docs/releases/v$V.md" ] && NOTES=(--notes-file "docs/releases/v$V.md")
           gh release create "v$V" dist/noxa_${V}_all.deb --target "$GITHUB_SHA" --title "Noxa $V" "${NOTES[@]}" --generate-notes
@@ -127,10 +127,10 @@ jobs:
           tags: ${{ github.ref == 'refs/heads/main' && format('{0}:latest,{0}:{1},{2}:latest,{2}:{1}', steps.v.outputs.image, steps.v.outputs.version, steps.v.outputs.old) || format('{0}:test,{1}:test', steps.v.outputs.image, steps.v.outputs.old) }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
-  # Appli Android TV : compilée sur test (vérification) et sur main, où elle est jointe à la publication.
+  # Android TV app: built on test (check) and on main, where it is attached to the release.
   # Also built for pull requests (fix/<version> branches change the apps too): nothing is published, the APKs are
   # left as the run's "android-apps" artifact so they can be tried on a TV before merging.
-  # Signature : secrets NEXIS_KEYSTORE (clé en base64) et NEXIS_KEYSTORE_PASSWORD (voir le README).
+  # Signing: secrets NEXIS_KEYSTORE (base64 key) and NEXIS_KEYSTORE_PASSWORD (see the README).
   android:
     needs: [api, release]
     if: >-
@@ -170,11 +170,11 @@ jobs:
             exit $status
           fi
           cp android/app/build/outputs/apk/release/app-release.apk "noxa-tv-$V.apk"
-          # application téléphone et tablette (module mobile) : publiée avec les applications de bureau
+          # phone and tablet app (mobile module): published with the desktop apps
           mkdir -p apps-out
           cp android/mobile/build/outputs/apk/release/mobile-release.apk apps-out/noxa-android.apk
           cp "noxa-tv-$V.apk" apps-out/noxa-tv.apk
-          # empreinte du certificat de signature : doit rester la même d'une version à l'autre
+          # fingerprint of the signing certificate: must stay the same from one version to the next
           SIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
           if [ -n "$SIGNER" ]; then
             FP=$("$SIGNER" verify --print-certs "noxa-tv-$V.apk" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
@@ -186,7 +186,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # à installer pour essayer la branche test avant son passage sur main ; ignorée par /tv et « latest »
+          # to install to try the test branch before it goes to main; ignored by /tv and "latest"
           cp "noxa-tv-$V.apk" noxa-tv-test.apk
           if ! gh release view tv-test >/dev/null 2>&1; then
             gh release create tv-test --prerelease --target test --title "Application TV (test)" \
@@ -205,8 +205,8 @@ jobs:
           name: android-apps
           path: apps-out/*.apk
 
-  # Application de bureau (Electron) : Windows (installateur), macOS (image disque universelle), Linux (AppImage,
-  # .deb). Construites sur chaque système, puis jointes à la publication avec l'APK Android (job apps).
+  # Desktop app (Electron): Windows (installer), macOS (universal disk image), Linux (AppImage,
+  # .deb). Built on each system, then attached to the release with the Android APK (apps job).
   desktop:
     needs: api
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test')
@@ -247,8 +247,8 @@ jobs:
             apps/desktop/dist/noxa-desktop.deb
             apps/desktop/dist/latest*.yml
 
-  # Publication des applications : avec la version (main), ou dans la pré-version « apps-test » (test). Chaque serveur
-  # Noxa lit cette publication pour sa page Applications et les mises à jour des applications (noxa/apps.py).
+  # Publishing the apps: with the version (main), or in the "apps-test" pre-release (test). Each Noxa
+  # server reads this release for its Apps page and for the app updates (noxa/apps.py).
   apps:
     needs: [desktop, android]
     if: >-
@@ -259,7 +259,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
-      # seulement les applications (pas le relevé de construction Docker, qui ne se télécharge pas)
+      # only the apps (not the Docker build record, which cannot be downloaded)
       - uses: actions/download-artifact@v4
         with:
           pattern: desktop-*
@@ -274,7 +274,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           V=$(python3 -c 'import re; print(re.search(r"__version__ = \"(.+?)\"", open("noxa/__init__.py").read()).group(1))')
-          # versions des applications (indépendantes de celle du serveur), lues par les applications pour se mettre à jour
+          # app versions (independent of the server's), read by the apps to update themselves
           python3 - > out/noxa-apps.json <<'PY'
           import json, re
           g = open("android/mobile/build.gradle").read()

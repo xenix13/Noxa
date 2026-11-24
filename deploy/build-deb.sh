@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Construit le paquet Debian/Ubuntu de Noxa : deploy/build-deb.sh [dossier de sortie]
-# Installation : apt install ./noxa_<version>_all.deb   (installe aussi ffmpeg, python3…)
+# Builds Noxa's Debian/Ubuntu package: deploy/build-deb.sh [output folder]
+# Install: apt install ./noxa_<version>_all.deb   (also installs ffmpeg, python3…)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT="$(realpath "${1:-dist}")"
@@ -39,7 +39,7 @@ cat > "$PKG/DEBIAN/postinst" <<'POSTINST'
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
-  # même préparation que l'installation par script : utilisateur, dossiers, services, carte graphique
+  # same preparation as the script install: user, folders, services, graphics card
   bash /opt/seance/deploy/setup-system.sh || echo "Noxa : voir journalctl -u seance -n 50" >&2
 fi
 POSTINST
@@ -62,7 +62,7 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
   command -v systemctl >/dev/null && systemctl daemon-reload || true
 fi
 if [ "$1" = "purge" ]; then
-  # « purge » efface aussi la configuration et les données (base, cache) ; « remove » les garde
+  # "purge" also erases the configuration and the data (database, cache); "remove" keeps them
   rm -rf /etc/seance /var/lib/seance
 fi
 POSTRM

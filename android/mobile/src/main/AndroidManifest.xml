@@ -2,12 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- mise à jour de l'application : l'APK vient du serveur Noxa -->
+    <!-- app update: the APK comes from the Noxa server -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- notifications (nouveaux épisodes, alertes), relevées même après un redémarrage du téléphone -->
+    <!-- notifications (new episodes, alerts), fetched even after a phone restart -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- téléchargements qui continuent application quittée, écran éteint -->
+    <!-- downloads that keep going with the app left, screen off -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />

@@ -1,5 +1,5 @@
-// Appli Android TV de Noxa : interface native et lecteur Media3 (ExoPlayer), données lues sur l'API du serveur.
-// Version et signature viennent de la CI (voir .github/workflows/tests.yml).
+// Noxa's Android TV app: native interface and Media3 player (ExoPlayer), data read from the server API.
+// Version and signing come from CI (see .github/workflows/tests.yml).
 plugins {
     id 'com.android.application'
 }
@@ -32,8 +32,8 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            // sans clé fournie (secrets GitHub), signature de développement : l'APK s'installe, mais les
-            // mises à jour demanderont de désinstaller d'abord
+            // without a provided key (GitHub secrets), development signing: the APK installs, but
+            // updates will require uninstalling first
             signingConfig keystore ? signingConfigs.release : signingConfigs.debug
         }
     }
