@@ -222,6 +222,15 @@ def build_library(media, quick):
     open(done, "w").close()
 
 
+def age_library(media):
+    """Dates every file of the library yesterday, like an existing library. Noxa skips files changed in the last
+    45 s (still being copied by Radarr / Sonarr): right after the library was built, its scan looked slow."""
+    day_ago = time.time() - 86400
+    for root, _, files in os.walk(media):
+        for x in files:
+            os.utime(os.path.join(root, x), (day_ago, day_ago))
+
+
 MOVIE_FILE = {"h264": "Bench Movie 01 (1991)", "hevc": "Bench Movie 02 (1992)"}
 DIRECT_TITLES = ["Bench Movie 01 (1991)", "Bench Movie 04 (1994)", "Bench Movie 07 (1997)"]  # the 8 Mbit/s H.264 copies
 
@@ -759,6 +768,7 @@ def main():
             log(f"Downloading {img}")
             docker("pull", "-q", img)
     build_library(args.media, args.quick)
+    age_library(args.media)
     if args.prepare:
         log("Ready: images downloaded and test library built")
         shutil.rmtree(outdir, ignore_errors=True)
