@@ -9,10 +9,10 @@ const listeners = new Set();
 const notify = () => listeners.forEach((fn) => fn());
 
 export const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-// application native Noxa : bureau (window.nexisNative) ou Android (passerelle window.NexisAndroid)
+// application native Noxa : bureau (window.noxaNative) ou Android (passerelle window.NoxaAndroid)
 export function nativeApp() {
-  if (window.nexisNative) return window.nexisNative;
-  const a = window.NexisAndroid;
+  if (window.noxaNative) return window.noxaNative;
+  const a = window.NoxaAndroid;
   if (!a) return null;
   let info = {};
   try { info = JSON.parse(a.info()); } catch { /* ancienne passerelle */ }

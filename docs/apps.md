@@ -90,6 +90,14 @@ Movies, episodes or whole seasons can be downloaded to watch without a connectio
 
 Apps check your server every 6 hours. Windows and Linux (AppImage) install the new version on restart; Android downloads the APK and offers to install it; macOS and the `.deb` offer to download the new version.
 
+**Android apps, once, with Noxa 4.5:** the Android and Android TV apps changed their internal id (from `fr.nexis.…` to `io.github.xenix13.noxa…`), and Android cannot update an app over one with another id. So the 4.5 apps install **next to** the old ones instead of replacing them:
+
+1. Install the new app as usual (*Install app*, or `<server>/tv` with *Downloader* on a TV).
+2. Sign in again, once.
+3. Uninstall the old app. On the phone, offline downloads made with the old app have to be downloaded again.
+
+The old apps keep working with a 4.5 server in the meantime. After this one-time step, updates install over the app as before.
+
 Under the hood, the CI builds the apps and attaches them to each GitHub release. Your server reads that release and keeps a copy of the files (in `<data>/apps`): devices download them **from your server**, never from GitHub (the very first download of a file is redirected to GitHub while the copy is made). Sources: [`apps/desktop`](../apps/desktop) (Electron) and [`android`](../android).
 
 ---

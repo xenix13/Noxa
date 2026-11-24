@@ -235,7 +235,7 @@ class App:
         html = html.replace('href="/css/', f'href="/v/{version}/css/').replace('src="/js/', f'src="/v/{version}/js/')
         # requêtes de démarrage lancées tout de suite, et tout le code chargé en parallèle (pas import après import)
         modules = ",".join(module_graph(root, version))
-        html = html.replace('  <link rel="stylesheet"', f'  <meta name="nexis-modules" data-base="/v/{version}/js/" content="{modules}">\n'
+        html = html.replace('  <link rel="stylesheet"', f'  <meta name="noxa-modules" data-base="/v/{version}/js/" content="{modules}">\n'
                             f'  <script>{BOOT_JS}</script>\n  <link rel="stylesheet"', 1)
         # langue par défaut du serveur : celle de l'interface tant que personne n'est connecté sur cet appareil
         auto_attr = ' data-auto-lang="1"' if auto else ""  # no server language yet: the browser's one
@@ -253,7 +253,7 @@ class App:
     def service_worker(root, full, req):
         """sw.js avec la liste des fichiers de l'interface et une version qui change dès que l'un d'eux change
         (le navigateur installe alors le nouveau service worker et recharge son cache)."""
-        shell = ["/", "/manifest.webmanifest", "/css/app.css", "/favicon.png", "/img/nexis-logo.webp"]
+        shell = ["/", "/manifest.webmanifest", "/css/app.css", "/favicon.png", "/img/noxa-logo.webp"]
         for sub, ext in (("js", ".js"), ("fonts", ".woff"), ("icons", ".png")):
             for dirpath, _, files in os.walk(os.path.join(root, sub)):
                 shell += ["/" + os.path.relpath(os.path.join(dirpath, f), root).replace(os.sep, "/")
@@ -353,6 +353,8 @@ def _gzipped(full, etag):
 # charge (sinon /api/status, puis /api/me, puis /api/home attendent chacune la précédente, et tout le code avant :
 # autant d'allers-retours, longs quand le serveur est loin). api.js reprend ces réponses au lieu de redemander.
 BOOT_JS = (
+    # app bridges: NoxaAndroid / noxaNative since 4.5, NexisAndroid / nexisNative in older apps
+    "window.NoxaAndroid=window.NoxaAndroid||window.NexisAndroid;window.noxaNative=window.noxaNative||window.nexisNative;"
     "(function(){var l=null;try{l=localStorage.getItem('nexis.lang')}catch(e){}"
     "var d=document.documentElement;if(l!=='fr'&&l!=='en')l=d.hasAttribute('data-auto-lang')?"
     "((navigator.languages||[navigator.language||'']).join(',').toLowerCase().indexOf('fr')===0?'fr':'en')"
@@ -363,7 +365,7 @@ BOOT_JS = (
     "g('/api/status');g('/api/me');var k=location.hash;if(!k||k==='#'||k==='#/')g('/api/home');"
     "window.__nexisBoot={at:Date.now(),req:b};"
     # tout le code demandé en parallèle, au premier chargement seulement (ensuite il vient du service worker)
-    "var m=document.querySelector('meta[name=nexis-modules]');"
+    "var m=document.querySelector('meta[name=noxa-modules]');"
     "if(m&&!(navigator.serviceWorker&&navigator.serviceWorker.controller))m.content.split(',').forEach(function(f){"
     "var x=document.createElement('link');x.rel='modulepreload';x.href=m.getAttribute('data-base')+f;document.head.appendChild(x)})"
     "})();"

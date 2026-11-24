@@ -277,8 +277,8 @@ def register(app, ctx, x):
 
     @app.route("GET", "/api/push/device", auth=None)
     def push_device_poll(req):
-        """Messages à afficher par l'application Android depuis sa dernière visite (en-tête X-Nexis-Device)."""
-        token = (req.headers.get("X-Nexis-Device") or "").strip()
+        """Messages à afficher par l'application Android depuis sa dernière visite (en-tête X-Noxa-Device, X-Nexis-Device avant la 4.5)."""
+        token = (req.headers.get("X-Noxa-Device") or req.headers.get("X-Nexis-Device") or "").strip()  # Nexis: apps < 4.5
         sub = db.one("SELECT s.* FROM push_subs s JOIN users u ON u.id=s.user_id WHERE s.endpoint=? AND u.disabled=0",
                      (device_key(token),)) if 20 <= len(token) <= 100 else None
         if not sub:

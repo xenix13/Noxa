@@ -647,7 +647,7 @@ class FederationTest(unittest.TestCase):
         st, sv = self.admin_a.call("GET", "/api/admin/servers")
         self.assertEqual(st, 200, sv)
         self.assertEqual([p["id"] for p in sv["peers"]], [str(self.peer_on_a)])
-        on_b = {"X-Nexis-Server": str(self.peer_on_a)}
+        on_b = {"X-Noxa-Server": str(self.peer_on_a)}
         st, libs = self.admin_a.call("GET", "/api/admin/libraries", headers=on_b)
         self.assertEqual(st, 200, libs)
         self.assertIn("Animes", [l["name"] for l in libs["libraries"]])  # la bibliothèque n'existe que sur B
@@ -685,17 +685,19 @@ class FederationTest(unittest.TestCase):
         self.a.db.set_setting("server_name", "Serveur Salon")
         self.b.db.set_setting("server_name", "Serveur Bureau")
         b_a = backup.create(self.a, "auto", distribute=False)
-        self.assertTrue(b_a["name"].startswith("nexis-serveur-salon_"), b_a["name"])
+        self.assertTrue(b_a["name"].startswith("noxa-serveur-salon_"), b_a["name"])
         res = backup.distribute(self.a, os.path.join(backup.directory(self.a), b_a["name"]))
         self.assertTrue(res and all(ok for _, ok in res), res)
         on_b = {b["name"]: b for b in backup.listing(self.b)}
-        self.assertIn(b_a["name"], on_b)
-        copy = on_b[b_a["name"]]
+        from noxa import __version__
+        sent = backup.name_for_peer({"version": __version__}, b_a["name"])  # nexis- for a server older than 4.5
+        self.assertIn(sent, on_b)
+        copy = on_b[sent]
         self.assertEqual((copy["mine"], copy["server"]), (False, "Serveur Salon"))
         # depuis A, l'administration de B montre la copie, avec son serveur d'origine
-        st, v = self.admin_a.call("GET", "/api/admin/backups", headers={"X-Nexis-Server": str(self.peer_on_a)})
+        st, v = self.admin_a.call("GET", "/api/admin/backups", headers={"X-Noxa-Server": str(self.peer_on_a)})
         self.assertEqual(st, 200, v)
-        self.assertTrue(any(b["name"] == b_a["name"] and not b["mine"] for b in v["backups"]))
+        self.assertTrue(any(b["name"] == sent and not b["mine"] for b in v["backups"]))
         # B garde au plus N copies automatiques de A, sans toucher aux siennes
         mine_b = backup.create(self.b, "auto", distribute=False)
         self.b.tasks.update("backup", options={"keep": 1})
@@ -705,8 +707,8 @@ class FederationTest(unittest.TestCase):
             b_a2 = backup.create(self.a, "auto", distribute=False)
             backup.distribute(self.a, os.path.join(backup.directory(self.a), b_a2["name"]))
             names = {b["name"] for b in backup.listing(self.b)}
-            self.assertIn(b_a2["name"], names)
-            self.assertNotIn(b_a["name"], names)
+            self.assertIn(backup.name_for_peer({"version": __version__}, b_a2["name"]), names)
+            self.assertNotIn(sent, names)
             self.assertIn(mine_b["name"], names)
         finally:
             self.b.tasks.update("backup", options={"keep": 7})

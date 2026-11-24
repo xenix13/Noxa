@@ -4,8 +4,8 @@ import { tr } from './i18n.js';
 
 // Application Android : sa vue web ne fait pas Web Push, c'est l'application qui affiche les notifications
 // (elle vient les chercher sur le serveur avec un jeton propre à l'appareil)
-const android = () => window.NexisAndroid && typeof window.NexisAndroid.pushEnable === 'function';
-const oldAndroid = () => window.NexisAndroid && !android(); // application 1.0 : à mettre à jour
+const android = () => window.NoxaAndroid && typeof window.NoxaAndroid.pushEnable === 'function';
+const oldAndroid = () => window.NoxaAndroid && !android(); // application 1.0 : à mettre à jour
 
 export const pushSupported = () => android() || (window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window
   && 'Notification' in window);
@@ -18,7 +18,7 @@ const keyBytes = (b64) => {
 export async function pushState() {
   if (android()) {
     let st = {};
-    try { st = JSON.parse(window.NexisAndroid.pushStatus()); } catch { /* ignore */ }
+    try { st = JSON.parse(window.NoxaAndroid.pushStatus()); } catch { /* ignore */ }
     if (st.registered && !st.allowed) return 'denied';
     return st.registered ? 'on' : 'off';
   }
@@ -36,7 +36,7 @@ export async function enablePush() {
   if (android()) {
     const { token } = await post('/api/push/device');
     // l'application demande l'autorisation d'Android (version 13 et plus) puis répond
-    const ok = await new Promise((resolve) => { window.onNexisPush = resolve; window.NexisAndroid.pushEnable(token); });
+    const ok = await new Promise((resolve) => { window.onNoxaPush = window.onNexisPush = resolve; window.NoxaAndroid.pushEnable(token); });
     // refusées : l'inscription reste, les messages arriveront dès qu'elles seront autorisées dans les réglages
     if (!ok) throw new Error(tr('Notifications refusées pour l’application Noxa : autorisez-les dans les réglages d’Android.'));
     return;
@@ -51,12 +51,12 @@ export async function enablePush() {
 }
 
 // application Android : aller chercher tout de suite les messages (notification d'essai)
-export function pushCheckNow() { if (android()) window.NexisAndroid.pushCheck(); }
-export function openPushSettings() { if (android()) window.NexisAndroid.notificationSettings(); }
+export function pushCheckNow() { if (android()) window.NoxaAndroid.pushCheck(); }
+export function openPushSettings() { if (android()) window.NoxaAndroid.notificationSettings(); }
 
 export async function disablePush() {
   if (android()) {
-    const token = window.NexisAndroid.pushDisable();
+    const token = window.NoxaAndroid.pushDisable();
     if (token) await post('/api/push/device/remove', { token }).catch(() => {});
     return;
   }

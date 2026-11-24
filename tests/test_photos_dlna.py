@@ -534,11 +534,11 @@ class PhotosDlnaTest(unittest.TestCase):
         token = r["token"]
         phone = Client(self.base)  # l'application, sans cookie : seulement son jeton
         self.assertEqual(phone.call("GET", "/api/push/device", headers={"X-Nexis-Device": "x" * 40})[0], 410)
-        st, r = phone.call("GET", "/api/push/device", headers={"X-Nexis-Device": token})
+        st, r = phone.call("GET", "/api/push/device", headers={"X-Noxa-Device": token})
         self.assertEqual((st, r["messages"]), (200, []))
         st, r = self.admin.call("POST", "/api/push/test")
         self.assertEqual((st, r["sent"]), (200, 1))  # l'appareil compte, sans envoi vers un service push
-        st, r = phone.call("GET", "/api/push/device", headers={"X-Nexis-Device": token})
+        st, r = phone.call("GET", "/api/push/device", headers={"X-Noxa-Device": token})
         self.assertEqual([m["tag"] for m in r["messages"]], ["test"])
         self.assertNotIn("ring", r["messages"][0])
         # heures calmes : le message reste dans la cloche, le téléphone ne sonne pas

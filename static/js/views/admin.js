@@ -1434,7 +1434,7 @@ async function backupsPage(body, ctx) {
       setTimeout(() => input.remove(), 60000);
     };
     const restorePath = async () => {
-      const path = h('input', { placeholder: '/backups/nexis-salon_20261107-043000-auto.tar.gz', spellcheck: false });
+      const path = h('input', { placeholder: '/backups/noxa-salon_20261107-043000-auto.tar.gz', spellcheck: false });
       const pass = h('input', { type: 'password', autocomplete: 'off', placeholder: tr('Seulement pour une archive chiffrée (.enc)') });
       const ok = await modal(tr('Restaurer depuis un fichier du serveur'), h('div.form',
         h('p.muted.small', tr('Un fichier déjà présent sur le serveur : disque externe, NAS monté, dossier partagé avec le conteneur…')),
@@ -1481,7 +1481,7 @@ async function backupsPage(body, ctx) {
         const from = toggle(tr('Garder ici les sauvegardes envoyées par les serveurs liés'), v.from_peers);
         from.querySelector('input').addEventListener('change', (e) => setOnly({ from_peers: e.target.checked }));
         return h('section.panel', h('h2', tr('Recopie entre les serveurs liés')),
-          h('p.muted.small', tr('Chaque serveur garde aussi les sauvegardes des autres : si l’un tombe en panne, sa dernière sauvegarde est sur un autre. Les noms commencent par le nom du serveur d’origine (nexis-<serveur>_date), et chaque serveur garde celles des autres à part.')),
+          h('p.muted.small', tr('Chaque serveur garde aussi les sauvegardes des autres : si l’un tombe en panne, sa dernière sauvegarde est sur un autre. Les noms commencent par le nom du serveur d’origine (noxa-<serveur>_date), et chaque serveur garde celles des autres à part.')),
           to, from,
           h('ul.small.copy-status', v.peers.map((p) => h('li', h('strong', p.name), ' · ', copyLine(p.last)))));
       })() : null,

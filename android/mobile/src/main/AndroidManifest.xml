@@ -19,7 +19,7 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true"
-        android:theme="@style/NexisMobile">
+        android:theme="@style/NoxaMobile">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -41,7 +41,7 @@
             android:foregroundServiceType="dataSync" />
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="fr.nexis.app.files"
+            android:authorities="io.github.xenix13.noxa.files"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

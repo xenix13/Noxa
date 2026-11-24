@@ -41,7 +41,7 @@ function pushPanel() {
         h('div.actions-row', h('button.btn.small', { type: 'button', onclick: () => nativeApp()?.checkUpdate() }, tr('Rechercher une mise à jour'))));
       return;
     }
-    if (st === 'denied' && window.NexisAndroid) {
+    if (st === 'denied' && window.NoxaAndroid) {
       clear(box, h('p.small', tr('Notifications bloquées pour l’application Noxa : autorisez-les dans les réglages d’Android.')),
         h('div.actions-row', h('button.btn.small', { type: 'button', onclick: () => openPushSettings() }, tr('Ouvrir les réglages')),
           h('button.btn.small.ghost', { type: 'button', onclick: async () => { await disablePush(); paint(); } }, tr('Désactiver'))));

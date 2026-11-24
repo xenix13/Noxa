@@ -73,8 +73,8 @@ const notify = () => listeners.forEach((fn) => { try { fn(); } catch (e) { conso
 const busy = new Map(); // téléchargements en cours (clé -> enregistrement)
 let toldActive = false;
 let tellTimer = null;
-const nativeDownloads = () => (window.NexisAndroid && window.NexisAndroid.downloads ? (j) => window.NexisAndroid.downloads(j)
-  : window.nexisNative && window.nexisNative.downloads ? (j) => window.nexisNative.downloads(j) : null);
+const nativeDownloads = () => (window.NoxaAndroid && window.NoxaAndroid.downloads ? (j) => window.NoxaAndroid.downloads(j)
+  : window.noxaNative && window.noxaNative.downloads ? (j) => window.noxaNative.downloads(j) : null);
 const NET_WAIT = 30 * 60 * 1000; // réseau perdu : l'application reste éveillée 30 min pour réessayer
 const isBusy = (rec) => ['queued', 'preparing', 'downloading'].includes(rec.state)
   || (rec.state === 'paused' && Date.now() - (rec.pausedAt || 0) < NET_WAIT);
@@ -327,7 +327,7 @@ async function work(rec) {
     return true;
   } catch (e) {
     if (e.name === 'QuotaExceededError') {
-      const app = window.nexisNative || window.NexisAndroid; // application : pas d'autorisation à donner, l'appareil est plein
+      const app = window.noxaNative || window.NoxaAndroid; // application : pas d'autorisation à donner, l'appareil est plein
       await save(rec, { state: 'error', error: app ? tr('Plus de place sur l’appareil. Supprimez un téléchargement ou libérez de l’espace.')
         : tr('Espace de stockage épuisé. Autorisez plus d’espace ou supprimez un téléchargement.') });
       return true;

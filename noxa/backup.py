@@ -35,9 +35,9 @@ log = logging.getLogger("noxa.backup")
 
 FORMAT = 1
 DIRS = ("federation", "push", "avatars", "subtitles", "wallpapers")
-# nexis-<serveur>_AAAAMMJJ-HHMMSS[-auto|-envoi].tar.gz (le serveur d'origine dans le nom : les copies des
-# serveurs liés se rangent à côté) ; anciens noms sans serveur acceptés
-NAME = re.compile(r"^nexis-(?:(?P<srv>[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)_)?(?P<date>\d{8}-\d{6})"
+# noxa-<server>_YYYYMMDD-HHMMSS[-auto|-envoi].tar.gz (the origin server in the name: copies from linked servers sit
+# next to ours). Also accepted: the nexis- prefix of backups made before 4.5, and old names without a server.
+NAME = re.compile(r"^(?:noxa|nexis)-(?:(?P<srv>[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)_)?(?P<date>\d{8}-\d{6})"
                   r"(?:-(?P<label>[a-z0-9]{1,12}))?\.tar\.gz$")
 ENC_SUFFIX = ".enc"
 MAGIC = b"NEXISENC1\n"
@@ -70,8 +70,8 @@ def check_directory(path):
 def slug(name):
     """Nom du serveur pour un nom de fichier : « Salon de Léa » -> « salon-de-lea »."""
     from .names import fold
-    s = re.sub(r"[^a-z0-9]+", "-", fold(name or "nexis")).strip("-")[:32].strip("-")
-    return s or "nexis"
+    s = re.sub(r"[^a-z0-9]+", "-", fold(name or "noxa")).strip("-")[:32].strip("-")
+    return s or "noxa"
 
 
 def server_identity(ctx):
@@ -96,7 +96,7 @@ def create(ctx, label="", keep=None, distribute=True):
     os.makedirs(dest, mode=0o700, exist_ok=True)
     now = time.time()
     uid, server = server_identity(ctx)
-    name = (f"nexis-{slug(server)}_" + time.strftime("%Y%m%d-%H%M%S", time.localtime(now)) + (f"-{label}" if label else "")
+    name = (f"noxa-{slug(server)}_" + time.strftime("%Y%m%d-%H%M%S", time.localtime(now)) + (f"-{label}" if label else "")
             + ".tar.gz")
     final = os.path.join(dest, name)
     tmp_dir = tempfile.mkdtemp(prefix="backup-", dir=ctx.data_dir)
@@ -422,7 +422,7 @@ def adopt(ctx, path, label="envoi", own=False):
     try:
         man = validate(plain)
         stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(man.get("created") or time.time()))
-        final = os.path.join(dest, f"nexis-{slug(man.get('server') or 'nexis')}_{stamp}-{label}.tar.gz")
+        final = os.path.join(dest, f"noxa-{slug(man.get('server') or 'noxa')}_{stamp}-{label}.tar.gz")
         part = final + ".partial"
         if decrypted or own:
             os.replace(plain, part)
@@ -495,6 +495,15 @@ def copies_status(ctx):
         return {}
 
 
+def name_for_peer(peer, name):
+    """Backup file name as a linked server understands it: servers older than 4.5 only accept the nexis- prefix
+    (and so do servers whose version is not known yet)."""
+    v = tuple(int(x) for x in re.findall(r"\d+", str(peer.get("version") or ""))[:2])
+    if name.startswith("noxa-") and (len(v) < 2 or v < (4, 5)):
+        return "nexis-" + name[len("noxa-"):]
+    return name
+
+
 def push_to_peer(ctx, peer, path):
     """Copie d'une sauvegarde de ce serveur chez un serveur lié (qui garde celles de chaque serveur à part)."""
     from .federation import FedError
@@ -502,7 +511,8 @@ def push_to_peer(ctx, peer, path):
     with open(path, "rb") as f:
         try:
             resp, close = ctx.fed.request(peer, "POST", "/fed/backup", f, timeout=900,
-                                          headers={"Content-Length": str(size), "X-Backup-Name": os.path.basename(path)})
+                                          headers={"Content-Length": str(size),
+                                                   "X-Backup-Name": name_for_peer(peer, os.path.basename(path))})
         except FedError as e:
             raise BackupError(str(e))
         try:
@@ -532,9 +542,10 @@ def push_to_storage(ctx, rid, path):
             name += ENC_SUFFIX
         st.upload(src, name)
         keep = int(r.get("keep") or 7)
-        mine = f"nexis-{slug(server_identity(ctx)[1])}_"
+        me = slug(server_identity(ctx)[1])
+        mine = (f"noxa-{me}_", f"nexis-{me}_")  # nexis-: made before 4.5
         autos = sorted((f for f in st.files() if f["name"].startswith(mine) and "-auto." in f["name"]),
-                       key=lambda f: f["name"], reverse=True)
+                       key=lambda f: f["name"].split("_", 1)[-1], reverse=True)  # newest first, whatever the prefix
         for f in autos[keep:]:
             st.delete(f)
     except StorageError as e:

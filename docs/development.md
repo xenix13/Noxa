@@ -95,13 +95,22 @@ French text in the code is the **translation key**:
 - Commit messages, pull requests and release notes (`docs/releases/`) are written in English.
 - Version numbers: **x.0** are major releases, **x.5** minor updates with new features, and every other number (x.1 to x.4, x.y.z) is a fix release with no new feature. New features wait for the next x.5 or x.0.
 
-## Former name (Nexis)
+## Former names (Nexis, seance)
 
-The project was called **Nexis** until 4.0. A few invisible identifiers keep that name on purpose, because changing them would break existing installs or links between servers:
+The project was called **Nexis** until 4.0, and its code used the internal name **seance** until 4.5. Since 4.5 the code and the apps use **noxa**:
 
-- Android application ids `fr.nexis.app` and `fr.nexis.tv` (Android only updates an app over one with the same id), and the bridges `window.NexisAndroid` / `window.nexisNative`;
-- HTTP headers `X-Nexis-Server` and `X-Nexis-Device`, the `NEXIS1-` linked-server invitations, the `nexis-` prefix of backup files, browser storage keys (`nexis.*`) and the desktop app's data folder;
-- the former internal name `seance`, for the system user, the service, the folders and the `seance_session` cookie. A small `seance` Python package is also kept: servers before 4.5 read its version to find updates, and older service files start Noxa through it. Environment variables are `NOXA_…`, and the old `SEANCE_…` names are still read.
+- **Android apps:** ids `io.github.xenix13.noxa.tv` (TV) and `io.github.xenix13.noxa` (phone). Before 4.5 they were `fr.nexis.tv` and `fr.nexis.app`: Android cannot update an app over one with another id, so the 4.5 apps are installed once next to the old ones, which can then be removed.
+- **Bridges between the web interface and the apps:** `window.NoxaAndroid` and `window.noxaNative`. The apps also expose the old names `NexisAndroid` and `nexisNative` for servers older than 4.5, and the web interface falls back to the old names in apps older than 4.5.
+- **HTTP headers:** `X-Noxa`, `X-Noxa-Server` and `X-Noxa-Device`. The server still accepts `X-Seance`, `X-Nexis-Server` and `X-Nexis-Device` from older apps and pages.
+- **Environment variables:** `NOXA_…`. The old `SEANCE_…` names are still read.
+- **Backups:** new backup files start with `noxa-`. Files starting with `nexis-` are still listed, rotated and restored.
+
+These names are kept on purpose, because changing them would break existing installs, data or links between servers:
+
+- **Linked servers:** the `NEXIS1-` linked-server invitations and the names used inside the link between servers.
+- **Browser and app data:** the browser storage keys (`nexis.*`) and caches, which hold each device's settings and offline downloads; the format of encrypted backups; and the desktop app's id and data folder.
+- **System names from the former internal name `seance`:** the system user, the service, the `/opt`, `/var/lib` and `/etc/seance` folders, the `seance_session` cookie and the `seance.db` file. These are planned to move with a migration in 5.0.
+- **A small `seance` Python package:** servers before 4.5 read its version to find updates, and older service files start Noxa through it. Its version must match `noxa/__init__.py`, and a test checks it.
 
 The Docker image is published as `ghcr.io/xenix13/noxa` and, for existing installs, `ghcr.io/xenix13/nexis`; the `.deb` package `noxa` replaces `nexis`; `nexis` is kept as an alias of the `noxa` command.
 

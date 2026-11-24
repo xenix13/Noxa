@@ -226,10 +226,16 @@ class RemoteBackupTest(unittest.TestCase):
 
     def test_02_named_after_server(self):
         b = backup.create(self.ctx, distribute=False)
-        self.assertTrue(b["name"].startswith("nexis-living-room_"), b["name"])
+        self.assertTrue(b["name"].startswith("noxa-living-room_"), b["name"])
         self.assertEqual((b["server"], b["mine"]), ("Living room", True))
         self.assertTrue(backup.NAME.match("nexis-20260101-000000-auto.tar.gz"))  # anciens noms toujours reconnus
+        self.assertTrue(backup.NAME.match("nexis-living-room_20261101-000000-auto.tar.gz"))  # made before 4.5
         self.assertEqual(backup.slug("Été à Nîmes !"), "ete-a-nimes")
+        # a linked server older than 4.5 only accepts the former nexis- prefix
+        n = "noxa-living-room_20261124-000000-auto.tar.gz"
+        self.assertEqual(backup.name_for_peer({"version": "4.2.1"}, n), "nexis-living-room_20261124-000000-auto.tar.gz")
+        self.assertEqual(backup.name_for_peer({"version": ""}, n), "nexis-living-room_20261124-000000-auto.tar.gz")
+        self.assertEqual(backup.name_for_peer({"version": "4.5.0"}, n), n)
 
     def add_remote(self, kind, conf, name=None):
         st, r = self.admin.call("POST", "/api/admin/backups/remotes", {"kind": kind, "conf": conf, "name": name, "keep": 2})

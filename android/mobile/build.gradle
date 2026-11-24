@@ -9,11 +9,11 @@ plugins {
 def keystore = System.getenv('NEXIS_KEYSTORE')
 
 android {
-    namespace 'fr.nexis.app'
+    namespace 'io.github.xenix13.noxa'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'fr.nexis.app'
+        applicationId 'io.github.xenix13.noxa'  // fr.nexis.app before 4.5: the app has to be reinstalled once
         minSdk 26
         targetSdk 34
         versionCode 5

@@ -61,7 +61,7 @@ An alert is sent once, repeated once a day while the problem lasts, and clears i
 *Settings → Maintenance → Backups*.
 
 - **Content:** the archive (`.tar.gz`) holds the database (accounts and hashed passwords, 2FA, history, ratings, playlists, settings, libraries and metadata), the linked-servers identity, the notification keys, profile pictures and downloaded subtitles. Videos and photos are not included; caches rebuild themselves.
-- **Names:** `nexis-<server>_<date>-<time>-auto.tar.gz` (e.g. `nexis-living-room_20261107-043000-auto.tar.gz`), so that you can tell servers apart when they keep each other's backups. `-auto`: automatic; no suffix: made by hand.
+- **Names:** `noxa-<server>_<date>-<time>-auto.tar.gz` (e.g. `noxa-living-room_20261107-043000-auto.tar.gz`), so that you can tell servers apart when they keep each other's backups. `-auto`: automatic; no suffix: made by hand. Backups made before 4.5 start with `nexis-` and can still be listed and restored.
 - **Automatic:** every night at 4:30 by default (or weekly), keeping the last 7 of each server. Backups made by hand are never deleted.
 - **Folder:** `data/backups` by default; another disk or a NAS is better (Docker: mount it, e.g. `- /mnt/nas/noxa:/backups`, and choose it as *Backup folder*). Archives are readable by Noxa only (mode 600).
 - **Copied between linked servers:** each backup is also sent to the [linked servers](linked-servers.md), which keep each server's backups apart. If a server dies, its latest backup is on another one. Each server can turn sending or receiving off.

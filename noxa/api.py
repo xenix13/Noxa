@@ -231,7 +231,8 @@ def build_app(ctx):
                 raise HTTPError(403, "Code d'installation invalide")
         if not req.fed_peer:
             # paramètres d'un serveur lié choisi dans le sélecteur : la requête d'administration lui est transmise
-            target = req.headers.get("X-Nexis-Server") or req.arg("_server")
+            # X-Nexis-Server: the same header from pages cached before 4.5
+            target = req.headers.get("X-Noxa-Server") or req.headers.get("X-Nexis-Server") or req.arg("_server")
             if target and req.path.startswith("/api/admin/") and not federation.LOCAL_ADMIN_ONLY.match(req.path):
                 if not (req.user and req.user["is_admin"]):
                     raise HTTPError(403, "Réservé aux administrateurs")

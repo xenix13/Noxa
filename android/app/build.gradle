@@ -7,11 +7,11 @@ plugins {
 def keystore = System.getenv('NEXIS_KEYSTORE')
 
 android {
-    namespace 'fr.nexis.tv'
+    namespace 'io.github.xenix13.noxa.tv'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'fr.nexis.tv'
+        applicationId 'io.github.xenix13.noxa.tv'  // fr.nexis.tv before 4.5: the app has to be reinstalled once
         minSdk 23
         targetSdk 34
         versionCode((project.findProperty('nexisVersionCode') ?: '1') as int)

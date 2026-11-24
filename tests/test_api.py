@@ -2003,7 +2003,7 @@ class SeanceTest(unittest.TestCase):
         digest = base64.b64encode(hashlib.sha256(boot.encode()).digest()).decode()
         self.assertIn(f"'sha256-{digest}'", h["Content-Security-Policy"])
         self.assertIn("/api/me", boot)
-        mods = re.search(r'name="nexis-modules" data-base="/v/[0-9a-f]{12}/js/" content="([^"]+)"', html).group(1).split(",")
+        mods = re.search(r'name="noxa-modules" data-base="/v/[0-9a-f]{12}/js/" content="([^"]+)"', html).group(1).split(",")
         self.assertIn("api.js", mods)
         self.assertIn("views/home.js", mods)
         self.assertTrue(all(os.path.isfile(os.path.join(STATIC, "js", x)) for x in mods), mods)
@@ -2169,7 +2169,7 @@ class SeanceTest(unittest.TestCase):
                                          headers={"If-None-Match": h["ETag"]})[0], 304)
         st, body, h2 = self.admin.call("GET", "/js/player.js", raw=True)
         self.assertNotIn("Content-Encoding", h2)  # client sans gzip : fichier tel quel
-        self.assertEqual(self.admin.call("GET", "/img/nexis-logo.webp", raw=True)[2].get("Content-Encoding"), None)
+        self.assertEqual(self.admin.call("GET", "/img/noxa-logo.webp", raw=True)[2].get("Content-Encoding"), None)
 
 
 class UnitTests(unittest.TestCase):

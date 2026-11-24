@@ -42,7 +42,7 @@ export async function api(method, path, body, { headers = {}, keepalive = false,
   if (pre) return finish(pre.status, pre.ok, pre.text, quiet401);
   // X-Lang : messages d'erreur du serveur dans la langue de l'interface
   const opts = { method, headers: { 'X-Noxa': '1', 'X-Lang': lang, ...headers }, credentials: 'same-origin', keepalive };
-  if (relayed(path)) opts.headers['X-Nexis-Server'] = target.id;
+  if (relayed(path)) opts.headers['X-Noxa-Server'] = target.id;
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);

@@ -532,7 +532,7 @@ def register(app, ctx, x):
         return {"ok": True}
 
     # ---------------------------------------------------- sauvegardes
-    BK = r"(?P<name>nexis-[0-9a-z_-]{15,70}\.tar\.gz)"
+    BK = r"(?P<name>(?:noxa|nexis)-[0-9a-z_-]{15,70}\.tar\.gz)"  # nexis-: backups made before 4.5
 
     def backups_view():
         from .. import backup  # noqa: F811

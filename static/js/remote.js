@@ -11,7 +11,7 @@ export const remoteMode = () => document.documentElement.classList.contains('rem
 import { device } from './device.js';
 
 const markRemote = () => { if (device().remote !== 'off') document.documentElement.classList.add('remote'); };
-if (/android tv|googletv|smart-?tv|aft[a-z]|bravia|crkey|tizen|web0s|nexisapp/i.test(navigator.userAgent)) markRemote();
+if (/android tv|googletv|smart-?tv|aft[a-z]|bravia|crkey|tizen|web0s|noxaapp|nexisapp/i.test(navigator.userAgent)) markRemote();
 
 const visible = (el) => {
   const r = el.getBoundingClientRect();
