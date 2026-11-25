@@ -56,7 +56,7 @@ noxa/                   the server (Python package)
   mountd.py             the root helper that mounts SMB shares read-only
   i18n.py, lang_en.py   server messages and their English translation
 static/                 the web interface (ES modules, no bundler)
-  js/app.js             router; js/views/ one file per page (js/views/admin/: one per admin page, loaded on demand); js/player.js the player
+  js/app.js             router; js/views/ one file per page (js/views/admin/: one per admin page, loaded on demand); js/player.js the player, with js/player/ for its subtitles (subtitles.js), watch together (together.js) and the remote control and casting (devices.js)
   js/i18n/en.js         English translation of the interface
   themes/               the theme store (one JSON per theme)
   vendor/               hls.js, JASSUB, libpgs, qrcode (pinned, SHA-256 checked)
