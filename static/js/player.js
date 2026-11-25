@@ -21,10 +21,14 @@ import { AIRPLAY_CAPS } from './cast.js';
 const REPORT_EVERY = 10000;
 const HIDE_AFTER = 3000;
 // Seconds of video to have buffered before starting / resuming after a stall.
-// An on-the-fly conversion produces barely faster than real time: get ahead.
+// An on-the-fly conversion can produce barely faster than real time: get ahead. When the video
+// arrives much faster than it plays (fast server and connection), the start waits for less (see waitBuffer).
 const PREROLL = { direct: 5, copy: 12, transcode: 20 };
 const PREROLL_SEEK = { direct: 3, copy: 6, transcode: 10 }; // after a seek: shorter buffer
 const REBUFFER = { direct: 6, copy: 15, transcode: 25 };
+// Buffer to wait for at a given fill rate (seconds of video received per second): at 2.5× real time and more,
+// the buffer keeps growing much faster than it is used, so a few seconds are enough to start.
+const fillTarget = (rate, target) => (rate >= 2.5 ? Math.min(target, 6) : rate >= 1.6 ? Math.min(target, 10) : target);
 const PREPARE_MAX = 10 * 60 * 1000;
 
 
@@ -266,7 +270,7 @@ export async function renderPlayer(root, rk, ctx) {
       await subsReady;
       if (seq !== startSeq || destroyed) return;
       // let the buffer fill before starting: no stall in the first seconds
-      await waitBuffer((everPlayed ? PREROLL_SEEK : PREROLL)[session.mode] ?? 12, 90000, seq);
+      await waitBuffer((everPlayed ? PREROLL_SEEK : PREROLL)[session.mode] ?? 12, 90000, seq, session.mode !== 'direct');
       if (seq !== startSeq || destroyed) return;
       if (together.group) {
         // in a group: say we are ready, playback starts when everyone is
@@ -340,13 +344,23 @@ export async function renderPlayer(root, rk, ctx) {
     return 0;
   };
   const nearEnd = () => { const d = duration(); return d > 0 && pos() + aheadSec() * 1000 >= d - 5000; };
-  function waitBuffer(target, maxMs, seq) {
+  // adaptive: the target is lowered when the video arrives much faster than it plays. The fill rate is
+  // measured from the first data received (segments arrive whole, so it takes at least two of them).
+  function waitBuffer(target, maxMs, seq, adaptive = false) {
     return new Promise((resolve) => {
       const t0 = Date.now();
+      let first = null; // [time, seconds buffered] when the first data arrived
       const tick = () => {
         if (destroyed || seq !== startSeq) { resolve(false); return; }
-        const enough = aheadSec() >= target || nearEnd()
-          || (session && session.mode === 'direct' && video.readyState >= 4 && aheadSec() >= Math.min(target, 2));
+        const ahead = aheadSec();
+        let need = target;
+        if (adaptive && ahead > 0) {
+          const now = Date.now();
+          if (!first) first = [now, ahead];
+          else if (now - first[0] >= 1000) need = Math.min(target, fillTarget((ahead - first[1]) / ((now - first[0]) / 1000), target));
+        }
+        const enough = ahead >= need || nearEnd()
+          || (session && session.mode === 'direct' && video.readyState >= 4 && ahead >= Math.min(target, 2));
         if (enough || Date.now() - t0 > maxMs) { resolve(true); return; }
         setTimeout(tick, 250);
       };
