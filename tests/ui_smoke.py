@@ -80,7 +80,9 @@ def check(cond, msg):
 
 
 with sync_playwright() as pw:
-    browser = pw.chromium.launch()
+    # PW_CHROMIUM: path of a Chromium already installed (when Playwright's own download is missing)
+    exe = os.environ.get("PW_CHROMIUM")
+    browser = pw.chromium.launch(executable_path=exe, args=["--no-sandbox"]) if exe else pw.chromium.launch()
     bctx = browser.new_context(viewport={"width": 1440, "height": 900}, bypass_csp=True, reduced_motion="reduce")  # stable screenshots (no animations)
     bctx.route("**/vendor/hls.min.js", lambda r: r.fulfill(status=200, content_type="text/javascript", body=STUB))
     bctx.route("**/__test.webm", serve_webm(webm))

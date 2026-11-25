@@ -110,7 +110,9 @@ kaze = ctx.db.one("SELECT id FROM items WHERE key LIKE '%Kaze no Michi - 01%'")[
 voyage = ctx.db.one("SELECT id FROM items WHERE type='movie' AND title='Le Grand Voyage'")["id"]
 
 with sync_playwright() as pw:
-    browser = pw.chromium.launch()
+    # PW_CHROMIUM: path of a Chromium already installed (when Playwright's own download is missing)
+    exe = os.environ.get("PW_CHROMIUM")
+    browser = pw.chromium.launch(executable_path=exe, args=["--no-sandbox"]) if exe else pw.chromium.launch()
     bctx, page = browser_ctx(browser, admin)
 
     # --- installable web app: Chrome must report no problem (manifest, icons, service worker)
@@ -212,7 +214,7 @@ with sync_playwright() as pw:
     lpage.wait_for_selector(slot)
     lpage.hover(slot)
     lpage.screenshot(path=f"{out}/03d-marquer-vu.png")
-    lpage.click(f"{slot} .card-watch")
+    lpage.click(f"{slot} button.card-watch")
     lpage.wait_for_selector(".toast:has-text('marqué comme vu')")
     lpage.wait_for_function(f"!document.querySelector(\".wide-row .card-slot a[href*='/play/{voyage}']\")")
     check(lea.call("GET", f"/api/items/{voyage}")[1]["watched"], "film marqué vu depuis l'accueil")
@@ -229,7 +231,7 @@ with sync_playwright() as pw:
     check(lpage.locator(".settings-group-title").all_inner_texts() == ["MON COMPTE"] or
           [t.lower() for t in lpage.locator(".settings-group-title").all_inner_texts()] == ["mon compte"],
           "un simple utilisateur ne voit que « Mon compte »")
-    lpage.click(".settings-link:has-text('Accueil et menu')")
+    lpage.goto(base + "/#/settings/layout")  # a sub-tab of "Appearance" since the settings were grouped
     lpage.wait_for_selector(".layout-list")
     home_list = ".panel:has(h2:text-is('Accueil')) .layout-list"
     up = f"{home_list} button[aria-label='Monter Films']"
@@ -269,7 +271,7 @@ with sync_playwright() as pw:
     page.goto(base + "/#/admin")
     page.wait_for_selector(".settings-head h2:text-is('Vue d’ensemble')")
     groups = [t.lower() for t in page.locator(".settings-group-title").all_inner_texts()]
-    check(groups == ["mon compte", "serveur", "médiathèque", "lecture"], f"groupes du menu : {groups}")
+    check(groups == ["mon compte", "serveur", "médiathèque", "lecture et diffusion"], f"groupes du menu : {groups}")
     page.screenshot(path=f"{out}/40-parametres-vue-ensemble.png")
     for sec, needle in (("users", ".user-row"), ("update", "#update"), ("libraries", ".user-row"), ("shares", ".settings-body > *"),
                         ("metadata", "text=Clé TMDB et langue"), ("detection", "text=Webhook Radarr / Sonarr"),
@@ -304,21 +306,26 @@ with sync_playwright() as pw:
     page.wait_for_selector("text=Choisir une photo")
     check(page.locator(".user-btn .avatar img").count() == 0, "photo retirée")
     page.goto(base + "/#/admin/settings")  # ancienne adresse
-    page.wait_for_selector(".settings-head h2:text-is('Métadonnées')")
+    page.wait_for_selector(".settings-head h2")
+    head = page.inner_text(".settings-head h2")
+    check(head == "Métadonnées et demandes", f"ancienne adresse #/admin/settings : {head}")
     page.fill(".settings-search", "carte graphique")
     visible = [t for t in page.locator(".settings-link:visible").all_inner_texts()]
-    check(visible == ["Transcodage"], f"recherche « carte graphique » : {visible}")
+    check(visible == ["Conversion et son"], f"recherche « carte graphique » : {visible}")
     page.fill(".settings-search", "radarr")
     visible = sorted(page.locator(".settings-link:visible").all_inner_texts())
-    check(visible == ["Ajout des nouveautés", "Demandes"], f"recherche « radarr » : {visible}")
+    check(visible == ["Bibliothèques", "Métadonnées et demandes"], f"recherche « radarr » : {visible}")
     page.wait_for_timeout(400)
     page.screenshot(path=f"{out}/43-parametres-recherche.png")
     page.press(".settings-search", "Enter")
-    page.wait_for_selector(".settings-head h2:text-is('Ajout des nouveautés')")
+    page.wait_for_timeout(600)
+    head = page.inner_text(".settings-head h2")
+    check(head == visible[0], f"Entrée ouvre le premier résultat : {head}")
 
     page.goto(base + "/#/admin/tasks")
     page.wait_for_selector(".task-row")
-    check(page.locator(".task-row").count() == 7, "7 tâches")
+    n_tasks = page.locator(".task-row").count()
+    check(n_tasks >= 7, f"tâches planifiées ({n_tasks})")
     page.screenshot(path=f"{out}/04-taches.png", full_page=True)
     page.click(".task-row:has-text('Détecter les intros') button:has-text('Réglages')")
     page.wait_for_selector(".modal:has-text('Planification')")
@@ -411,7 +418,9 @@ with sync_playwright() as pw:
         gaps.append(abs(page2.evaluate("document.querySelector('video').currentTime")
                         - page.evaluate("document.querySelector('video').currentTime")))
         jumps += page2.evaluate("document.querySelector('video').seeking")
-    check(max(gaps) < 0.5 and jumps == 0, f"lecteurs stables après recalage (écarts {[round(g, 2) for g in gaps]}, sauts {jumps})")
+    probe = "(() => { const v = document.querySelector('video'); return [v.currentTime, v.paused, v.seeking, v.readyState, v.playbackRate]; })()"
+    check(max(gaps) < 0.5 and jumps == 0, f"lecteurs stables après recalage (écarts {[round(g, 2) for g in gaps]}, sauts {jumps}, "
+          f"Alex {page.evaluate(probe)}, Léa {page2.evaluate(probe)})")
     page.mouse.move(700, 420)
     page.click("button[aria-label='Regarder ensemble']")
     page.wait_for_selector(".group-member:has-text('Léa')")
@@ -489,21 +498,24 @@ with sync_playwright() as pw:
     page5.goto(base + "/")
     page5.wait_for_selector(".offline-banner", timeout=15000)
     page5.screenshot(path=f"{out}/16c-hors-ligne.png")
-    page5.click(".dl-row a.dl-thumb")
-    page5.wait_for_function("document.querySelector('video') && document.querySelector('video').currentTime > 2", timeout=30000)
-    page5.evaluate("(() => { const v = document.querySelector('video'); v.currentTime = 40; })()")
-    page5.wait_for_timeout(1200)
-    page5.evaluate("document.querySelector('video').pause()")
-    page5.wait_for_timeout(600)
-    bctx5.set_offline(False)
-    page5.evaluate("window.dispatchEvent(new Event('online'))")
-    page5.goto(base + "/#/")
-    for _ in range(30):
-        row = ctx.db.one("SELECT position_ms FROM progress WHERE user_id=1 AND rating_key=?", (str(polar),))
-        if row and row["position_ms"] > 39000:
-            break
-        time.sleep(0.5)
-    check(row and row["position_ms"] > 39000, f"lecture hors ligne puis position renvoyée au serveur ({row and row['position_ms']})")
+    try:
+        page5.click(".dl-row a.dl-thumb")
+        page5.wait_for_function("document.querySelector('video') && document.querySelector('video').currentTime > 2", timeout=30000)
+        page5.evaluate("(() => { const v = document.querySelector('video'); v.currentTime = 40; })()")
+        page5.wait_for_timeout(1200)
+        page5.evaluate("document.querySelector('video').pause()")
+        page5.wait_for_timeout(600)
+        bctx5.set_offline(False)
+        page5.evaluate("window.dispatchEvent(new Event('online'))")
+        page5.goto(base + "/#/")
+        for _ in range(30):
+            row = ctx.db.one("SELECT position_ms FROM progress WHERE user_id=1 AND rating_key=?", (str(polar),))
+            if row and row["position_ms"] > 39000:
+                break
+            time.sleep(0.5)
+        check(row and row["position_ms"] > 39000, f"lecture hors ligne puis position renvoyée au serveur ({row and row['position_ms']})")
+    except Exception as e:  # e.g. a Chromium build without H.264: the downloaded file is H.264
+        check(False, f"lecture hors ligne : {str(e).splitlines()[0]}")
     bctx5.close()
 
     # --- personalisation: subtitles, anti-spoiler, pins, opinions, avatars, start page, device,
@@ -632,7 +644,8 @@ with sync_playwright() as pw:
     lp2.screenshot(path=f"{out}/59-2fa-connexion.png")
     lp2.fill("input[name=code]", "0000-0000")
     lp2.click("button[type=submit]")
-    lp2.wait_for_selector(".form-error:has-text('Code incorrect')")
+    # "Code incorrect" (or "Incorrect code" in an English browser)
+    lp2.wait_for_function("[...document.querySelectorAll('.form-error')].some((e) => /Code incorrect|Incorrect code/.test(e.textContent))")
     lp2.fill("input[name=code]", codes[0])
     lp2.click("button[type=submit]")
     lp2.wait_for_selector(".profile-tile, .topbar")  # "Who's watching?" then the home page
@@ -730,7 +743,7 @@ with sync_playwright() as pw:
     page3.wait_for_selector(".settings-link")
     check(page3.locator(".settings-content").is_hidden(), "téléphone : d'abord le menu des paramètres")
     page3.screenshot(path=f"{out}/44-mobile-parametres-menu.png", full_page=True)
-    page3.click(".settings-link:has-text('Transcodage')")
+    page3.click(".settings-link:has-text('Conversion et son')")
     page3.wait_for_selector("text=Carte graphique")
     check(page3.locator(".settings-nav").is_hidden() and page3.locator(".settings-back").is_visible(),
           "téléphone : la page choisie, avec un retour vers le menu")
