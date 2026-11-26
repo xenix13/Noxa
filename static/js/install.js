@@ -25,7 +25,8 @@ const android = () => /android/i.test(navigator.userAgent);
 const windows = () => /windows/i.test(navigator.userAgent);
 
 export function setupInstall() {
-  if ('serviceWorker' in navigator && window.isSecureContext) {
+  // the online demo has its own service worker (tools/demo/demo-sw.js)
+  if ('serviceWorker' in navigator && window.isSecureContext && !window.NOXA_DEMO) {
     navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('Service worker :', e));
   }
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); prompt = e; notify(); });
