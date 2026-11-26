@@ -141,6 +141,24 @@ ffmpeg -f concat -safe 0 -i /tmp/rec/frames.txt -vf "fps=15,scale=960:-1" -c:v l
 
 Run `take.py` as a regular user (as root every folder looks writable and the Libraries page warns about it). Set `CHROMIUM=/path/to/chrome` if Playwright's own browser is not installed.
 
+## Online demo
+
+The demo at https://xenix13.github.io/Noxa/ is the web interface working without a server: a service worker
+(`tools/demo/demo-sw.js`) answers its requests from recordings. It lives on the `gh-pages` branch.
+
+- **Each change of the interface on `main`** is copied to the demo by the *Demo* workflow
+  (`tools/demo/build.py --interface-only`); the recordings stay as they are.
+- **To record again** (new pages, an API change), build the free film library (see above), then:
+
+  ```bash
+  python3 tools/demo/build.py <free_library_folder> <output_folder>
+  ```
+
+  It starts a throwaway server with the screenshot accounts and history (`tools/screenshots/seed.py`), follows
+  every link of the interface while recording the API's answers and pictures, and cuts a 30-second clip of each
+  video. Push the output folder to `gh-pages`.
+- In the demo nothing is saved, the administration is read-only, and every visitor starts from the same view.
+
 ## Contributing
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md).

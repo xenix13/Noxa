@@ -43,6 +43,8 @@ async function api(req, u) {
   if (req.method === 'GET') return get(d, u);
   if (path === '/api/play') return play(d, req);
   if (['/api/progress', '/api/stop', '/api/login', '/api/logout', '/api/remote/state'].includes(path)) return json({});
+  // the administration is read-only: a clear message rather than a fake success
+  if (path.startsWith('/api/admin/')) return json({ error: 'Demo: the administration is read-only.' }, 403);
   notify('not-saved');
   return json({});
 }
