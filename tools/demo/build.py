@@ -117,7 +117,10 @@ def main():
             body = resp.body()
         except Exception:
             return
-        ext = ".json" if ctype == "application/json" else os.path.splitext(u.path)[1] or ".bin"
+        save(key, body, ctype)
+
+    def save(key, body, ctype):
+        ext = ".json" if ctype == "application/json" else os.path.splitext(urlsplit(key).path)[1] or ".bin"
         name = hashlib.sha1(key.encode()).hexdigest()[:16] + ext
         with open(os.path.join(rec_dir, name), "wb") as f:
             f.write(body)
@@ -157,6 +160,11 @@ def main():
             for href in page.eval_on_selector_all("a[href^='#/']", "els => els.map((e) => e.getAttribute('href'))"):
                 if href not in seen and not SKIP.match(href):
                     todo.append(href)
+        # the photo viewer's pictures (opened by a click, not by a link): one size, served for every screen
+        for r in db.all("SELECT id FROM items WHERE type='photo'"):
+            resp = bctx.request.get(base + f"/api/photos/{r['id']}/view?w=1920")
+            if resp.ok:
+                save(f"/api/photos/{r['id']}/view", resp.body(), (resp.headers.get("content-type") or "").split(";")[0])
         print(f"{len(seen)} pages, {len(index)} answers recorded", flush=True)
         browser.close()
     S["server"].shutdown()
