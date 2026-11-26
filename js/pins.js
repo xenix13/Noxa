@@ -1,0 +1,79 @@
+// Personal rows of the home page: collections, playlists or genres pinned by each user.
+import { get, put } from './api.js';
+import { applyPrefs, state } from './app.js';
+import { h, icon, posterCard, row, toast, wideCard } from './ui.js';
+import { tr } from './i18n.js';
+
+const same = (a, b) => a.type === b.type && String(a.ref) === String(b.ref) && String(a.lib || '') === String(b.lib || '');
+
+export const pins = () => state.me.prefs.home_pins || [];
+
+async function savePins(list, msg) {
+  const r = await put('/api/me/prefs', { home_pins: list });
+  Object.assign(state.me.prefs, r);
+  applyPrefs(state.me.prefs);
+  toast(msg, 'ok');
+}
+
+export async function removePin(id) {
+  const order = (state.me.prefs.home_order || []).filter((k) => k !== `pin:${id}`);
+  await put('/api/me/prefs', { home_order: order });
+  state.me.prefs.home_order = order;
+  await savePins(pins().filter((p) => p.id !== id), tr('Rangée retirée de l’accueil'));
+}
+
+// "Pin to home" / "Remove from home" button; pin = { type, ref, lib?, title }
+export function pinButton(pin) {
+  const btn = h('button.btn.ghost.small.pin-btn', { type: 'button' });
+  const paint = () => {
+    const on = pins().some((p) => same(p, pin));
+    btn.replaceChildren(icon(on ? 'bookmarked' : 'bookmark'), on ? tr('Retirer de l’accueil') : tr('Épingler à l’accueil'));
+    btn.setAttribute('aria-pressed', String(on));
+  };
+  btn.addEventListener('click', async () => {
+    try {
+      const existing = pins().find((p) => same(p, pin));
+      if (existing) await removePin(existing.id);
+      else {
+        if (pins().length >= 20) { toast(tr('20 rangées épinglées au maximum'), 'bad'); return; }
+        const id = Math.max(0, ...pins().map((p) => p.id + 1));
+        await savePins([...pins(), { id, ...pin, ref: String(pin.ref), ...(pin.lib ? { lib: String(pin.lib) } : {}) }],
+          tr('Rangée ajoutée à l’accueil'));
+      }
+      paint();
+    } catch (e) { toast(e.message, 'bad'); }
+  });
+  paint();
+  return btn;
+}
+
+export const PIN_LABELS = { collection: 'collection', playlist: 'playlist', genre: 'genre', filter: 'filtres' };
+
+// Home row for a pin (null when the source no longer exists or is empty)
+export async function pinRow(p) {
+  try {
+    if (p.type === 'collection') {
+      const c = await get(`/api/collections/${p.ref}`);
+      return row(c.title, c.items, (x) => posterCard(x), { href: `#/collection/${p.ref}` });
+    }
+    if (p.type === 'playlist') {
+      const pl = await get(`/api/playlists/${p.ref}`);
+      return row(pl.title, pl.items, (x) => wideCard(x), { href: `#/playlist/${p.ref}`, wide: true });
+    }
+    const lib = (state.me.libraries || []).find((l) => String(l.id) === String(p.lib));
+    if (!lib) return null;
+    if (p.type === 'filter') { // combination of filters of a library
+      const q = new URLSearchParams(p.ref);
+      if (!q.get('sort')) q.set('sort', 'added');
+      q.set('start', 0);
+      q.set('size', p.count || 24);
+      const r = await get(`/api/libraries/${p.lib}/items?${q}`);
+      return row(p.title, r.items, (x) => posterCard(x), { href: `#/library/${p.lib}?${p.ref}` });
+    }
+    const q = new URLSearchParams({ start: 0, size: p.count || 24, sort: 'added', genre: p.ref });
+    const r = await get(`/api/libraries/${p.lib}/items?${q}`);
+    return row(`${p.ref} · ${lib.title}`, r.items, (x) => posterCard(x), { href: `#/library/${p.lib}?genre=${encodeURIComponent(p.ref)}` });
+  } catch {
+    return null;
+  }
+}

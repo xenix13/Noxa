@@ -1,0 +1,27 @@
+import { tr } from './i18n.js';
+// Appearance of text subtitles (each user's preferences), applied through CSS variables
+// to the player and to the Settings preview. ASS subtitles rendered by libass keep their own style.
+export const SUB_FONTS = {
+  sans: [tr('Standard'), 'Inter, system-ui, sans-serif'],
+  display: [tr('Arrondie'), 'Outfit, Inter, sans-serif'],
+  serif: [tr('À empattements'), 'Georgia, "Times New Roman", serif'],
+  mono: [tr('Machine à écrire'), '"SFMono-Regular", Consolas, "Liberation Mono", monospace'],
+};
+export const SUB_BGS = { box: [tr('Bandeau semi-transparent'), 'rgba(0, 0, 0, 0.55)'], solid: [tr('Bandeau opaque'), 'rgba(0, 0, 0, 0.92)'],
+  none: [tr('Aucun'), 'transparent'] };
+export const SUB_EDGES = {
+  shadow: [tr('Ombre'), '0 1px 2px #000, 0 0 6px rgba(0, 0, 0, 0.7)'],
+  outline: [tr('Contour'), '-1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 4px #000'],
+  none: [tr('Aucun'), 'none'],
+};
+export const SUB_POSITIONS = { bottom: [tr('En bas'), '9%'], high: [tr('Un peu plus haut'), '16%'] };
+export const SUB_COLORS = ['#ffffff', '#fff4b0', '#ffd23f', '#9be7ff', '#b6f5c0'];
+
+export function applySubStyle(el, prefs) {
+  const pick = (table, key, fallback) => (table[prefs[key]] || table[fallback])[1];
+  el.style.setProperty('--sub-font', pick(SUB_FONTS, 'sub_font', 'sans'));
+  el.style.setProperty('--sub-bg', pick(SUB_BGS, 'sub_bg', 'box'));
+  el.style.setProperty('--sub-shadow', pick(SUB_EDGES, 'sub_edge', 'shadow'));
+  el.style.setProperty('--sub-bottom', pick(SUB_POSITIONS, 'sub_position', 'bottom'));
+  el.style.setProperty('--sub-color', prefs.sub_color || '#ffffff');
+}

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr" data-theme="dark" data-poster="m">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0b0b0e">
+  <meta name="description" content="Noxa : tes films, séries et animes, partout.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Noxa">
+  <title>Noxa</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="preload" href="fonts/outfit.woff" as="font" type="font/woff" crossorigin>
+  <link rel="preload" href="fonts/inter.woff" as="font" type="font/woff" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+  <script>window.NOXA_DEMO = true;</script>
+  <style>
+    .demo-banner { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 9999; display: flex;
+      align-items: center; gap: 10px; max-width: calc(100vw - 32px); padding: 8px 14px; border-radius: 999px;
+      background: rgba(20, 20, 26, .92); color: #f3f3f5; font: 500 13px/1.3 Inter, system-ui, sans-serif;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, .4); transition: background .3s; }
+    .demo-banner a { color: #ffa43a; font-weight: 600; white-space: nowrap; }
+    .demo-banner.flash { background: rgba(255, 164, 58, .95); color: #1c0f00; }
+    .demo-banner.flash a { color: #1c0f00; }
+  </style>
+  <script>
+    (async () => {
+      if (!('serviceWorker' in navigator)) {
+        document.addEventListener('DOMContentLoaded', () => { document.getElementById('app').textContent = 'This demo needs a recent browser (service workers).'; });
+        return;
+      }
+      await navigator.serviceWorker.register('demo-sw.js', { scope: './' });
+      await navigator.serviceWorker.ready;
+      if (!navigator.serviceWorker.controller) {
+        // first visit: wait until the worker controls the page, so that every request goes through it
+        await new Promise((resolve) => {
+          navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
+          setTimeout(() => { if (!navigator.serviceWorker.controller) location.reload(); }, 4000);
+        });
+      }
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        const b = document.querySelector('.demo-banner');
+        if (!b || !e.data || e.data.demo !== 'not-saved') return;
+        b.classList.add('flash');
+        setTimeout(() => b.classList.remove('flash'), 2500);
+      });
+      import('./js/app.js');
+    })();
+  </script>
+
+</head>
+<body>
+  <div id="app"><div class="boot"><span class="logo-mark big" role="img" aria-label="Noxa"></span></div></div>
+  <noscript>Noxa a besoin de JavaScript.</noscript>
+  <div class="demo-banner">Noxa demo: nothing you change is saved, and videos are 30-second clips. <a href="https://github.com/xenix13/Noxa">Install your own</a></div>
+</body>
+</html>

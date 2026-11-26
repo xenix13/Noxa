@@ -1,0 +1,408 @@
+import { tr, locale } from './i18n.js';
+// DOM helpers, formatting and shared components. Text is always set with
+// textContent, never innerHTML, so metadata cannot inject markup.
+
+export function h(tag, attrs, ...children) {
+  const m = /^([a-z0-9]+)?((?:[.#][\w-]+)*)$/i.exec(tag);
+  const el = document.createElement((m && m[1]) || 'div');
+  if (m && m[2]) {
+    for (const part of m[2].match(/[.#][\w-]+/g)) {
+      if (part[0] === '.') el.classList.add(part.slice(1));
+      else el.id = part.slice(1);
+    }
+  }
+  if (attrs && (typeof attrs !== 'object' || attrs instanceof Node || Array.isArray(attrs))) {
+    children.unshift(attrs);
+    attrs = null;
+  }
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    else if (k === 'class') el.className = v;
+    else if (k === 'style' && typeof v === 'object') {
+      for (const [sk, sv] of Object.entries(v)) {
+        if (sk.startsWith('--')) el.style.setProperty(sk, sv); else el.style[sk] = sv;
+      }
+    }
+    else if (k === 'dataset') Object.assign(el.dataset, v);
+    else if (k in el && typeof v !== 'string') el[k] = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  append(el, children);
+  return el;
+}
+
+function append(el, children) {
+  for (const c of children.flat(Infinity)) {
+    if (c === null || c === undefined || c === false) continue;
+    el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+}
+
+// Pictures still loading on the page being left: abandoned. The browser only opens 6 connections to
+// the server; without this, the next page waits behind the posters of the previous one.
+export function cancelImages(el) {
+  for (const im of el.querySelectorAll('img')) {
+    if (!im.complete) im.removeAttribute('src');
+  }
+}
+
+export function clear(el, ...children) {
+  el.replaceChildren();
+  append(el, children);
+  return el;
+}
+
+// Local browser preferences (volume, filter…): no effect when storage is unavailable.
+export function store(key, value) {
+  try {
+    if (value === undefined) return localStorage.getItem(key);
+    localStorage.setItem(key, value);
+  } catch { /* storage unavailable (private browsing…) */ }
+  return null;
+}
+
+export function img(path, w, h) {
+  if (!path) return '';
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  return `/api/img?p=${encodeURIComponent(path)}&w=${Math.round(w * dpr)}&h=${Math.round(h * dpr)}`;
+}
+
+export function fmtTime(ms, withHours = false) {
+  ms = Math.max(0, Math.floor((ms || 0) / 1000));
+  const hh = Math.floor(ms / 3600), mm = Math.floor((ms % 3600) / 60), ss = ms % 60;
+  const p = (n) => String(n).padStart(2, '0');
+  return hh || withHours ? `${hh}:${p(mm)}:${p(ss)}` : `${mm}:${p(ss)}`;
+}
+
+export function fmtDuration(ms) {
+  if (!ms) return '';
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `${min} min`;
+  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
+}
+
+export function episodeCode(c) {
+  if (c.season == null || c.episode == null) return '';
+  return `S${String(c.season).padStart(2, '0')}E${String(c.episode).padStart(2, '0')}`;
+}
+
+export function icon(name, extra) {
+  const paths = {
+    play: 'M8 5v14l11-7z',
+    chevleft: 'M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z',
+    cast: 'M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z',
+    airplay: 'M6 22h12l-6-6zM21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h4v-2H3V5h18v12h-4v2h4c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z',
+    grid: 'M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z',
+    place: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z',
+    wide: 'M3 5h18v6H3zm0 8h18v6H3z',
+    shuffle: 'M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z',
+    chevright: 'M8.6 7.4 10 6l6 6-6 6-1.4-1.4 4.6-4.6z',
+    download: 'M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z',
+    info: 'M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z',
+    pause: 'M6 5h4v14H6zM14 5h4v14h-4z',
+    check: 'M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z',
+    back: 'M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z',
+    share: 'M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6c-1.11 0-2-.9-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .89 2 2z',
+    'thumb-up': 'M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z',
+    'thumb-down': 'M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z',
+    bell: 'M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z',
+    user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z',
+    palette: 'M12 3a9 9 0 0 0 0 18c.8 0 1.5-.7 1.5-1.5 0-.4-.1-.7-.4-1-.2-.3-.4-.6-.4-1 0-.8.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8zm-5.5 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z',
+    home: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
+    dashboard: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
+    folder: 'M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z',
+    storage: 'M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z',
+    bolt: 'M7 2v11h3v9l7-12h-4l4-8z',
+    upgrade: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6H8l4-4 4 4h-3v6z',
+    headphones: 'M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h3v-8H5v-1a7 7 0 0 1 14 0v1h-3v8h3a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9z',
+    mic: 'M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z',
+    backup: 'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z',
+    install: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
+    search: 'M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z',
+    rewind: 'M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z',
+    forward: 'M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z',
+    full: 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z',
+    exitfull: 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z',
+    volume: 'M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z',
+    mute: 'M16.5 12A4.5 4.5 0 0 0 14 8v2.2l2.5 2.5V12zM19 12a7 7 0 0 1-.6 2.8l1.5 1.5A9 9 0 0 0 21 12a9 9 0 0 0-7-8.8v2A7 7 0 0 1 19 12zM4.3 3 3 4.3 7.7 9H3v6h4l5 5v-6.7l4.3 4.3a7 7 0 0 1-2.3 1.2v2a9 9 0 0 0 3.7-1.8l2 2 1.3-1.3L4.3 3zM12 4 9.9 6.1 12 8.2V4z',
+    cog: 'M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.7 7.7 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.7 7.7 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z',
+    subs: 'M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z',
+    next: 'M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z',
+    skip: 'M5 5v14l7-7zm7 0v14l7-7z',
+    eye: 'M12 5C7 5 2.7 8.1 1 12.5 2.7 16.9 7 20 12 20s9.3-3.1 11-7.5C21.3 8.1 17 5 12 5zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+    trash: 'M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z',
+    'cloud-off': 'M19.35 10.04A7.49 7.49 0 0 0 12 4c-1.48 0-2.85.43-4.01 1.17l1.46 1.46a5.5 5.5 0 0 1 8.05 4.87v.5H19c1.66 0 3 1.34 3 3 0 1.13-.64 2.11-1.56 2.62l1.45 1.45A4.99 4.99 0 0 0 24 15c0-2.64-2.05-4.78-4.65-4.96zM3 5.27l2.75 2.74C2.56 8.15 0 10.77 0 14c0 3.31 2.69 6 6 6h11.73l2 2L21 20.73 4.27 4 3 5.27zM7.73 10l8 8H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h1.73z',
+    close: 'M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z',
+    chapters: 'M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z',
+    more: 'M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
+    bookmark: 'M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2zm0 15-5-2.2L7 18V5h10v13z',
+    bookmarked: 'M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z',
+    film: 'M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V4h-4z',
+    playlist: 'M3 10h11v2H3v-2zm0-4h11v2H3V6zm0 8h7v2H3v-2zm13-1v8l6-4-6-4z',
+    group: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z',
+    tv: 'M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18v12z',
+    star: 'M22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2l5.5 4.7L5.8 21 12 17.3 18.2 21l-1.6-7.1L22 9.2zM12 15.4l-3.8 2.3 1-4.3-3.3-2.9 4.4-.4L12 6.1l1.7 4 4.4.4-3.3 2.9 1 4.3-3.8-2.3z',
+    starred: 'M12 17.3 18.2 21l-1.6-7.1L22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2l5.5 4.7L5.8 21z',
+    guide: 'M3 5h18v2H3V5zm0 6h6v2H3v-2zm8 0h10v2H11v-2zm-8 6h10v2H3v-2zm12 0h6v2h-6v-2z',
+    clock: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z',
+    link: 'M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z',
+    up: 'M7.4 15.4 12 10.8l4.6 4.6L18 14l-6-6-6 6z',
+    down: 'M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z',
+    pip: 'M19 11h-8v6h8v-6zm4 8V5a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2zm-2 0H3V5h18v14z',
+    list: 'M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z',
+  };
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('icon');
+  if (extra) svg.classList.add(extra);
+  const p = document.createElementNS(ns, 'path');
+  p.setAttribute('d', paths[name] || '');
+  svg.append(p);
+  return svg;
+}
+
+export function toast(message, kind = 'info', action = null) {
+  let box = document.getElementById('toasts');
+  if (!box) {
+    box = h('div#toasts', { role: 'status', 'aria-live': 'polite' });
+    document.body.append(box);
+  }
+  for (const old of [...box.children]) if (old.firstChild && old.firstChild.textContent === message) old.remove(); // no stack of identical messages
+  const t = h(`div.toast.${kind}`, message, action ? h('button.toast-action', {
+    onclick: () => { t.remove(); action.onClick(); } }, action.label) : null);
+  box.append(t);
+  const wait = action ? 6000 : 3600;
+  setTimeout(() => t.classList.add('out'), wait);
+  setTimeout(() => t.remove(), wait + 400);
+}
+
+export function modal(title, body, actions = []) {
+  return new Promise((resolve) => {
+    const close = (v) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+    const overlay = h('div.modal-overlay', { onclick: (e) => { if (e.target === overlay) close(null); } },
+      h('div.modal', { role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+        h('div.modal-head', h('h2', title),
+          h('button.icon-btn', { onclick: () => close(null), 'aria-label': tr('Fermer') }, icon('close'))),
+        h('div.modal-body', body),
+        actions.length ? h('div.modal-actions', actions.map((a) =>
+          h(`button.btn${a.primary ? '.primary' : ''}${a.danger ? '.danger' : ''}`, {
+            onclick: async (e) => {
+              if (!a.handler) return close(a.value);
+              const btn = e.currentTarget;
+              btn.disabled = true;
+              try {
+                const v = await a.handler();
+                if (v !== false) close(v ?? a.value);
+              } finally { btn.disabled = false; }
+            },
+          }, a.label))) : null));
+    document.body.append(overlay);
+    document.addEventListener('keydown', onKey);
+    const first = overlay.querySelector('input, select, button.primary');
+    if (first) setTimeout(() => first.focus(), 30);
+  });
+}
+
+export async function confirmDialog(title, message, label = tr('Confirmer'), danger = true) {
+  const r = await modal(title, h('p', message), [
+    { label: tr('Annuler'), value: false },
+    { label, value: true, primary: !danger, danger },
+  ]);
+  return r === true;
+}
+
+export function field(label, input, hint) {
+  return h('label.field', h('span.field-label', label), input, hint ? h('span.field-hint', hint) : null);
+}
+
+export function select(options, value, attrs = {}) {
+  return h('select', attrs, options.map(([v, l]) => h('option', { value: v, selected: String(v) === String(value) }, l)));
+}
+
+// Order chosen by the user: the known keys in their order, then the new ones at their default place.
+export function arrange(keys, order = []) {
+  const known = order.filter((k) => keys.includes(k));
+  const rest = keys.filter((k) => !known.includes(k));
+  return [...known, ...rest];
+}
+
+// hls.js (400 KB): loaded only when a player needs it, not on every page
+let hlsPromise = null;
+export function loadHls() {
+  if (window.Hls) return Promise.resolve();
+  hlsPromise = hlsPromise || new Promise((resolve) => {
+    const s = document.createElement('script');
+    s.src = '/vendor/hls.min.js';
+    s.onload = s.onerror = () => resolve(); // missing: the player shows its error message
+    document.head.append(s);
+  });
+  return hlsPromise;
+}
+
+export function toggle(label, checked, attrs = {}) {
+  return h('label.toggle', h('input', { type: 'checkbox', checked, ...attrs }), h('span.toggle-ui'), h('span', label));
+}
+
+export function spinner() {
+  return h('div.spinner', { role: 'progressbar', 'aria-label': tr('Chargement') });
+}
+
+export function errorBox(err, retry) {
+  return h('div.error-box', h('p', err.message || String(err)),
+    retry ? h('button.btn', { onclick: retry }, tr('Réessayer')) : null);
+}
+
+export function avatar(user, size = 32) {
+  const initial = (user.display_name || user.username || '?').trim().charAt(0).toUpperCase();
+  const el = h('span.avatar', { style: { background: user.avatar_color, width: `${size}px`, height: `${size}px`,
+    fontSize: `${Math.round(size * 0.45)}px` } }, initial);
+  if (user.avatar) {
+    // profile picture; the initial stays underneath if it does not load
+    const pic = h('img', { src: user.avatar, alt: '', loading: 'lazy', decoding: 'async' });
+    pic.addEventListener('error', () => pic.remove());
+    el.append(pic);
+  }
+  return el;
+}
+
+// ---------- media cards ----------
+export function progressBar(position, duration) {
+  if (!position || !duration) return null;
+  const pct = Math.min(100, Math.max(2, (position / duration) * 100));
+  return h('div.progress', h('div.progress-fill', { style: { width: `${pct}%` } }));
+}
+
+function badge(c) {
+  if (c.type === 'show' || c.type === 'season') {
+    if (c.watched) return h('span.badge.done', icon('check'));
+    if (c.leaves && c.leaves > (c.watched_count || 0)) return h('span.badge.count', c.leaves - (c.watched_count || 0));
+    return null;
+  }
+  return c.watched ? h('span.badge.done', icon('check')) : null;
+}
+
+export function posterCard(c, { href } = {}) {
+  const link = href || (c.type === 'episode' ? `#/item/${c.id}` : `#/item/${c.id}`);
+  let sub = c.year || '';
+  if (c.type === 'episode') sub = `${episodeCode(c)} · ${c.title}`;
+  if (c.type === 'show' && c.latest) sub = tr('Nouveau : S{season} E{episode}', { season: c.latest.season, episode: c.latest.episode });
+  if (c.type === 'season') sub = tr('{p1} épisodes', { p1: c.leaves || 0 });
+  const thumb = c.type === 'episode' ? (c.show_thumb || c.thumb) : c.thumb;
+  // badges shown according to the profile (Settings → Appearance): resolution, HDR, new, rating
+  const isNew = c.added && Date.now() / 1000 - c.added < 7 * 86400 && !c.watched && c.type !== 'episode';
+  const flags = [c.res === '4K' ? h('span.card-q', '4K') : null, c.hdr ? h('span.card-q', 'HDR') : null,
+    isNew ? h('span.card-new', tr('Nouveau')) : null,
+    c.rating ? h('span.card-rate', `★ ${Number(c.rating).toLocaleString(locale(), { maximumFractionDigits: 1 })}`) : null].filter(Boolean);
+  return h('a.card.poster', { href: link, title: c.title },
+    h('div.card-img', thumb ? h('img', { src: img(thumb, 200, 300), alt: '', loading: 'lazy' }) : h('div.noimg', c.title),
+      flags.length ? h('div.card-flags', flags) : null, badge(c), progressBar(c.position, c.duration)),
+    h('div.card-title', c.type === 'episode' ? c.show : c.title),
+    h('div.card-sub', String(sub)));
+}
+
+export function wideCard(c, { onPlay, onWatched } = {}) {
+  const thumb = c.type === 'episode' ? (c.thumb || c.show_art) : (c.art || c.thumb);
+  const title = c.type === 'episode' ? c.show : c.title;
+  let sub = c.type === 'episode' ? `${episodeCode(c)} · ${c.title}` : (c.year || '');
+  if (c.next_up) sub = tr('À suivre · {sub}', { sub });
+  const left = c.duration && c.position ? tr('{p1} restantes', { p1: fmtDuration(c.duration - c.position) }) : '';
+  const card = h('a.card.wide', { href: `#/play/${c.id}${c.position ? '?resume=1' : ''}`, title,
+    onclick: onPlay ? (e) => { e.preventDefault(); onPlay(c); } : null },
+    h('div.card-img', { class: c.type === 'episode' && c.next_up && c.thumb ? 'card-img spoiler-img' : 'card-img' },
+      thumb ? h('img', { src: img(thumb, 400, 225), alt: '', loading: 'lazy' }) : h('div.noimg', title),
+      h('span.play-hover', icon('play')), progressBar(c.position, c.duration)),
+    h('div.card-title', title),
+    h('div.card-sub', String(sub), left ? h('span.muted', ` — ${left}`) : null));
+  if (!onWatched) return card;
+  // button next to the link (not inside): "mark as watched" without starting playback
+  const label = c.type === 'episode' ? tr('Marquer « {p1} » comme vu', { p1: episodeCode(c) }) : tr('Marquer comme vu');
+  // and a discreet access to the title page (of the show for an episode), without resuming playback
+  const about = c.type === 'episode' ? tr('Fiche de la série') : tr('Fiche du film');
+  return h('div.card-slot', card,
+    h('a.card-watch.card-about', { href: `#/item/${c.show_id || c.id}`, title: about, 'aria-label': `${about} : ${title}` }, icon('info')),
+    h('button.card-watch', { type: 'button', title: label, 'aria-label': `${label} : ${title}`,
+      onclick: (e) => { e.currentTarget.disabled = true; onWatched(c, slot()); } }, icon('check')));
+  function slot() { return card.parentElement; }
+}
+
+export function row(title, items, render, opts = {}) {
+  if (!items || !items.length) return null;
+  const track = h('div.row-track', items.map(render));
+  const scroll = (dir) => track.scrollBy({ left: dir * track.clientWidth * 0.85, behavior: 'smooth' });
+  return h('section.row', opts.wide ? { class: 'row wide-row' } : null,
+    h('div.row-head', opts.href ? h('a.row-title', { href: opts.href }, title) : h('h2.row-title', title),
+      h('div.row-nav',
+        h('button.icon-btn', { onclick: () => scroll(-1), 'aria-label': tr('Précédent') }, '‹'),
+        h('button.icon-btn', { onclick: () => scroll(1), 'aria-label': tr('Suivant') }, '›'))),
+    track);
+}
+
+// "⋯" menu: button + list of actions, closed on an outside click or with Escape.
+export function moreMenu(items, label = tr('Plus d’actions')) {
+  const list = h('div.more-list', { role: 'menu', hidden: true });
+  const backdrop = h('div.more-backdrop');
+  const close = () => {
+    if (list.contains(document.activeElement)) btn.focus({ preventScroll: true }); // remote control: back to the button
+    list.hidden = true; document.removeEventListener('click', onDoc, true); document.removeEventListener('keydown', onKey);
+    window.removeEventListener('scroll', onMove); window.removeEventListener('resize', onMove);
+    backdrop.remove();
+    if (list.parentNode !== wrap) { list.classList.remove('sheet', 'floating'); wrap.append(list); }
+    for (const k of ['left', 'top', 'maxHeight', 'overflowY']) list.style[k] = '';
+    list.classList.remove('more-fade');
+  };
+  const onDoc = (e) => { if (!wrap.contains(e.target) && !list.contains(e.target)) close(); };
+  // when opened, the menu is placed on the page (outside any container that would clip it): on a phone, as a
+  // sheet at the bottom of the screen; elsewhere, under the button (or above when there is more room), moved back into the
+  // window, and scrolling when it is taller than the available space
+  const place = () => {
+    if (window.innerWidth <= 600) {
+      list.classList.add('sheet');
+      document.body.append(backdrop, list);
+      fade();
+      return;
+    }
+    const b = btn.getBoundingClientRect();
+    list.classList.add('floating');
+    document.body.append(list);
+    const w = list.offsetWidth, ht = list.scrollHeight, m = 8, H = window.innerHeight;
+    list.style.left = `${Math.round(Math.min(Math.max(m, b.left), window.innerWidth - m - w))}px`;
+    let top;
+    if (ht > H - 2 * m) { // taller than the window: full height, and it scrolls
+      top = m;
+      list.style.maxHeight = `${H - 2 * m}px`; list.style.overflowY = 'auto';
+    } else if (b.bottom + 6 + ht <= H - m) top = b.bottom + 6;     // under the button
+    else if (b.top - 6 - ht >= m) top = b.top - 6 - ht;             // above
+    else top = H - m - ht;                                          // shifted to fit entirely
+    list.style.top = `${Math.round(top)}px`;
+    fade();
+  };
+  // scrolling menu: the bottom fades while there are more options below (otherwise they seem missing)
+  const fade = () => list.classList.toggle('more-fade', list.scrollHeight - list.scrollTop - list.clientHeight > 4);
+  list.addEventListener('scroll', fade, { passive: true });
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const onMove = () => { if (list.classList.contains('floating')) close(); }; // the page moves: the menu does not follow
+  for (const it of items.filter(Boolean)) {
+    if (it.divider) { list.append(h('div.more-divider')); continue; }
+    if (it.heading) { list.append(h('div.more-heading', it.heading)); continue; }
+    list.append(h('button.more-item', { role: 'menuitem', class: it.danger ? 'more-item danger' : 'more-item',
+      onclick: async () => { close(); await it.onClick(); } }, it.label));
+  }
+  const btn = h('button.btn.ghost.icon-only', { 'aria-label': label, title: label, 'aria-haspopup': 'menu', onclick: (e) => {
+    e.stopPropagation();
+    if (list.hidden) {
+      list.hidden = false;
+      place();
+      document.addEventListener('click', onDoc, true);
+      document.addEventListener('keydown', onKey);
+      window.addEventListener('scroll', onMove, { passive: true }); window.addEventListener('resize', onMove);
+      const first = list.querySelector('.more-item');
+      if (first) first.focus({ preventScroll: true }); // with the keyboard / remote: focus is in the menu
+    } else close();
+  } }, icon('more'));
+  const wrap = h('div.more-wrap', btn, list);
+  return wrap;
+}

@@ -1,0 +1,131 @@
+import { get, post } from '../api.js';
+import { state } from '../app.js';
+import { arrange, clear, h, icon, img, posterCard, row, toast, wideCard } from '../ui.js';
+import { groupCard } from './together.js';
+import { onGroups } from '../groups.js';
+import { pinRow, pins } from '../pins.js';
+import { tr } from '../i18n.js';
+
+// Last home received: shown right away when coming back to the page (from Settings, a title page…), then
+// updated in the background if it changed. Specific to the account and its settings.
+let lastHome = null;
+const HOME_KEEP_MS = 10 * 60 * 1000;
+const homeKey = () => `${state.me.user.id}|${JSON.stringify(state.me.prefs)}`;
+
+export async function renderHome(main, ctx, { fresh = false, preset = null } = {}) {
+  const key = homeKey();
+  let data = preset;
+  let stale = false;
+  if (!data && !fresh && lastHome && lastHome.key === key && Date.now() - lastHome.at < HOME_KEEP_MS) {
+    data = lastHome.data;
+    stale = true;
+  }
+  if (!data) {
+    data = await get('/api/home');
+    lastHome = { key, at: Date.now(), data, text: JSON.stringify(data) };
+  }
+  if (!ctx.isCurrent()) return;
+  const parts = [];
+  const sections = new Map(); // key -> row; shown in the chosen order (Settings → Home and menu)
+  // banner: chosen in Settings → Home and menu (resume, recent addition, random, list, none)
+  const mode = data.hero_mode || 'auto';
+  const hero = mode === 'none' ? null : mode === 'resume' ? data.continue[0] : mode === 'auto' ? (data.continue[0] || data.hero) : data.hero;
+  if (hero) {
+    const art = hero.type === 'episode' ? (hero.show_art || hero.art) : hero.art;
+    const resume = data.continue[0] === hero;
+    const playHref = `#/play/${hero.id}${resume && hero.position ? '?resume=1' : ''}`;
+    const infoHref = `#/item/${hero.type === 'episode' ? hero.show_id : hero.id}`;
+    parts.push(h('section.hero', art ? { style: { backgroundImage: `url("${img(art, 1600, 900)}")` } } : null,
+      h('div.hero-shade'),
+      h('div.hero-body',
+        h('div.hero-kicker', resume ? (hero.next_up ? tr('À suivre') : tr('Reprendre'))
+          : mode === 'random' ? tr('À découvrir') : mode === 'watchlist' ? tr('Dans votre liste') : tr('Ajouté récemment')),
+        h('h1.hero-title', hero.type === 'episode' ? hero.show : hero.title),
+        hero.type === 'episode'
+          ? h('p.hero-sub', tr('Saison {season} · Épisode {episode} — {title}', { season: hero.season, episode: hero.episode, title: hero.title }))
+          : (hero.year ? h('p.hero-sub', [hero.year, hero.content_rating].filter(Boolean).join(' · ')) : null),
+        hero.summary ? h('p.hero-summary', { class: hero.type === 'episode' && !hero.position ? 'hero-summary spoiler' : 'hero-summary' }, hero.summary) : null,
+        h('div.hero-actions',
+          hero.type === 'show' ? null : h('a.btn.light.lg', { href: playHref }, icon('play'), resume && hero.position ? tr('Reprendre') : tr('bouton|Lecture')),
+          h('a.btn.ghost.lg', { href: infoHref }, tr('Plus d’infos'))))));
+  }
+  // running groups: row kept up to date live (empty and invisible when there are none)
+  const togetherBox = h('div.together-row');
+  sections.set('together', togetherBox);
+  const stopGroups = onGroups((groups) => {
+    const shown = groups.filter((g) => !g.item || !g.item.hidden);
+    togetherBox.replaceChildren(...(shown.length ? [h('section.row', h('div.row-head', h('a.row-title', { href: '#/together' }, tr('Regarder ensemble'))),
+      h('div.group-list', shown.map(groupCard)))] : []));
+  });
+  ctx.setCleanup(stopGroups);
+  const continueRow = (items) => row(tr('Reprendre et à suivre'), items, (c) => wideCard(c, { onWatched }), { wide: true });
+  let current = continueRow(data.continue);
+  // "mark as watched": the card fades, the next episode takes its place; can be undone
+  async function refreshRow(c) {
+    if (hero && String(hero.id) === String(c.id)) { stopGroups(); await renderHome(main, ctx, { fresh: true }); return; } // the big poster changes too
+    const fresh = await get('/api/home');
+    if (!ctx.isCurrent()) return;
+    const next = continueRow(fresh.continue) || h('div', { hidden: true });
+    if (current && current.isConnected) current.replaceWith(next);
+    current = next;
+  }
+  async function setWatched(c, watched) {
+    await post(`/api/items/${c.id}/watched`, watched ? { watched } : { watched, undo: true, position: c.position || 0 });
+    await refreshRow(c);
+  }
+  async function onWatched(c, slot) {
+    slot.classList.add('leaving');
+    try {
+      await setWatched(c, true);
+      toast(c.type === 'episode' ? tr('{show} · {title} : marqué comme vu', { show: c.show, title: c.title }) : tr('{title} : marqué comme vu', { title: c.title }), 'ok',
+        { label: tr('Annuler'), onClick: () => setWatched(c, false).catch((x) => toast(x.message, 'bad')) });
+    } catch (x) {
+      slot.classList.remove('leaving');
+      slot.querySelector('.card-watch').disabled = false;
+      toast(x.message, 'bad');
+    }
+  }
+  sections.set('continue', current);
+  sections.set('watchlist', row(tr('À regarder'), data.watchlist, (c) => posterCard(c), { href: '#/watchlist' }));
+  // suggestions computed from what was watched recently (genres, directors, actors)
+  sections.set('suggest', row(tr('Suggestions'), data.suggestions, (c) => posterCard(c)));
+  const because = (data.because || []).map((b) => row(tr(b.seed.type === 'show' ? 'Parce que vous avez regardé la série {title}' : 'Parce que vous avez regardé {title}', { title: b.seed.title }),
+    b.items, (c) => posterCard(c)));
+  sections.set('because', because.length ? h('div.row-group', because) : null);
+  sections.set('short', row(tr('Pour une soirée courte'), data.short || [], (c) => posterCard(c)));
+  sections.set('unfinished', row(tr('Séries à reprendre'), data.unfinished || [], (c) => wideCard(c), { wide: true }));
+  for (const r of data.rows) {
+    const title = r.library.type === 'show' ? tr('Nouveaux épisodes · {title}', { title: r.library.title }) : tr('Ajoutés récemment · {title}', { title: r.library.title });
+    sections.set(`lib:${r.library.id}`, row(title, r.items, (c) => posterCard(c), { href: `#/library/${r.library.id}` }));
+  }
+  // pinned rows (collections, playlists, genres), loaded in parallel
+  const myPins = pins();
+  const pinRows = await Promise.all(myPins.map(pinRow));
+  if (!ctx.isCurrent()) return;
+  myPins.forEach((p, i) => sections.set(`pin:${p.id}`, pinRows[i]));
+  const { home_order: order = [], home_hidden: hiddenKeys = [] } = state.me.prefs;
+  for (const k of arrange([...sections.keys()], order)) {
+    if (!hiddenKeys.includes(k)) parts.push(sections.get(k));
+  }
+  if (!data.rows.length && !data.continue.length && !(data.watchlist || []).length) {
+    parts.push(state.me.user.is_admin
+      ? h('div.empty', h('p', tr('Aucun média pour l’instant.')),
+        h('a.btn.primary', { href: '#/admin/libraries' }, tr('Ajouter une bibliothèque')))
+      : h('div.empty', tr('Aucune bibliothèque n’est accessible avec ce compte. Contactez l’administrateur.')));
+  }
+  clear(main, parts);
+  if (stale) {
+    // home kept in memory: check it is still up to date, and redraw it only if it changed
+    try {
+      const next = await get('/api/home');
+      const text = JSON.stringify(next);
+      if (lastHome && lastHome.key === key && lastHome.text === text) { lastHome.at = Date.now(); return; }
+      lastHome = { key, at: Date.now(), data: next, text };
+      if (!ctx.isCurrent() || homeKey() !== key) return;
+      const y = window.scrollY;
+      stopGroups();
+      await renderHome(main, ctx, { preset: next });
+      window.scrollTo(0, y);
+    } catch { /* offline or server busy: keep what is shown */ }
+  }
+}

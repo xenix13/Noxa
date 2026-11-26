@@ -1,0 +1,84 @@
+import { del, get } from '../api.js';
+import { clear, episodeCode, fmtDuration, h, icon, img, posterCard, select, spinner, toast } from '../ui.js';
+import { tr, plural, locale } from '../i18n.js';
+
+const DAY = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+const monthNames = (month) => [...Array(12)].map((_, i) => new Date(2000, i, 15).toLocaleDateString(locale(), { month }));
+const MONTHS = monthNames('short');
+const MONTHS_LONG = monthNames('long');
+
+// Summary: time spent, favourite titles and genres, over a year or a month
+async function renderRecap(box, ctx) {
+  const years = await get('/api/history/years').catch(() => []);
+  if (!ctx.isCurrent() || !years.length) return;
+  const yearSel = select(years.map((y) => [String(y), String(y)]), String(years[0]), { 'aria-label': tr('Année') });
+  const monthSel = select([['0', tr('Toute l’année')], ...MONTHS_LONG.map((m, i) => [String(i + 1), m])], '0', { 'aria-label': tr('Mois') });
+  const body = h('div.recap-body');
+  const paint = async () => {
+    body.replaceChildren(spinner());
+    const r = await get(`/api/history/recap?year=${yearSel.value}&month=${monthSel.value}`).catch(() => null);
+    if (!ctx.isCurrent()) return;
+    if (!r || r.empty) { body.replaceChildren(h('p.muted', tr('Aucun visionnage sur cette période.'))); return; }
+    const stat = (value, label) => h('div.stat', h('strong', value), h('span', label));
+    const maxMonth = Math.max(...(r.months || [0]), 0.1);
+    body.replaceChildren(
+      h('div.stats', stat(r.minutes < 60 ? `${r.minutes} min` : `${r.hours.toLocaleString(locale())} h`, tr('de visionnage')), stat(String(r.films), r.films > 1 ? tr('films') : tr('film')),
+        stat(String(r.episodes), r.episodes > 1 ? tr('épisodes') : tr('épisode')), stat(String(r.days), r.days > 1 ? tr('jours actifs') : tr('jour actif')),
+        r.streak > 1 ? stat(plural(r.streak, '{n} jour', '{n} jours'), tr('d’affilée au maximum')) : null,
+        r.weekday ? stat(r.weekday, tr('jour préféré')) : null),
+      r.months ? h('div.recap-months', { role: 'img', 'aria-label': tr('Heures de visionnage par mois') },
+        r.months.map((v, i) => h('div.recap-month', { title: `${MONTHS_LONG[i]} : ${v.toLocaleString(locale())} h` },
+          h('div.recap-bar', { style: { height: `${Math.max(2, (v / maxMonth) * 100)}%` } }), h('span', MONTHS[i])))) : null,
+      r.genres.length ? h('div.chips.recap-genres', h('span.muted', tr('Genres les plus regardés :')), r.genres.map((g) => h('span.chip', g))) : null,
+      r.top.length ? h('div', h('h3.sub', tr('Les plus regardés')), h('div.grid.recap-top', r.top.map((c) => posterCard(c)))) : null);
+  };
+  yearSel.addEventListener('change', paint);
+  monthSel.addEventListener('change', paint);
+  box.replaceChildren(h('div.recap-head', h('h2', tr('Bilan')), yearSel, monthSel), body);
+  await paint();
+}
+
+export async function renderHistory(main, ctx) {
+  const list = h('div.history');
+  const head = h('div.page-head', h('h1', tr('Historique')));
+  const stats = h('div.stats');
+  const moreBtn = h('button.btn.ghost', { onclick: () => load() }, tr('Afficher plus'));
+  const recapBox = h('section.recap');
+  clear(main, head, recapBox, stats, list, h('div.center', moreBtn));
+  renderRecap(recapBox, ctx);
+  let start = 0, lastDay = null;
+
+  async function load() {
+    moreBtn.replaceChildren(spinner());
+    const r = await get(`/api/history?start=${start}&size=50`);
+    if (!ctx.isCurrent()) return;
+    if (start === 0) {
+      const hours = Math.round((r.stats.ms || 0) / 3600000);
+      const mins = Math.round((r.stats.ms || 0) / 60000);
+      stats.replaceChildren(h('div.stat', h('strong', String(r.stats.n)), h('span', r.stats.n > 1 ? tr('visionnages') : tr('visionnage'))),
+        h('div.stat', h('strong', mins < 60 ? `${mins} min` : `${hours} h`), h('span', tr('de visionnage'))));
+      if (!r.items.length) list.append(h('div.empty', tr('Aucun visionnage pour le moment.')));
+    }
+    for (const it of r.items) {
+      const day = new Date(it.watched_at * 1000).toLocaleDateString(locale(), DAY);
+      if (day !== lastDay) { list.append(h('h3.history-day', day)); lastDay = day; }
+      const thumb = it.type === 'episode' ? (it.thumb || it.show_thumb) : it.thumb;
+      const line = h('div.history-item', { class: it.available ? 'history-item' : 'history-item gone' },
+        h('a.history-thumb', { href: it.available ? `#/item/${it.id}` : null },
+          thumb ? h('img', { src: img(thumb, 160, 90), alt: '', loading: 'lazy' }) : h('div.noimg')),
+        h('div.history-body',
+          h('strong', it.type === 'episode' ? it.show : it.title),
+          h('div.muted', it.type === 'episode' ? `${episodeCode(it)} · ${it.title}` : String(it.year || ''),
+            ` · ${new Date(it.watched_at * 1000).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })}`,
+            it.duration ? ` · ${fmtDuration(it.duration)}` : '')),
+        h('button.icon-btn', { title: tr('Retirer de l’historique'), onclick: async () => {
+          try { await del(`/api/history/${it.history_id}`); line.remove(); } catch (e) { toast(e.message, 'bad'); }
+        } }, icon('trash')));
+      list.append(line);
+    }
+    start += r.items.length;
+    moreBtn.replaceChildren(tr('Afficher plus'));
+    moreBtn.hidden = start >= r.total;
+  }
+  await load();
+}

@@ -1,0 +1,28 @@
+// Chapter selection as thumbnails (player and title page): picture, title, start time.
+import { fmtTime, h } from './ui.js';
+import { tr } from './i18n.js';
+
+export const chapterTitle = (c, n) => c.title || tr('Chapitre {p1}', { p1: n + 1 });
+
+export function chapterCards(chapters, { current = -1, onPick, href } = {}) {
+  return chapters.map((c, n) => {
+    const attrs = {
+      class: n === current ? 'chapter-card on' : 'chapter-card',
+      title: `${chapterTitle(c, n)} · ${fmtTime(c.start)}`,
+      dataset: { n: String(n) },
+    };
+    const body = [
+      h('span.chapter-img', c.image ? h('img', { src: c.image, alt: '', loading: 'lazy',
+        onerror: (e) => { e.target.remove(); } }) : null),
+      h('span.chapter-name', chapterTitle(c, n)),
+      h('span.chapter-time', fmtTime(c.start)),
+    ];
+    if (href) return h('a', { ...attrs, href: href(c, n) }, body);
+    return h('button', { ...attrs, type: 'button', onclick: () => onPick && onPick(c, n) }, body);
+  });
+}
+
+export function chapterStrip(chapters, opts = {}) {
+  const track = h('div.chapter-strip', chapterCards(chapters, opts));
+  return track;
+}

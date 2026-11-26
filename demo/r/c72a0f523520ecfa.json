@@ -1,0 +1,1 @@
+{"current":"4.2.1","channels":{"main":"Stable","test":"Test"},"branch":"main","check_error":"GitHub unreachable (Not Found)","can_update":false,"update_error":"The mount service (seance-mountd) is not running: run the Noxa installation again"}

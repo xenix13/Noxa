@@ -1,0 +1,1 @@
+{"enabled":false,"name":"Noxa (vm)","custom_name":"","running":false,"error":null,"address":null,"libraries":[{"id":"1","name":"Movies","kind":"movie","shared":true},{"id":"2","name":"Shows","kind":"show","shared":true},{"id":"3","name":"Photos","kind":"photo","shared":true}]}
