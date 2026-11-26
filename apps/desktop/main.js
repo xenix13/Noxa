@@ -59,7 +59,7 @@ function createWindow() {
     if (/^https?:/.test(url)) shell.openExternal(url);
   });
   win.webContents.on('did-fail-load', (_e, code, desc, url, isMain) => {
-    if (!isMain || code === -3) return; // -3 : chargement interrompu (navigation suivante)
+    if (!isMain || code === -3) return; // -3: load aborted (next navigation)
     win.loadFile('setup.html', { query: { offline: config.server || '', error: desc || String(code) } });
   });
   // F11 / Cmd+Ctrl+F: fullscreen; F5 / Ctrl+R: reload
@@ -109,7 +109,12 @@ async function setServer(raw) {
   return { ok: false, error: last && last.message === 'not nexis' ? T.notNexis : fill(T.unreachable, { error: last ? last.message : '?' }) };
 }
 
-ipcMain.handle('nexis:set-server', (_e, url) => setServer(url));
+// the server only changes from the app's own server choice screen (setup.html), never from a page of a website
+ipcMain.handle('nexis:set-server', (e, url) => {
+  const from = (e.senderFrame && e.senderFrame.url) || '';
+  if (!from.startsWith('file:')) throw new Error('not allowed');
+  return setServer(url);
+});
 ipcMain.handle('nexis:change-server', () => { win.loadFile('setup.html', { query: { change: '1', current: config.server || '' } }); });
 ipcMain.handle('nexis:retry', () => { if (config.server) win.loadURL(config.server); });
 ipcMain.handle('nexis:check-update', () => checkUpdates(true));

@@ -299,6 +299,24 @@ class SecurityTest(unittest.TestCase):
         for opt in ("NoNewPrivileges=true", "CapabilityBoundingSet=", "RestrictAddressFamilies=", "ProtectSystem=strict"):
             self.assertIn(opt, unit)
 
+    # ------------------------------------------------------------ audit 2026-11: the apps' bridges
+    def test_android_server_change_only_from_setup_screen(self):
+        """The Android bridge is visible to every frame (a trailer's iframe too): setServer only from setup.html."""
+        with open(os.path.join(ROOT, "android", "mobile", "src", "main", "java", "io", "github", "xenix13", "noxa",
+                               "MainActivity.java"), encoding="utf-8") as f:
+            java = f.read()
+        bridge = java[java.index("private class Bridge"):]
+        method = bridge[bridge.index("public void setServer"):bridge.index("public void changeServer")]
+        self.assertIn("startsWith(SETUP_URL)", method)
+        self.assertIn('SETUP_URL = "file:///android_asset/setup.html"', java)
+
+    def test_desktop_server_change_only_from_setup_screen(self):
+        with open(os.path.join(ROOT, "apps", "desktop", "main.js"), encoding="utf-8") as f:
+            js = f.read()
+        handler = js[js.index("ipcMain.handle('nexis:set-server'"):js.index("ipcMain.handle('nexis:change-server'")]
+        self.assertIn("senderFrame", handler)
+        self.assertIn("startsWith('file:')", handler)
+
 
 if __name__ == "__main__":
     unittest.main()

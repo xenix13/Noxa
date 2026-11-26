@@ -78,7 +78,7 @@ def register(app, ctx, x):
                     raise HTTPError(400, "Langue invalide")
                 expr = (f"EXISTS (SELECT 1 FROM json_each(json_extract({{a}}.probe, '$.{path}')) t "
                         "WHERE json_extract(t.value, '$.lang') = ?)")
-                if key == "subs":  # sous-titres externes aussi (Film.fr.srt)
+                if key == "subs":  # external subtitles too (Movie.fr.srt)
                     expr = ("(" + expr + " OR EXISTS (SELECT 1 FROM json_each(json_extract({a}.probe, '$.external')) t "
                             "WHERE json_extract(t.value, '$.lang') = ?))")
                 sql += " AND " + media_cond(kind, expr)

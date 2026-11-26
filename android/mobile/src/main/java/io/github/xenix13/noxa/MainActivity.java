@@ -216,8 +216,10 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(request, permissions, results);
     }
 
+    private static final String SETUP_URL = "file:///android_asset/setup.html";
+
     private void showSetup(String query) {
-        web.loadUrl("file:///android_asset/setup.html" + (query.isEmpty() ? "" : "?" + query));
+        web.loadUrl(SETUP_URL + (query.isEmpty() ? "" : "?" + query));
     }
 
     private boolean sameOrigin(Uri u) {
@@ -508,7 +510,14 @@ public class MainActivity extends Activity {
         public String strings() { return MainActivity.this.strings(); }
 
         @JavascriptInterface
-        public void setServer(String url) { MainActivity.this.setServer(url); }
+        public void setServer(String url) {
+            // The bridge is visible to every frame of the page, a trailer's iframe included: the server only
+            // changes from the app's own server choice screen, never from a page or a frame of a website.
+            ui.post(() -> {
+                String top = web.getUrl();
+                if (top != null && top.startsWith(SETUP_URL)) MainActivity.this.setServer(url);
+            });
+        }
 
         @JavascriptInterface
         public void changeServer() {
