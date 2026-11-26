@@ -26,6 +26,8 @@
     .demo-banner a { color: #ffa43a; font-weight: 600; white-space: nowrap; }
     .demo-banner.flash { background: rgba(255, 164, 58, .95); color: #1c0f00; }
     .demo-banner.flash a { color: #1c0f00; }
+    .demo-credits { color: #9a9aa6; font-size: 11px; white-space: nowrap; }
+    @media (max-width: 700px) { .demo-credits { display: none; } }
   </style>
   <script>
     (async () => {
@@ -56,6 +58,6 @@
 <body>
   <div id="app"><div class="boot"><span class="logo-mark big" role="img" aria-label="Noxa"></span></div></div>
   <noscript>Noxa a besoin de JavaScript.</noscript>
-  <div class="demo-banner">Noxa demo: nothing you change is saved, and videos are 30-second clips. <a href="https://github.com/xenix13/Noxa">Install your own</a></div>
+  <div class="demo-banner">Noxa demo: nothing you change is saved, and videos are 30-second clips. <a href="https://github.com/xenix13/Noxa">Install your own</a><span class="demo-credits">Films: Blender Foundation (CC BY), public domain classics</span></div>
 </body>
 </html>
