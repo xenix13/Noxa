@@ -60,6 +60,8 @@ async function get(d, u) {
     if (same.length) return recorded(d.answers[same[0]].f, d.answers[same[0]].t);
   }
   if (/\/prepare$/.test(u.pathname)) return json({ ready: true });
+  // bandwidth measure before playback: a small download, measured as fast (the clips are small)
+  if (u.pathname === '/api/bandwidth') return new Response(new Uint8Array(256 * 1024), { headers: { 'Content-Type': 'application/octet-stream' } });
   if (/\/trickplay$/.test(u.pathname)) return json({ ready: false });
   if (u.pathname === '/api/together/time') return json({ now: Date.now() });
   // the same page with other options (sort, filters, page size): the recorded version
@@ -74,6 +76,8 @@ async function play(d, req) {
   const id = Number(body.id);
   const itemKey = `/api/items/${id}`;
   if (!d.clips.includes(id) || !d.answers[itemKey]) return json({ error: 'No clip for this title in the demo' }, 404);
+  // the browser refused the clip (it asks again for a converted stream): there is no conversion in the demo
+  if (body.no_direct) return json({ error: 'This browser cannot play the demo clip (H.264).' }, 415);
   const item = await (await fetch(`${BASE}demo/r/${d.answers[itemKey].f}`)).json();
   return json({
     mode: 'direct', url: `${BASE}demo/clips/${id}.mp4`, offset: 0, duration: d.clip_seconds * 1000, stream: `demo-${id}`,

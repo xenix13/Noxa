@@ -39,7 +39,7 @@ BANNER = (f"Noxa demo: nothing you change is saved, and videos are {CLIP_SECONDS
           '<a href="https://github.com/xenix13/Noxa">Install your own</a>')
 MAX_PAGES = 400
 # pages never opened by the recorder: they change something, or have nothing to show offline
-SKIP = re.compile(r"^#/(play|offline|login|setup|logout|share)/?")
+SKIP = re.compile(r"^#/(play|offline|login|setup|logout|share)(/|\?|$)")
 
 
 def clip(src, dst):
@@ -137,6 +137,15 @@ def main():
             continue
         src = os.path.join(static, name)
         (shutil.copytree if os.path.isdir(src) else shutil.copy2)(src, os.path.join(out, name))
+    # absolute addresses in the stylesheets (fonts, pictures): relative, so that the first visit works before
+    # the demo's service worker controls the page
+    for d, _, names in os.walk(os.path.join(out, "css")):
+        for n in names:
+            if n.endswith(".css"):
+                f = os.path.join(d, n)
+                css = open(f, encoding="utf-8").read()
+                with open(f, "w", encoding="utf-8") as w:
+                    w.write(re.sub(r"url\((['\"]?)/(?!/)", r"url(\1../", css))
     html = open(os.path.join(static, "index.html"), encoding="utf-8").read()
     html = re.sub(r'(href|src)="/(?!/)', r'\1="', html)
     html = html.replace('<script type="module" src="js/app.js"></script>', open(os.path.join(HERE, "boot.html"), encoding="utf-8").read())
