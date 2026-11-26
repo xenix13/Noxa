@@ -1,7 +1,7 @@
 """Noxa: self-hosted media server."""
 import os
 
-__version__ = "4.2.1"
+__version__ = "4.5.0"
 
 
 def env(name, default=None):
