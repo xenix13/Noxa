@@ -15,9 +15,11 @@
 ![Python](https://img.shields.io/badge/python-3.9%2B%20·%20no%20dependencies-3776ab?logo=python&logoColor=white)
 ![Platforms](https://img.shields.io/badge/apps-web%20·%20Windows%20·%20macOS%20·%20Linux%20·%20Android%20·%20Android%20TV-555)
 
-[Install](docs/installation.md) · [Getting started](docs/getting-started.md) · [Features](#features) · [Documentation](#documentation) · [Releases](https://github.com/xenix13/Noxa/releases)
+**[Try the live demo](https://xenix13.github.io/Noxa/)** · [Install](docs/installation.md) · [Getting started](docs/getting-started.md) · [Features](#features) · [Documentation](#documentation) · [Releases](https://github.com/xenix13/Noxa/releases)
 
 <img src="docs/images/demo.webp" alt="A short tour of Noxa: home screen, movie library, movie page, player, TV show and photo albums" width="100%">
+
+<sub>The <a href="https://xenix13.github.io/Noxa/">live demo</a> runs the real interface in your browser, on a few free films: nothing to install, nothing saved.</sub>
 
 </div>
 
