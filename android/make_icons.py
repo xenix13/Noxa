@@ -9,7 +9,7 @@ version is used for Android 13 themed icons.
 """
 import os
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGO = os.path.join(ROOT, "static", "icons", "icon-512.png")
@@ -84,8 +84,24 @@ def macos():
     out.save(os.path.join(folder, "icon-mac.png"), optimize=True)
 
 
+def tv_banner():
+    """Android TV home screen banner (320 x 180, xhdpi): the logo with its glow, and the name."""
+    w, h = 320, 180
+    out = Image.new("RGBA", (w, h), BG)
+    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(glow).ellipse((14, 38, 130, 142), fill=(255, 140, 30, 90))
+    out = Image.alpha_composite(out, glow.filter(ImageFilter.GaussianBlur(22)))
+    out.alpha_composite(fit(logo(), 96), (24, 42))
+    font = ImageFont.truetype(os.path.join(ROOT, "static", "fonts", "outfit.woff"), 64)
+    font.set_variation_by_name("Bold")  # variable font: the weight of the interface titles
+    ImageDraw.Draw(out).text((132, h // 2), "Noxa", font=font, fill=(255, 255, 255, 255), anchor="lm")
+    folder = os.path.join(ROOT, "android", "app", "src", "main", "res", "drawable-xhdpi")
+    out.convert("RGB").save(os.path.join(folder, "banner.png"), optimize=True)
+
+
 if __name__ == "__main__":
     android("mobile")
     android("app")
     macos()
-    print("icônes écrites")
+    tv_banner()
+    print("icons written")
