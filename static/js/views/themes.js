@@ -1,6 +1,6 @@
-// Magasin de thèmes (Paramètres → Magasin de thèmes) : thèmes fournis avec Noxa et proposés par la communauté sur
-// GitHub, thèmes installés, éditeur, import et export. Un thème n'est qu'une description vérifiée par le serveur
-// (couleurs, dégradé, effets d'une liste fixe, police, arrondi) : il ne peut contenir ni code ni image.
+// Theme store (Settings → Theme store): themes shipped with Noxa and offered by the community on
+// GitHub, installed themes, editor, import and export. A theme is only a description checked by the server
+// (colours, gradient, effects from a fixed list, font, corner radius): it can hold neither code nor picture.
 import { get, post, put } from '../api.js';
 import { applyPrefs, paintTheme, state } from '../app.js';
 import { clear, field, h, icon, modal, select, spinner, toast, toggle } from '../ui.js';
@@ -19,7 +19,7 @@ const MAX_MINE = 20;
 const label = (v) => (v ? (v[lang] || v.fr || v.en || '') : '');
 const effectName = (e) => (EFFECTS.find(([k]) => k === e) || [e, e])[1];
 
-// mini-aperçu du thème (couleurs vérifiées par le serveur : #rrggbb)
+// mini preview of the theme (colours checked by the server: #rrggbb)
 export function themePreview(t) {
   const c = t.colors;
   const bg = t.background ? `linear-gradient(${t.background.angle}deg, ${t.background.stops.join(', ')})` : c.bg;
@@ -39,10 +39,10 @@ async function savePrefs(patch, msg) {
   if (msg) toast(msg, 'ok');
 }
 
-// le thème tel qu'il s'enregistre (sans l'indication de provenance ajoutée par la liste du magasin)
-const bare = ({ source, ...t }) => t; // eslint-disable-line no-unused-vars
+// the theme as it is saved (without the origin tag added by the store list)
+const bare = ({ source, ...t }) => t;
 
-// installer (ou mettre à jour) un thème et l'utiliser
+// install (or update) a theme and use it
 async function install(theme, withStyle) {
   const t = bare(theme);
   const mine = (state.me.prefs.my_themes || []).filter((x) => x.id !== t.id);
@@ -60,8 +60,8 @@ function download(t) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
-// GitHub : page « nouveau fichier » du dépôt du magasin, déjà remplie ; GitHub propose de créer une copie (fork)
-// et une demande de fusion, vérifiée par l'intégration continue puis par les responsables du dépôt
+// GitHub: "new file" page of the store repository, already filled in; GitHub offers to create a copy (fork)
+// and a pull request, checked by continuous integration then by the repository maintainers
 function proposeUrl(submit, t) {
   const body = JSON.stringify(t, null, 1) + '\n';
   return `${submit}?filename=${encodeURIComponent(`${t.id}.json`)}&value=${encodeURIComponent(body)}`;
@@ -79,7 +79,7 @@ export async function renderThemeStore(body, ctx) {
   const me = state.me;
   let previewing = null;
   const restore = () => { if (previewing) { previewing = null; applyPrefs(me.prefs); bar.hidden = true; } };
-  ctx.setCleanup(restore); // aperçu en cours quand on quitte la page : on revient au thème choisi
+  ctx.setCleanup(restore); // preview running when the page is left: back to the chosen theme
   const bar = h('div.status-box.preview-bar', { hidden: true });
   const preview = (t) => {
     previewing = t;
@@ -159,7 +159,7 @@ export async function renderThemeStore(body, ctx) {
     }
   } });
 
-  // ---------------------------------------------------------------- éditeur
+  // ---------------------------------------------------------------- editor
   function editor(base) {
     const start = base ? JSON.parse(JSON.stringify(bare(base))) : {
       schema: 1, id: '', name: { fr: '', en: '' }, author: '', version: 1, dark: true,
@@ -208,7 +208,7 @@ export async function renderThemeStore(body, ctx) {
     function live() {
       const tt = build();
       clear(prev, themePreview(tt));
-      paintTheme(tt); // l'interface entière sert d'aperçu
+      paintTheme(tt); // the whole interface serves as preview
       document.documentElement.dataset.theme = tt.dark ? 'dark' : 'light';
       document.documentElement.style.setProperty('--accent', tt.colors.accent);
       clearTimeout(timer);
@@ -253,7 +253,7 @@ export async function renderThemeStore(body, ctx) {
       } }]).then(() => { applyPrefs(me.prefs); paint(); });
   }
 
-  // ---------------------------------------------------------------- administrateur : source du magasin
+  // ---------------------------------------------------------------- administrator: store source
   function adminPanel() {
     const box = h('section.panel', h('h2', tr('Magasin de thèmes (administrateur)')), spinner());
     get('/api/admin/themes').then((c) => {
@@ -282,7 +282,7 @@ export async function renderThemeStore(body, ctx) {
   paint();
 }
 
-// https://github.com/<dépôt>/new/<branche>/<dossier> -> la page du dossier sur GitHub
+// https://github.com/<repo>/new/<branch>/<folder> -> the folder's page on GitHub
 function repoUrl(submit) {
   const m = /^(https:\/\/github\.com\/[^/]+\/[^/]+)\/new\/([^/]+)\/(.*)$/.exec(submit || '');
   return m ? `${m[1]}/tree/${m[2]}/${m[3]}` : submit;

@@ -12,10 +12,10 @@ Requirements: Python 3.9+, ffmpeg / ffprobe. Optional: Pillow (only used by some
 
 ```bash
 git clone https://github.com/xenix13/Noxa.git && cd Noxa
-python3 -m seance --data ./data --port 8420
+python3 -m noxa --data ./data --port 8420
 ```
 
-Open `http://localhost:8420`; the setup code is printed in the console. Edit a file in `static/` and reload the page; restart the server after changing Python code. `--debug` (or `SEANCE_DEBUG=1`) logs the ffmpeg commands.
+Open `http://localhost:8420`; the setup code is printed in the console. Edit a file in `static/` and reload the page; restart the server after changing Python code. `--debug` (or `NOXA_DEBUG=1`) logs the ffmpeg commands.
 
 ## Tests
 
@@ -34,7 +34,7 @@ The suite builds a small library with ffmpeg (H.264, HEVC, 10-bit, multi-audio, 
 ## Code layout
 
 ```
-seance/                 the server (Python package; "seance" is the internal name)
+noxa/                   the server (Python package)
   __main__.py           command line, start-up
   api.py                assembles the server; routes/ holds the HTTP routes by topic
   web.py                HTTP server, static files, security headers
@@ -45,8 +45,9 @@ seance/                 the server (Python package; "seance" is the internal nam
   subcache.py, subtitles.py, opensubs.py, whisper.py  subtitles
   chapters.py, introdetect.py, markers.py  chapter images, intro detection, skip markers
   tasks.py              scheduled tasks; watcher.py: new content detection
-  federation.py         linked servers (TLS, tunnel, replication)
-  cold.py, coldfree.py  cold storage and freeing up space
+  federation/           linked servers: links and tunnel, pairing, sync, relay, shared services, routes
+  cold/                 cold storage: storage backends, copies, compression, archiving queue, routes
+  coldfree.py           freeing up space
   backup.py, remote_storage.py  backups and external storages
   livetv.py, dlna.py, photos.py, books.py, syncplay.py  live TV, DLNA, photos, audiobooks, watch together
   downloads.py, push.py, notify.py, stats.py, health.py  offline downloads, notifications, stats, alerts
@@ -55,7 +56,7 @@ seance/                 the server (Python package; "seance" is the internal nam
   mountd.py             the root helper that mounts SMB shares read-only
   i18n.py, lang_en.py   server messages and their English translation
 static/                 the web interface (ES modules, no bundler)
-  js/app.js             router; js/views/ one file per page; js/player.js the player
+  js/app.js             router; js/views/ one file per page (js/views/admin/: one per admin page, loaded on demand); js/player.js the player, with js/player/ for its subtitles (subtitles.js), watch together (together.js) and the remote control and casting (devices.js)
   js/i18n/en.js         English translation of the interface
   themes/               the theme store (one JSON per theme)
   vendor/               hls.js, JASSUB, libpgs, qrcode (pinned, SHA-256 checked)
@@ -72,13 +73,13 @@ tools/screenshots/      demo library and documentation screenshots
 French text in the code is the **translation key**:
 
 - Interface: `tr('Paramètres')` (`static/js/i18n.js`), translations in `static/js/i18n/en.js`.
-- Server messages: `tr("Introuvable")` (`seance/i18n.py`), translations in `seance/lang_en.py`, where `{}` stands for a variable part.
+- Server messages: `tr("Introuvable")` (`noxa/i18n.py`), translations in `noxa/lang_en.py`, where `{}` stands for a variable part.
 - Android TV app: `Tr.t("…")` (`Tr.java`).
 - Plurals: `plural(n, '{n} film', '{n} films')`. The same word with two meanings takes a context: `tr('bouton|Lecture')`.
 
 `tests/test_i18n.py` checks that every interface string and every server error message has its translation.
 
-**Adding a language:** create `static/js/i18n/<code>.js` and `seance/lang_<code>.py`, then add the code to `LANGUAGES` in `i18n.js` and `i18n.py`. Pull requests for new languages are very welcome.
+**Adding a language:** create `static/js/i18n/<code>.js` and `noxa/lang_<code>.py`, then add the code to `LANGUAGES` in `i18n.js` and `i18n.py`. Pull requests for new languages are very welcome.
 
 ## Apps
 
@@ -89,19 +90,28 @@ French text in the code is the **translation key**:
 ## Releases and branches
 
 - `test`: where new work lands first; the *Test* update channel and the `:test` Docker image follow it.
-- `main`: stable releases. Every push to `main` with a new version in `seance/__init__.py` makes CI publish the GitHub release `v<version>` with the `.deb`, the Docker images (`latest` and `<version>`), the Android TV APK and the desktop / Android apps. Hand-written notes are taken from `docs/releases/v<version>.md` when that file exists.
+- `main`: stable releases. Every push to `main` with a new version in `noxa/__init__.py` (and the same in `seance/__init__.py`, which servers before 4.5 read) makes CI publish the GitHub release `v<version>` with the `.deb`, the Docker images (`latest` and `<version>`), the Android TV APK and the desktop / Android apps. Hand-written notes are taken from `docs/releases/v<version>.md` when that file exists.
 - Changes reach `main` only through a pull request from `test`, reviewed and merged by the maintainer.
 - `docker-compose.yml` uses `ghcr.io/xenix13/noxa:latest` on both branches (CI checks it on `main`); switch the tag to `:test` by hand to try the test channel.
 - Commit messages, pull requests and release notes (`docs/releases/`) are written in English.
 - Version numbers: **x.0** are major releases, **x.5** minor updates with new features, and every other number (x.1 to x.4, x.y.z) is a fix release with no new feature. New features wait for the next x.5 or x.0.
 
-## Former name (Nexis)
+## Former names (Nexis, seance)
 
-The project was called **Nexis** until 4.0. A few invisible identifiers keep that name on purpose, because changing them would break existing installs or links between servers:
+The project was called **Nexis** until 4.0, and its code used the internal name **seance** until 4.5. Since 4.5 the code and the apps use **noxa**:
 
-- Android application ids `fr.nexis.app` and `fr.nexis.tv` (Android only updates an app over one with the same id), and the bridges `window.NexisAndroid` / `window.nexisNative`;
-- HTTP headers `X-Nexis-Server` and `X-Nexis-Device`, the `NEXIS1-` linked-server invitations, the `nexis-` prefix of backup files, browser storage keys (`nexis.*`) and the desktop app's data folder;
-- the internal name `seance` (Python package, system user, service, folders).
+- **Android apps:** ids `io.github.xenix13.noxa.tv` (TV) and `io.github.xenix13.noxa` (phone). Before 4.5 they were `fr.nexis.tv` and `fr.nexis.app`: Android cannot update an app over one with another id, so the 4.5 apps are installed once next to the old ones, which can then be removed.
+- **Bridges between the web interface and the apps:** `window.NoxaAndroid` and `window.noxaNative`. The apps also expose the old names `NexisAndroid` and `nexisNative` for servers older than 4.5, and the web interface falls back to the old names in apps older than 4.5.
+- **HTTP headers:** `X-Noxa`, `X-Noxa-Server` and `X-Noxa-Device`. The server still accepts `X-Seance`, `X-Nexis-Server` and `X-Nexis-Device` from older apps and pages.
+- **Environment variables:** `NOXA_…`. The old `SEANCE_…` names are still read.
+- **Backups:** new backup files start with `noxa-`. Files starting with `nexis-` are still listed, rotated and restored.
+
+These names are kept on purpose, because changing them would break existing installs, data or links between servers:
+
+- **Linked servers:** the `NEXIS1-` linked-server invitations and the names used inside the link between servers.
+- **Browser and app data:** the browser storage keys (`nexis.*`) and caches, which hold each device's settings and offline downloads; the format of encrypted backups; and the desktop app's id and data folder.
+- **System names from the former internal name `seance`:** the system user, the service, the `/opt`, `/var/lib` and `/etc/seance` folders, the `seance_session` cookie and the `seance.db` file. These are planned to move with a migration in 5.0.
+- **A small `seance` Python package:** servers before 4.5 read its version to find updates, and older service files start Noxa through it. Its version must match `noxa/__init__.py`, and a test checks it.
 
 The Docker image is published as `ghcr.io/xenix13/noxa` and, for existing installs, `ghcr.io/xenix13/nexis`; the `.deb` package `noxa` replaces `nexis`; `nexis` is kept as an alias of the `noxa` command.
 
@@ -130,6 +140,24 @@ ffmpeg -f concat -safe 0 -i /tmp/rec/frames.txt -vf "fps=15,scale=960:-1" -c:v l
 `docs/images/social-preview.png` (1280×640) is the image GitHub shows when the repository is shared; it is uploaded by hand in the repository's *Settings → General → Social preview*.
 
 Run `take.py` as a regular user (as root every folder looks writable and the Libraries page warns about it). Set `CHROMIUM=/path/to/chrome` if Playwright's own browser is not installed.
+
+## Online demo
+
+The demo at https://xenix13.github.io/Noxa/ is the web interface working without a server: a service worker
+(`tools/demo/demo-sw.js`) answers its requests from recordings. It lives on the `gh-pages` branch.
+
+- **Each change of the interface on `main`** is copied to the demo by the *Demo* workflow
+  (`tools/demo/build.py --interface-only`); the recordings stay as they are.
+- **To record again** (new pages, an API change), build the free film library (see above), then:
+
+  ```bash
+  python3 tools/demo/build.py <free_library_folder> <output_folder>
+  ```
+
+  It starts a throwaway server with the screenshot accounts and history (`tools/screenshots/seed.py`), follows
+  every link of the interface while recording the API's answers and pictures, and cuts a 30-second clip of each
+  video. Push the output folder to `gh-pages`.
+- In the demo nothing is saved, the administration is read-only, and every visitor starts from the same view.
 
 ## Contributing
 

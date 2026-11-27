@@ -1,4 +1,4 @@
-// Sélection de chapitre en vignettes (lecteur et fiche) : image, titre, heure de début.
+// Chapter selection as thumbnails (player and title page): picture, title, start time.
 import { fmtTime, h } from './ui.js';
 import { tr } from './i18n.js';
 

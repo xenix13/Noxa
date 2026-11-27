@@ -1,5 +1,5 @@
-// « Regarder ensemble » : liste des groupes en direct (une connexion par onglet, partagée par toutes les pages)
-// et création d'un groupe à l'avance (salon d'attente).
+// "Watch together": live group list (one connection per tab, shared by all the pages)
+// and creating a group in advance (waiting room).
 import { post } from './api.js';
 import { field, h, modal, toggle } from './ui.js';
 import { tr } from './i18n.js';
@@ -10,18 +10,18 @@ const listeners = new Set();
 
 export function currentGroups() { return groups; }
 
-// fn(groups) appelé tout de suite puis à chaque changement ; renvoie de quoi se désabonner
+// fn(groups) called right away then at each change; returns what unsubscribes
 export function onGroups(fn) {
   listeners.add(fn);
   fn(groups);
   return () => listeners.delete(fn);
 }
 
-// paused : lecteur en plein écran, personne ne voit la liste ; on rend la connexion aux segments vidéo
-// (la présence dans un groupe passe alors par le flux du groupe lui-même)
+// paused: player in fullscreen, nobody sees the list; the connection is given back to the video segments
+// (presence in a group then goes through the group's own stream)
 export function startGroupsFeed({ paused = false } = {}) {
   wanted = true;
-  // membre d'un groupe : la liste reste ouverte, c'est elle qui nous garde présent (bande-annonce, aperçu…)
+  // member of a group: the list stays open, it is what keeps us present (trailer, preview…)
   feedPaused = paused && !groups.some((g) => g.member);
   if (feedPaused) closeFeed();
   else if (!document.hidden) openFeed();
@@ -33,7 +33,7 @@ function closeFeed() {
   reopened = true;
 }
 
-let reopened = true; // le premier envoi après (ré)ouverture : on ne sait pas ce qui a changé entre-temps
+let reopened = true; // the first send after (re)opening: what changed meanwhile is unknown
 export function isFreshFeed() { return reopened; }
 
 function openFeed() {
@@ -47,7 +47,7 @@ function openFeed() {
     for (const fn of [...listeners]) { try { fn(groups); } catch (err) { console.warn(err); } }
     reopened = false;
   };
-  // coupure réseau : le navigateur se reconnecte seul ; refus du serveur (trop de connexions…) : il abandonne,
+  // network cut: the browser reconnects by itself; refusal from the server (too many connections…): it gives up,
   // on retente plus tard
   const es = source;
   source.onerror = () => {
@@ -57,8 +57,8 @@ function openFeed() {
   };
 }
 
-// Onglet en arrière-plan : on libère la connexion (les navigateurs en limitent le nombre par serveur),
-// sauf si l'on fait partie d'un groupe (rester présent dans le salon pendant qu'on fait autre chose).
+// Tab in the background: the connection is released (browsers limit their number per server),
+// unless one belongs to a group (stay present in the room while doing something else).
 let wanted = false;
 let feedPaused = false;
 let hiddenTimer = null;
@@ -81,7 +81,7 @@ export function stopGroupsFeed() {
   for (const fn of [...listeners]) { try { fn(groups); } catch { /* ignore */ } }
 }
 
-// Groupes où l'on peut lancer un titre : ceux dont on est membre et que l'on peut piloter
+// Groups where a title can be started: those one is a member of and can control
 export function launchableGroups() {
   return groups.filter((g) => g.member && (g.is_host || !g.host_only));
 }

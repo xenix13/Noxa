@@ -1,4 +1,4 @@
-"""Photothèque (albums, EXIF, visionneuse) et serveur DLNA (annonce, navigation, lecture).
+"""Photo library (albums, EXIF, viewer) and DLNA server (announcement, browsing, playback).
 
 python3 -m unittest tests.test_photos_dlna
 """
@@ -19,20 +19,20 @@ import xml.etree.ElementTree as ET
 
 from tests.test_api import STATIC, Client, media_root, wait_scan
 
-from seance import dlna as dlna_mod
-from seance.api import Ctx, build_app
-from seance.photos import read_info
-from seance.web import Server, make_handler
+from noxa import dlna as dlna_mod
+from noxa.api import Ctx, build_app
+from noxa.photos import read_info
+from noxa.web import Server, make_handler
 
 DIDL = "{urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/}"
 DC = "{http://purl.org/dc/elements/1.1/}"
 
 
 def exif_block(orientation, taken, model):
-    """Segment APP1 EXIF minimal : orientation et appareil (IFD0), date de prise de vue (sous-IFD EXIF)."""
+    """Minimal EXIF APP1 segment: orientation and camera (IFD0), date taken (EXIF sub-IFD)."""
     model_b = model.encode() + b"\0"
     date_b = taken.encode() + b"\0"
-    # en-tête TIFF (8) + IFD0 : 3 entrées (2 + 36 + 4) = 42 -> données à partir de 50
+    # TIFF header (8) + IFD0: 3 entries (2 + 36 + 4) = 42 -> data from 50
     model_off = 8 + 2 + 3 * 12 + 4
     sub_off = model_off + len(model_b)
     date_off = sub_off + 2 + 12 + 4
@@ -49,15 +49,15 @@ def exif_block(orientation, taken, model):
 
 
 def gps_block(lat, lon):
-    """Segment APP1 EXIF avec seulement les coordonnées GPS (IFD0 -> IFD GPS, degrés/minutes/secondes)."""
+    """EXIF APP1 segment with only the GPS coordinates (IFD0 -> GPS IFD, degrees/minutes/seconds)."""
     def dms(v):
         v = abs(v)
         d = int(v)
         m = int((v - d) * 60)
         sec = round(((v - d) * 60 - m) * 60 * 100)
         return struct.pack("<IIIIII", d, 1, m, 1, sec, 100)
-    gps_off = 8 + 2 + 12 + 4                 # IFD0 : une entrée (pointeur GPS)
-    data_off = gps_off + 2 + 4 * 12 + 4      # IFD GPS : 4 entrées
+    gps_off = 8 + 2 + 12 + 4                 # IFD0: one entry (GPS pointer)
+    data_off = gps_off + 2 + 4 * 12 + 4      # GPS IFD: 4 entries
     t = b"II\x2a\x00" + struct.pack("<I", 8)
     t += struct.pack("<H", 1) + struct.pack("<HHII", 0x8825, 4, 1, gps_off) + struct.pack("<I", 0)
     t += struct.pack("<H", 4)
@@ -133,32 +133,32 @@ class PhotosDlnaTest(unittest.TestCase):
         cls.server.shutdown()
         shutil.rmtree(cls.work, ignore_errors=True)
 
-    # ---------------------------------------------------------------- photothèque
+    # ---------------------------------------------------------------- photo library
     def test_01_albums_and_exif(self):
         lib = self.libs["Photos"]
         self.assertEqual(lib["type"], "photo")
         st, r = self.admin.call("GET", f"/api/libraries/{lib['id']}/photos")
         self.assertEqual(st, 200, r)
-        self.assertEqual([(a["title"], a["count"]) for a in r["albums"]], [("Vacances 2024", 4)])  # « Vide » écarté
+        self.assertEqual([(a["title"], a["count"]) for a in r["albums"]], [("Vacances 2024", 4)])  # "Vide" left out
         self.assertEqual([p["title"] for p in r["photos"]], ["capture"])
         self.assertEqual((r["photos"][0]["w"], r["photos"][0]["h"]), (40, 30))
         st, a = self.admin.call("GET", f"/api/libraries/{lib['id']}/photos?album={r['albums'][0]['id']}")
         self.assertEqual([x["title"] for x in a["albums"]], ["Plage"])
-        self.assertEqual([x["title"] for x in a["photos"]], ["IMG_0001", "VID_0001", "IMG_0002"])  # par date de prise de vue
+        self.assertEqual([x["title"] for x in a["photos"]], ["IMG_0001", "VID_0001", "IMG_0002"])  # by date taken
         p1 = a["photos"][0]
         self.assertEqual((p1["taken"], p1["w"], p1["h"], p1["camera"]), ("2024-07-14T10:30:00", 32, 64, "Pixel 8"))
         self.assertEqual([x["title"] for x in a["path"]], ["Vacances 2024"])
         st, t = self.admin.call("GET", f"/api/libraries/{lib['id']}/photos?view=timeline")
         self.assertEqual(t["total"], 5)
-        self.assertEqual([x["title"] for x in t["photos"]], ["capture", "IMG_0003", "IMG_0002", "VID_0001", "IMG_0001"])  # sans EXIF : date du fichier
-        # vignettes (photo, album) et image de la visionneuse remise à l'endroit
+        self.assertEqual([x["title"] for x in t["photos"]], ["capture", "IMG_0003", "IMG_0002", "VID_0001", "IMG_0001"])  # no EXIF: file date
+        # thumbnails (photo, album) and viewer picture turned the right way up
         st, data, _ = self.admin.call("GET", f"/api/img?p={p1['thumb']}&w=100&h=100", raw=True)
         self.assertEqual((st, data[:2]), (200, b"\xff\xd8"))
         st, data, _ = self.admin.call("GET", f"/api/img?p={r['albums'][0]['thumb']}&w=100&h=100", raw=True)
         self.assertEqual((st, data[:2]), (200, b"\xff\xd8"))
         st, data, _ = self.admin.call("GET", f"/api/photos/{p1['id']}/view?w=1280", raw=True)
         self.assertEqual(st, 200)
-        self.assertEqual(jpeg_size(data), (32, 64))  # orientation 6 : portrait, et jamais agrandie
+        self.assertEqual(jpeg_size(data), (32, 64))  # orientation 6: portrait, and never enlarged
         st, data, h = self.admin.call("GET", f"/api/photos/{p1['id']}/original", raw=True)
         self.assertEqual(st, 200)
         with open(os.path.join(self.pics, "Vacances 2024", "IMG_0001.jpg"), "rb") as f:
@@ -170,7 +170,7 @@ class PhotosDlnaTest(unittest.TestCase):
         self.assertNotIn("Photos", [r["library"]["title"] for r in home.get("rows", [])])
         st, res = self.admin.call("GET", "/api/search?q=img")
         self.assertEqual(sum(len(v) for v in res.values() if isinstance(v, list)), 0)
-        # un compte sans accès à la photothèque ne voit rien
+        # an account without access to the photo library sees nothing
         st, r = self.admin.call("POST", "/api/admin/users", {"username": "tom", "password": "motdepasseT",
                                                               "all_libraries": False, "libraries": [self.libs["Films"]["id"]]})
         self.assertEqual(st, 200, r)
@@ -231,7 +231,7 @@ class PhotosDlnaTest(unittest.TestCase):
         return r.status, data, r
 
     def test_10_dlna(self):
-        self.assertEqual(self.raw("GET", "/dlna/description.xml")[0], 404)  # désactivé par défaut
+        self.assertEqual(self.raw("GET", "/dlna/description.xml")[0], 404)  # off by default
         self.ctx.dlna.http_port = self.port
         st, v = self.admin.call("PUT", "/api/admin/dlna", {"enabled": True, "name": "Salon",
                                                             "libraries": [self.libs["Films"]["id"], self.libs["Photos"]["id"]]})
@@ -242,7 +242,7 @@ class PhotosDlnaTest(unittest.TestCase):
         self.assertIn(b"<friendlyName>Salon</friendlyName>", desc)
         self.assertIn(b"urn:schemas-upnp-org:device:MediaServer:1", desc)
         self.assertEqual(self.raw("GET", "/dlna/cd.xml")[0], 200)
-        # racine : les deux bibliothèques
+        # root: both libraries
         st, didl, total = self.browse("0")
         self.assertEqual(st, 200)
         names = [c.find(DC + "title").text for c in didl.findall(DIDL + "container")]
@@ -256,21 +256,21 @@ class PhotosDlnaTest(unittest.TestCase):
         self.assertIn("http-get:*:video/", res.get("protocolInfo"))
         url = res.text
         self.assertTrue(url.startswith(f"http://127.0.0.1:{self.port}/dlna/media/"), url)
-        # lecture par morceaux, telle qu'un téléviseur la fait
+        # reading in chunks, as a TV does
         st, data, r = self.raw("GET", url.split(str(self.port), 1)[1], {"Range": "bytes=0-99", "getcontentFeatures.dlna.org": "1"})
         self.assertEqual((st, len(data)), (206, 100))
         self.assertEqual(r.getheader("transferMode.dlna.org"), "Streaming")
         st, _, r = self.raw("HEAD", url.split(str(self.port), 1)[1])
         self.assertEqual(st, 200)
         self.assertGreater(int(r.getheader("Content-Length")), 100)
-        # photos : albums, puis photos en JPEG (et l'original)
+        # photos: albums, then photos as JPEG (and the original)
         photos = next(c.get("id") for c in self.browse("0")[1].findall(DIDL + "container") if c.find(DC + "title").text == "Photos")
         st, didl, total = self.browse(photos)
         self.assertEqual([c.find(DC + "title").text for c in didl.findall(DIDL + "container")], ["Vacances 2024"])
         self.assertEqual([c.find(DC + "title").text for c in didl.findall(DIDL + "item")], ["capture"])
         album = didl.find(DIDL + "container").get("id")
         st, didl, total = self.browse(album)
-        self.assertEqual(total, 4)  # sous-album, 2 photos, 1 vidéo
+        self.assertEqual(total, 4)  # sub-album, 2 photos, 1 video
         clip = next(c for c in didl.findall(DIDL + "item") if c.find(DC + "title").text == "VID_0001")
         self.assertEqual(clip.find("{urn:schemas-upnp-org:metadata-1-0/upnp/}class").text, "object.item.videoItem")
         self.assertIn("video/mp4", clip.find(DIDL + "res").get("protocolInfo"))
@@ -284,13 +284,13 @@ class PhotosDlnaTest(unittest.TestCase):
         thumb = self.raw("GET", f"/dlna/thumb/{album[1:]}.jpg")
         self.assertEqual((thumb[0], thumb[1][:2]), (200, b"\xff\xd8"))
         self.assertEqual(self.browse("I999999")[0], 500)  # objet inconnu : erreur UPnP
-        # bibliothèque retirée du partage : plus rien n'en sort
+        # library removed from sharing: nothing comes out of it anymore
         self.admin.call("PUT", "/api/admin/dlna", {"libraries": [self.libs["Films"]["id"]]})
         st, didl, total = self.browse("0")
         self.assertEqual([c.find(DC + "title").text for c in didl.findall(DIDL + "container")], ["Films"])
         self.assertEqual(self.browse(album)[0], 500)
         self.assertEqual(self.raw("GET", jpg.split(str(self.port), 1)[1])[0], 404)
-        # abonnement aux événements
+        # event subscription
         st, _, r = self.raw("SUBSCRIBE", "/dlna/event/cd", {"CALLBACK": "<http://127.0.0.1:9/>", "NT": "upnp:event"})
         self.assertEqual(st, 200)
         self.assertTrue(r.getheader("SID").startswith("uuid:"))
@@ -312,56 +312,56 @@ class PhotosDlnaTest(unittest.TestCase):
         self.assertIn("ST: urn:schemas-upnp-org:device:MediaServer:1", text)
         loc = re.search(r"LOCATION: (\S+)", text).group(1)
         self.assertTrue(loc.endswith(f":{self.port}/dlna/description.xml"), loc)
-        # désactivé : plus d'annonce ni de réponse
+        # off: no more announcement or answer
         self.admin.call("PUT", "/api/admin/dlna", {"enabled": False})
         self.assertEqual(self.raw("GET", "/dlna/description.xml")[0], 404)
 
-    # ---------------------------------------------------------------- qualité automatique
+    # ---------------------------------------------------------------- automatic quality
     def test_20_auto_quality(self):
-        from seance.transcoder import auto_quality
+        from noxa.transcoder import auto_quality
         p4k = {"bitrate": 40_000_000, "video": {"height": 2160}}
-        self.assertEqual(auto_quality(p4k, None), "original")       # pas de mesure : l'original
-        self.assertEqual(auto_quality(p4k, 100_000), "original")    # réseau local rapide
+        self.assertEqual(auto_quality(p4k, None), "original")       # no measurement: the original
+        self.assertEqual(auto_quality(p4k, 100_000), "original")    # fast local network
         self.assertEqual(auto_quality(p4k, 20_000), "1080p")
         self.assertEqual(auto_quality(p4k, 6_000), "720p")
-        self.assertEqual(auto_quality(p4k, 800), "480p")            # jamais en dessous de 480p
+        self.assertEqual(auto_quality(p4k, 800), "480p")            # never below 480p
         p720 = {"bitrate": 9_000_000, "video": {"height": 720}}
         self.assertEqual(auto_quality(p720, 12_000), "original")
-        self.assertEqual(auto_quality(p720, 11_000), "720p")         # pas de « 1080p » pour un fichier 720p
+        self.assertEqual(auto_quality(p720, 11_000), "720p")         # no "1080p" for a 720p file
         p720hi = {"bitrate": 20_000_000, "video": {"height": 720}}
-        self.assertEqual(auto_quality(p720hi, 12_000), "1080p")      # 720p très lourd : le palier 1080p réduit le débit
-        size_only = {"video": {"height": 1080}}  # débit d'après la taille : 3 Go en 1 h = 6,7 Mbit/s
+        self.assertEqual(auto_quality(p720hi, 12_000), "1080p")      # very heavy 720p: the 1080p step lowers the bitrate
+        size_only = {"video": {"height": 1080}}  # bitrate from the size: 3 GB in 1 h = 6.7 Mbit/s
         self.assertEqual(auto_quality(size_only, 9_000, 3_000_000_000, 3_600_000), "original")
         self.assertEqual(auto_quality(size_only, 8_000, 3_000_000_000, 3_600_000), "720p")
-        # mesure du débit : octets incompressibles, taille bornée
+        # bandwidth measurement: incompressible bytes, bounded size
         st, data, h = self.admin.call("GET", "/api/bandwidth?size=70000", raw=True)
         self.assertEqual((st, len(data), h.get("Cache-Control")), (200, 70000, "no-store"))
         st, data, h = self.admin.call("GET", "/api/bandwidth?size=1", raw=True)
         self.assertEqual(len(data), 1 << 16)
-        # lecture en automatique : débit faible -> conversion, débit large -> l'original
+        # automatic playback: low bandwidth -> conversion, wide bandwidth -> the original
         movie = self.ctx.db.one("SELECT id, probe FROM items WHERE type='movie' ORDER BY id LIMIT 1")
         caps = {"video": ["h264", "hevc"], "audio": ["aac", "ac3", "mp3"], "containers": ["mp4", "matroska"], "native": True}
         st, r = self.admin.call("POST", "/api/play", {"id": str(movie["id"]), "quality": "auto", "bandwidth": 900, "caps": caps})
         self.assertEqual(st, 200, r)
-        # (fichier de test en 180p à 0,8 Mbit/s : en 480p, rien à réduire, il reste lu tel quel)
+        # (test file in 180p at 0.8 Mbit/s: at 480p, nothing to reduce, it stays played as is)
         self.assertEqual((r["quality"], r["auto_quality"], r["bandwidth"]), ("auto", "480p", 900))
         self.admin.call("POST", "/api/stop", {"stream": r["stream"]})
         st, r = self.admin.call("POST", "/api/play", {"id": str(movie["id"]), "quality": "auto", "bandwidth": 500_000, "caps": caps})
         self.assertEqual((r["auto_quality"], r["mode"]), ("original", "direct"))
         self.admin.call("POST", "/api/stop", {"stream": r["stream"]})
-        # sans mesure dans la demande : la dernière de cet appareil (même compte, même adresse)
+        # no measurement in the request: this device's last one (same account, same address)
         self.admin.call("POST", "/api/play", {"id": str(movie["id"]), "quality": "auto", "bandwidth": 900, "caps": caps})
         st, r = self.admin.call("POST", "/api/play", {"id": str(movie["id"]), "quality": "auto", "caps": caps})
         self.assertEqual((r["auto_quality"], r["bandwidth"]), ("480p", 900))
         self.admin.call("POST", "/api/stop", {"stream": r["stream"]})
-        # qualité par défaut d'un compte : automatique
+        # default quality of an account: automatic
         st, me = self.admin.call("GET", "/api/me")
         self.assertEqual(me["prefs"]["quality"], "auto")
 
     def test_21_readrate_only_with_ffmpeg_6(self):
-        """-readrate fige la préparation avec ffmpeg 8 : utilisé seulement avec ffmpeg 5 et 6."""
+        """-readrate freezes the preparation with ffmpeg 8: only used with ffmpeg 5 and 6."""
         from unittest import mock
-        from seance import media
+        from noxa import media
         with mock.patch.object(media, "has_option", return_value=True):
             for major, ok in ((6, True), (5, True), (7, False), (8, False), (0, False)):
                 with mock.patch.object(media, "ffmpeg_major", return_value=major):
@@ -378,7 +378,7 @@ class PhotosDlnaTest(unittest.TestCase):
         st, data, h = self.admin.call("GET", f"/api/photos/{clip['id']}/stream", headers={"Range": "bytes=0-99"}, raw=True)
         self.assertEqual((st, len(data), h["Content-Type"]), (206, 100, "video/mp4"))
         st, data, _ = self.admin.call("GET", f"/api/img?p={clip['thumb']}&w=100&h=100", raw=True)
-        self.assertEqual((st, data[:2]), (200, b"\xff\xd8"))  # vignette : une image de la vidéo
+        self.assertEqual((st, data[:2]), (200, b"\xff\xd8"))  # thumbnail: a frame of the video
         photo = next(p for p in a["photos"] if p["title"] == "IMG_0001")
         self.assertEqual(self.admin.call("GET", f"/api/photos/{photo['id']}/stream")[0], 404)
         # favoris
@@ -388,7 +388,7 @@ class PhotosDlnaTest(unittest.TestCase):
         self.assertEqual([p["id"] for p in f["photos"]], [photo["id"]])
         self.assertTrue(f["photos"][0]["fav"])
         self.admin.call("PUT", f"/api/photos/{photo['id']}/favorite", {"on": False})
-        # lien de partage de l'album « Plage » : sans compte, rien en dehors de l'album
+        # share link of the "Plage" album: no account, nothing outside the album
         st, sub = self.admin.call("GET", f"/api/libraries/{lib['id']}/photos?album={album['id']}")
         plage = sub["albums"][0]
         st, share = self.admin.call("POST", f"/api/photos/albums/{plage['id']}/shares", {"days": 7})
@@ -401,17 +401,17 @@ class PhotosDlnaTest(unittest.TestCase):
         st, data, _ = anon.call("GET", pub["photos"][0]["thumb_url"] + "&w=120", raw=True)
         self.assertEqual((st, data[:2]), (200, b"\xff\xd8"))
         self.assertEqual(anon.call("GET", f"/api/share/{token}/original/{pid}", raw=True)[0], 200)
-        self.assertEqual(anon.call("GET", f"/api/share/{token}/img/{photo['id']}?k=view", raw=True)[0], 404)  # hors de l'album
-        self.assertEqual(anon.call("GET", f"/api/share/{token}?album={album['id']}")[0], 404)  # pas au-dessus
-        self.assertEqual(anon.call("GET", f"/api/photos/{pid}/view")[0], 401)  # l'API normale demande un compte
+        self.assertEqual(anon.call("GET", f"/api/share/{token}/img/{photo['id']}?k=view", raw=True)[0], 404)  # outside the album
+        self.assertEqual(anon.call("GET", f"/api/share/{token}?album={album['id']}")[0], 404)  # not above
+        self.assertEqual(anon.call("GET", f"/api/photos/{pid}/view")[0], 401)  # the normal API requires an account
         st, lst = self.admin.call("GET", f"/api/photos/albums/{plage['id']}/shares")
         self.assertEqual([s["token"] for s in lst], [token])
         self.assertEqual(self.admin.call("POST", f"/api/photos/albums/{plage['id']}/shares", {"days": 365})[0], 400)
         self.admin.call("DELETE", f"/api/photos/shares/{token}")
-        self.assertEqual(anon.call("GET", f"/api/share/{token}")[0], 404)  # révoqué
+        self.assertEqual(anon.call("GET", f"/api/share/{token}")[0], 404)  # revoked
 
     def test_40_photo_map(self):
-        """Coordonnées GPS (EXIF des photos, métadonnées des vidéos), carte, photos d'un lieu ; jamais dans un lien."""
+        """GPS coordinates (photo EXIF, video metadata), map, photos of a place; never in a link."""
         lib = self.libs["Photos"]
         folder = os.path.join(self.pics, "Voyage")
         os.makedirs(folder)
@@ -441,14 +441,14 @@ class PhotosDlnaTest(unittest.TestCase):
             st, r = self.admin.call("GET", f"/api/libraries/{lib['id']}/photos?ids={','.join(pts)},999999")
             self.assertEqual(sorted(p["title"] for p in r["photos"]), ["IMG_GPS", "VID_GPS"])
             self.assertTrue(all(p["lat"] is not None for p in r["photos"]))
-            # photo analysée avant la lecture du GPS : relue une fois au scan suivant, sans changer de fichier
+            # photo analysed before GPS was read: read again once at the next scan, without changing file
             gid = next(k for k, v in pts.items() if v[0] < 0)
             self.ctx.db.run("UPDATE items SET probe='{\"w\":32,\"h\":32}' WHERE id=?", (int(gid),))
             self.assertEqual(len(self.admin.call("GET", f"/api/libraries/{lib['id']}/photos?view=map")[1]["points"]), 1)
             self.admin.call("POST", "/api/admin/scan", {"library": lib["id"]})
             wait_scan(self.admin)
             self.assertEqual(len(self.admin.call("GET", f"/api/libraries/{lib['id']}/photos?view=map")[1]["points"]), 2)
-            # album partagé par lien : pas de position
+            # album shared by link: no position
             st, root = self.admin.call("GET", f"/api/libraries/{lib['id']}/photos")
             voyage = next(a for a in root["albums"] if a["title"] == "Voyage")
             st, share = self.admin.call("POST", f"/api/photos/albums/{voyage['id']}/shares", {"days": 1})
@@ -456,7 +456,7 @@ class PhotosDlnaTest(unittest.TestCase):
             self.assertEqual(len(pub["photos"]), 2)
             self.assertFalse(any("lat" in p for p in pub["photos"]))
             self.admin.call("DELETE", f"/api/photos/shares/{share['token']}")
-            # une autre personne sans accès à la photothèque : rien
+            # another person without access to the photo library: nothing
             self.assertNotEqual(Client(self.base).call("GET", f"/api/libraries/{lib['id']}/photos?view=map")[0], 200)
         finally:
             shutil.rmtree(folder, ignore_errors=True)
@@ -464,7 +464,7 @@ class PhotosDlnaTest(unittest.TestCase):
             wait_scan(self.admin)
 
     def test_30_remote_control(self):
-        """Télécommande : le lecteur s'annonce, envoie son état ; un autre appareil le voit et lui envoie des commandes."""
+        """Remote control: the player announces itself, sends its state; another device sees it and sends it commands."""
         cookie = "; ".join(f"{c.name}={c.value}" for c in self.admin.jar)
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         conn.request("GET", "/api/remote/events?device=salon0001&name=TV%20du%20salon", headers={"Cookie": cookie})
@@ -484,7 +484,7 @@ class PhotosDlnaTest(unittest.TestCase):
         self.assertEqual(json.loads(line[6:]), {"action": "seekby", "value": 30000})
         self.assertEqual(self.admin.call("POST", "/api/remote/salon0001/cmd", {"action": "rm -rf"})[0], 400)
         self.assertEqual(self.admin.call("POST", "/api/remote/inconnu01/cmd", {"action": "pause"})[0], 404)
-        # un autre compte ne voit pas les appareils de celui-ci
+        # another account does not see this one's devices
         st, r = self.admin.call("POST", "/api/admin/users", {"username": "zoe", "password": "motdepasseZ"})
         zoe = Client(self.base)
         zoe.call("POST", "/api/login", {"username": "zoe", "password": "motdepasseZ"})
@@ -493,24 +493,24 @@ class PhotosDlnaTest(unittest.TestCase):
         conn.close()
 
     def test_31_push_notifications(self):
-        from seance import push as push_mod
+        from noxa import push as push_mod
         st, k = self.admin.call("GET", "/api/push/key")
         self.assertEqual(st, 200)
-        self.assertEqual(len(push_mod.base64.urlsafe_b64decode(k["key"] + "=")), 65)  # point P-256 non compressé
-        # seuls les services push des navigateurs sont acceptés (pas d'adresse du réseau local)
+        self.assertEqual(len(push_mod.base64.urlsafe_b64decode(k["key"] + "=")), 65)  # uncompressed P-256 point
+        # only the browsers' push services are accepted (no local network address)
         self.assertEqual(self.admin.call("POST", "/api/push/subscribe", {"endpoint": "https://192.168.1.10/x"})[0], 400)
         self.assertEqual(self.admin.call("POST", "/api/push/subscribe", {"endpoint": "http://fcm.googleapis.com/x"})[0], 400)
         st, r = self.admin.call("POST", "/api/push/subscribe", {"endpoint": "https://fcm.googleapis.com/fcm/send/abc"})
         self.assertEqual(st, 200, r)
         st, k = self.admin.call("GET", "/api/push/key?endpoint=" + urllib.parse.quote("https://fcm.googleapis.com/fcm/send/abc"))
         self.assertTrue(k["subscribed"])
-        # signature du jeton : vérifiée avec la clé publique (ES256)
+        # token signature: checked with the public key (ES256)
         jwt = self.ctx.push._jwt("https://fcm.googleapis.com/fcm/send/abc")
         head, body, sig = jwt.split(".")
         self.assertEqual(len(push_mod.base64.urlsafe_b64decode(sig + "==")), 64)
         claims = json.loads(push_mod.base64.urlsafe_b64decode(body + "=="))
         self.assertEqual(claims["aud"], "https://fcm.googleapis.com")
-        # le message attend l'appareil réveillé
+        # the message waits for the woken device
         sent = []
         self.ctx.push._send_one = lambda sub: sent.append(sub["endpoint"]) or True
         st, r = self.admin.call("POST", "/api/push/test")
@@ -526,22 +526,22 @@ class PhotosDlnaTest(unittest.TestCase):
         self.assertEqual(self.admin.call("POST", "/api/push/test")[0], 409)
 
     def test_31b_push_android_app(self):
-        """Application Android : jeton d'appareil, messages relevés par l'appareil lui-même (pas de Web Push)."""
+        """Android app: device token, messages fetched by the device itself (no Web Push)."""
         sent = []
         self.ctx.push._send_one = lambda sub: sent.append(sub["endpoint"]) or True
         st, r = self.admin.call("POST", "/api/push/device")
         self.assertEqual(st, 200, r)
         token = r["token"]
-        phone = Client(self.base)  # l'application, sans cookie : seulement son jeton
+        phone = Client(self.base)  # the app, without a cookie: only its token
         self.assertEqual(phone.call("GET", "/api/push/device", headers={"X-Nexis-Device": "x" * 40})[0], 410)
-        st, r = phone.call("GET", "/api/push/device", headers={"X-Nexis-Device": token})
+        st, r = phone.call("GET", "/api/push/device", headers={"X-Noxa-Device": token})
         self.assertEqual((st, r["messages"]), (200, []))
         st, r = self.admin.call("POST", "/api/push/test")
-        self.assertEqual((st, r["sent"]), (200, 1))  # l'appareil compte, sans envoi vers un service push
-        st, r = phone.call("GET", "/api/push/device", headers={"X-Nexis-Device": token})
+        self.assertEqual((st, r["sent"]), (200, 1))  # the device counts, without a send to a push service
+        st, r = phone.call("GET", "/api/push/device", headers={"X-Noxa-Device": token})
         self.assertEqual([m["tag"] for m in r["messages"]], ["test"])
         self.assertNotIn("ring", r["messages"][0])
-        # heures calmes : le message reste dans la cloche, le téléphone ne sonne pas
+        # quiet hours: the message stays in the bell, the phone does not ring
         uid = self.ctx.db.scalar("SELECT id FROM users WHERE username='admin'")
         prefs = self.ctx.push.prefs
         self.ctx.push.prefs = lambda u: {"quiet_hours": "00:00-23:59"}
@@ -554,32 +554,32 @@ class PhotosDlnaTest(unittest.TestCase):
         self.assertEqual([m["tag"] for m in r["messages"]], ["show-1"])
         self.assertEqual(r["messages"][0]["url"], "#/item/1")
         self.assertEqual(sent, [])
-        # désinscription : le jeton ne sert plus à rien
+        # unsubscription: the token is useless now
         self.admin.call("POST", "/api/push/device/remove", {"token": token})
         self.assertEqual(phone.call("GET", "/api/push/device", headers={"X-Nexis-Device": token})[0], 410)
         self.assertEqual(self.admin.call("POST", "/api/push/test")[0], 409)
 
     def test_32_cast_streams(self):
-        """Flux pour une TV (Chromecast, AirPlay) : lisible sans session, avec CORS ; les autres flux demandent un compte."""
+        """Stream for a TV (Chromecast, AirPlay): playable without a session, with CORS; the other streams require an account."""
         movie = self.ctx.db.scalar("SELECT id FROM items WHERE type='movie' ORDER BY id LIMIT 1")
         caps = {"video": ["h264"], "audio": ["aac"], "containers": ["mp4"]}
         st, normal = self.admin.call("POST", "/api/play", {"id": str(movie), "caps": caps, "no_direct": True})
         st, cast = self.admin.call("POST", "/api/play", {"id": str(movie), "caps": caps, "no_direct": True, "cast": True})
         self.assertEqual(st, 200, cast)
-        tv = Client(self.base)  # la TV : pas de cookie
+        tv = Client(self.base)  # the TV: no cookie
         st, body, h = tv.call("GET", cast["url"], raw=True)
         self.assertEqual(st, 200)
         self.assertIn(b"#EXTM3U", body)
         self.assertEqual(h.get("Access-Control-Allow-Origin"), "*")
         st, init, h = tv.call("GET", cast["url"].replace("main.m3u8", "init.mp4"), raw=True)
         self.assertEqual(st, 200)
-        self.assertEqual(tv.call("GET", normal["url"], raw=True)[0], 404)  # flux ordinaire : seulement avec sa session
+        self.assertEqual(tv.call("GET", normal["url"], raw=True)[0], 404)  # ordinary stream: only with its session
         st, body, h = self.admin.call("GET", normal["url"], raw=True)
         self.assertEqual(st, 200)
         self.assertIsNone(h.get("Access-Control-Allow-Origin"))
         for sid in (normal["stream"], cast["stream"]):
             self.admin.call("POST", "/api/stop", {"stream": sid})
-        self.assertEqual(tv.call("GET", cast["url"], raw=True)[0], 404)  # arrêté : l'adresse ne sert plus
+        self.assertEqual(tv.call("GET", cast["url"], raw=True)[0], 404)  # stopped: the address no longer works
 
     def test_12_local_only(self):
         for ip, ok in (("192.168.1.20", True), ("10.0.0.5", True), ("127.0.0.1", True), ("::ffff:192.168.0.3", True),

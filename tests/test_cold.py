@@ -1,4 +1,4 @@
-"""Stockage froid : stockages (dossier, WebDAV, S3, SFTP, rclone), archivage vérifié, lecture depuis la copie."""
+"""Cold storage: storages (folder, WebDAV, S3, SFTP, rclone), checked archiving, playback from the copy."""
 import base64
 import json
 import os
@@ -16,11 +16,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client, ffprobe_codec, hls_segment, media_root, wait_scan
 
-from seance import cold as cold_mod
-from seance import coldfree
-from seance import mountd
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import cold as cold_mod
+from noxa import coldfree
+from noxa import mountd
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 
 # ---------------------------------------------------------------------- faux serveurs
@@ -233,7 +233,7 @@ class FakeArr(BaseHTTPRequestHandler):
             self._json({})
 
 
-# faux rclone : « remote:chemin » -> dossier $FAKE_RCLONE_ROOT/remote/chemin
+# fake rclone: "remote:path" -> folder $FAKE_RCLONE_ROOT/remote/path
 FAKE_RCLONE = r'''#!/usr/bin/env python3
 import json, os, sys
 args = [a for a in sys.argv[1:]]
@@ -271,7 +271,7 @@ def serve(handler):
     return srv
 
 
-# SFTP : vrai serveur (asyncssh), seulement si la bibliothèque est disponible (dossier donné par NEXIS_TEST_PYDEPS)
+# SFTP: real server (asyncssh), only when the library is available (folder given by NEXIS_TEST_PYDEPS)
 SFTPD = r'''
 import asyncio, os, sys
 sys.path.insert(0, sys.argv[1])
@@ -304,7 +304,7 @@ class ColdStorageTest(unittest.TestCase):
         FakeS3.objects, FakeS3.uploads = {}, {}
         cls.dav = serve(FakeDAV)
         cls.s3 = serve(FakeS3)
-        # bibliothèque propre au test (on y efface un fichier)
+        # library specific to the test (a file is erased in it)
         src = os.path.join(media_root(), "films")
         cls.films = os.path.join(cls.work, "films")
         os.makedirs(cls.films)
@@ -325,7 +325,7 @@ class ColdStorageTest(unittest.TestCase):
         assert st == 200, r
         wait_scan(cls.admin)
         cls.movie = cls.ctx.db.one("SELECT * FROM items WHERE type='movie' AND key LIKE '%Nuit.Polaire%'")
-        # faux rclone sur le PATH
+        # fake rclone on the PATH
         cls.bin = os.path.join(cls.work, "bin")
         os.makedirs(cls.bin)
         exe = os.path.join(cls.bin, "rclone")
@@ -371,23 +371,23 @@ class ColdStorageTest(unittest.TestCase):
             self.assertEqual(b"".join(b.open("Films/Un film (2020)/film é.mkv", a, z)), data[a:z + 1], (a, z))
         b.delete("Films/Un film (2020)/film é.mkv")
         self.assertIsNone(b.size("Films/Un film (2020)/film é.mkv"))
-        b.delete("Films/Un film (2020)/film é.mkv")  # déjà absent : pas d'erreur
+        b.delete("Films/Un film (2020)/film é.mkv")  # already missing: no error
 
     def test_01_backends(self):
         cold = self.ctx.cold
         os.makedirs(os.path.join(self.work, "usb"), exist_ok=True)
         self.exercise(cold_mod.Local({"path": os.path.join(self.work, "usb")}, cold))
-        self.assertFalse(os.listdir(os.path.join(self.work, "usb")))  # dossiers vides retirés
+        self.assertFalse(os.listdir(os.path.join(self.work, "usb")))  # empty folders removed
         self.exercise(cold_mod.WebDAV(self.dav_conf(), cold))
-        old = cold_mod.PART
-        cold_mod.PART = 1024 * 1024  # envoi en plusieurs parties dès 1 Mo
+        old = cold_mod.storage.PART
+        cold_mod.storage.PART = 1024 * 1024  # multipart upload from 1 MB
         try:
             self.exercise(cold_mod.S3(self.s3_conf(), cold))
         finally:
-            cold_mod.PART = old
-        self.assertEqual(FakeS3.uploads, {})  # parties assemblées
+            cold_mod.storage.PART = old
+        self.assertEqual(FakeS3.uploads, {})  # parts assembled
         self.exercise(cold_mod.Rclone({"remote": "pcloud:Noxa"}, cold))
-        # mauvais mot de passe WebDAV : message clair
+        # wrong WebDAV password: clear message
         with self.assertRaises(cold_mod.ColdError) as e:
             cold_mod.WebDAV({**self.dav_conf(), "password": "faux"}, cold).check()
         self.assertIn("refusé", str(e.exception))
@@ -410,10 +410,10 @@ class ColdStorageTest(unittest.TestCase):
             b = cold_mod.SFTP(conf, self.ctx.cold)
             fp = b.fingerprint()
             self.assertRegex(fp, r"^[0-9a-f]{32}$")
-            with self.assertRaises(cold_mod.ColdError):  # clé non confirmée : refus
+            with self.assertRaises(cold_mod.ColdError):  # key not confirmed: refused
                 cold_mod.SFTP({**conf, "hostkey": "0" * 32}, self.ctx.cold).check()
             self.exercise(cold_mod.SFTP({**conf, "hostkey": fp}, self.ctx.cold))
-            # par l'API : l'essai donne l'empreinte à confirmer, puis le stockage s'ajoute
+            # through the API: the test gives the fingerprint to confirm, then the storage is added
             st, r = self.admin.call("POST", "/api/admin/cold/test", {"kind": "sftp", "conf": conf})
             self.assertEqual((st, r.get("fingerprint")), (200, fp), r)
             st, r = self.admin.call("POST", "/api/admin/cold/stores", {"kind": "sftp", "name": "Box", "conf": {**conf, "hostkey": fp}})
@@ -432,13 +432,13 @@ class ColdStorageTest(unittest.TestCase):
         self.assertEqual(st, 400)
         st, r = self.admin.call("POST", "/api/admin/cold/stores", {"kind": "webdav", "name": "Mauvais",
                                                                     "conf": {**self.dav_conf(), "password": "faux"}})
-        self.assertEqual(st, 400, r)  # essai réel avant l'ajout
+        self.assertEqual(st, 400, r)  # real test before adding
         st, r = self.admin.call("GET", "/api/admin/cold")
         self.assertEqual(r["stores"], [])
         self.assertIsNone(r["available"]["webdav"])
-        self.assertIsNotNone(r["available"]["smb"])  # pas de service de montage dans les tests
+        self.assertIsNotNone(r["available"]["smb"])  # no mount service in the tests
 
-    # -------------------------------------------------------------------------- archivage et lecture
+    # -------------------------------------------------------------------------- archiving and playback
     def test_04_archive_and_play_from_cold(self):
         usb = os.path.join(self.work, "disque-usb")
         os.makedirs(usb)
@@ -457,7 +457,7 @@ class ColdStorageTest(unittest.TestCase):
         counts = {s["id"]: s for s in r["stores"]}
         self.assertEqual(counts[local_id]["copies"], 1)
         self.assertEqual(counts[dav_id]["bytes"], os.path.getsize(self.movie["key"]))
-        # copie lisible telle quelle sur le disque : même arborescence que la bibliothèque, sous-titres voisins compris
+        # copy readable as is on the disk: same tree as the library, neighbouring subtitles included
         self.assertTrue(os.path.isfile(os.path.join(usb, "Films", "Nuit.Polaire.2021.1080p.BluRay.x264.mkv")))
         self.assertTrue(os.path.isfile(os.path.join(usb, "Films", "Nuit.Polaire.2021.1080p.BluRay.x264.en.srt")))
         st, c = self.admin.call("GET", f"/api/admin/cold/items/{mid}")
@@ -465,11 +465,11 @@ class ColdStorageTest(unittest.TestCase):
         self.assertTrue(all(x["verified_at"] for x in c["copies"]))
         st, d = self.admin.call("GET", f"/api/items/{mid}")
         self.assertEqual((d["archived"], d["cold_only"]), (True, False))
-        # déjà archivé : rien de plus dans la file
+        # already archived: nothing more in the queue
         st, r = self.admin.call("POST", "/api/admin/cold/archive", {"ids": [mid], "store": dav_id})
         self.assertEqual(r["queued"], 0)
 
-        # le fichier quitte la bibliothèque (supprimé par Radarr, par exemple) : le titre reste, lu depuis la copie
+        # the file leaves the library (deleted by Radarr, for example): the title stays, played from the copy
         os.remove(self.movie["key"])
         os.remove(self.movie["key"].replace(".mkv", ".en.srt"))
         self.admin.call("POST", "/api/admin/scan")
@@ -485,7 +485,7 @@ class ColdStorageTest(unittest.TestCase):
         self.assertEqual(ffprobe_codec(data), "h264")
         self.admin.call("POST", "/api/stop", {"stream": p["stream"]})
 
-        # plus de disque USB : la copie WebDAV prend le relais, relue par l'adresse locale de Noxa
+        # USB disk gone: the WebDAV copy takes over, read through Noxa's local address
         st, r = self.admin.call("DELETE", f"/api/admin/cold/items/{mid}/{local_id}")
         self.assertEqual((st, r["ok"]), (200, True), r)
         self.assertFalse(os.path.exists(os.path.join(usb, "Films")))
@@ -496,14 +496,14 @@ class ColdStorageTest(unittest.TestCase):
         n, data, _ = hls_segment(self.admin, p["url"], at=10.0)
         self.assertEqual(ffprobe_codec(data), "h264")
         self.admin.call("POST", "/api/stop", {"stream": p["stream"]})
-        # l'adresse locale ne sert qu'à ffmpeg : jeton secret, et jamais derrière un proxy
+        # the local address is only for ffmpeg: secret token, and never behind a proxy
         url = self.ctx.cold.stream_url(dav_id, "Films/Nuit.Polaire.2021.1080p.BluRay.x264.mkv", 100)
         path = urllib.parse.urlsplit(url).path
         st, body, h = Client(self.base).call("GET", path, headers={"Range": "bytes=0-3"}, raw=True)
-        self.assertEqual((st, body), (206, b"\x1aE\xdf\xa3"))  # début d'un MKV
+        self.assertEqual((st, body), (206, b"\x1aE\xdf\xa3"))  # start of an MKV
         self.assertEqual(Client(self.base).call("GET", path, headers={"X-Forwarded-For": "1.2.3.4"}, raw=True)[0], 404)
         self.assertEqual(Client(self.base).call("GET", "/cold/" + "x" * 32, raw=True)[0], 404)
-        # téléchargement hors ligne depuis la copie froide
+        # offline download from the cold copy
         st, j = self.admin.call("POST", "/api/downloads", {"id": str(mid), "quality": "original",
                                                             "caps": {"video": ["h264"], "audio": ["aac"], "containers": ["mp4"]}})
         self.assertEqual(st, 200, j)
@@ -513,14 +513,14 @@ class ColdStorageTest(unittest.TestCase):
                 break
             time.sleep(0.2)
         self.assertEqual(j2["state"], "ready", j2)
-        # dernière copie : on ne la retire pas, ni le stockage qui la porte
+        # last copy: it is not removed, nor the storage that holds it
         st, r = self.admin.call("DELETE", f"/api/admin/cold/items/{mid}/{dav_id}")
         self.assertEqual(st, 409, r)
         st, r = self.admin.call("DELETE", f"/api/admin/cold/stores/{dav_id}")
         self.assertEqual(st, 409, r)
 
     def test_05_show_and_errors(self):
-        # un stockage injoignable : la tâche passe en erreur, avec un message, et se relance
+        # an unreachable storage: the job goes to error, with a message, and is retried
         st, r = self.admin.call("POST", "/api/admin/cold/stores", {"kind": "s3", "name": "B2", "conf": self.s3_conf()})
         self.assertEqual(st, 200, r)
         s3_id = r["id"]
@@ -547,16 +547,16 @@ class ColdStorageTest(unittest.TestCase):
         self.wait_jobs()
         st, c = self.admin.call("GET", f"/api/admin/cold/items/{brume['id']}")
         self.assertEqual([x["store"] for x in c["copies"]], ["B2"])
-        self.assertIn("/nexis/archive/Films/Brume (2022)/Brume.2022.HEVC.mkv", FakeS3.objects)  # seau/préfixe/arborescence
+        self.assertIn("/nexis/archive/Films/Brume (2022)/Brume.2022.HEVC.mkv", FakeS3.objects)  # bucket/prefix/tree
 
-    # -------------------------------------------------------------------------- titres ramenés en local
+    # -------------------------------------------------------------------------- titles brought back locally
     def test_05b_cache_brings_titles_back(self):
         mid = self.movie["id"]
         if self.ctx.cold.local_missing(self.movie) is False:
             self.skipTest("dépend de test_04 (fichier retiré de la bibliothèque)")
         self.ctx.db.set_setting("cold_cache_gb", "1")
         self.ctx.db.set_setting("cold_cache_free_gb", "0")
-        # la lecture en ligne du test 04 l'a peut-être déjà ramené : on repart d'un cache vide
+        # test 04's online playback may already have brought it back: start from an empty cache
         for _ in range(100):
             if not (self.ctx.cold.fetcher and self.ctx.cold.fetcher.is_alive()):
                 break
@@ -564,7 +564,7 @@ class ColdStorageTest(unittest.TestCase):
         self.admin.call("PUT", "/api/admin/cold/extra", {"clear_cache": True})
         st, p = self.admin.call("POST", "/api/play", {"id": str(mid)})
         self.assertEqual(st, 200, p)
-        self.assertTrue(self.ctx.transcoder.get(p["stream"]).path.startswith("cold:"))  # en ligne, cette fois
+        self.assertTrue(self.ctx.transcoder.get(p["stream"]).path.startswith("cold:"))  # online, this time
         self.admin.call("POST", "/api/stop", {"stream": p["stream"]})
         for _ in range(100):
             if self.ctx.db.scalar("SELECT 1 FROM cold_cache WHERE item_id=?", (mid,)):
@@ -573,17 +573,17 @@ class ColdStorageTest(unittest.TestCase):
         path = self.ctx.db.scalar("SELECT path FROM cold_cache WHERE item_id=?", (mid,))
         self.assertTrue(path and os.path.getsize(path) == self.movie["file_size"], path)
         st, p = self.admin.call("POST", "/api/play", {"id": str(mid)})
-        self.assertEqual(self.ctx.transcoder.get(p["stream"]).path, path)  # la suite : depuis le disque local
+        self.assertEqual(self.ctx.transcoder.get(p["stream"]).path, path)  # the rest: from the local disk
         self.admin.call("POST", "/api/stop", {"stream": p["stream"]})
         st, r = self.admin.call("GET", "/api/admin/cold/extra")
         self.assertEqual((r["cache"]["count"], r["cache"]["bytes"]), (1, self.movie["file_size"]))
-        # budget trop petit : rien n'est ramené ; vider le cache le retire
+        # budget too small: nothing is brought back; emptying the cache removes it
         self.admin.call("PUT", "/api/admin/cold/extra", {"clear_cache": True, "cache_gb": 0.001})
         self.assertFalse(os.path.exists(path))
         self.assertFalse(self.ctx.cold._make_room(self.movie["file_size"]))
         self.admin.call("PUT", "/api/admin/cold/extra", {"cache_gb": 20})
 
-    # -------------------------------------------------------------------------- libérer de la place
+    # -------------------------------------------------------------------------- freeing space
     def free_state(self, root):
         st, r = self.admin.call("GET", "/api/admin/cold/free")
         return [g for g in r["groups"] if g["root"] == root]
@@ -606,34 +606,34 @@ class ColdStorageTest(unittest.TestCase):
                                                                  "delay_days": 7, "methods": {str(lib): "write"}})
         self.assertEqual(st, 200, r)
         st, prev = self.admin.call("GET", "/api/admin/cold/free/preview")
-        self.assertEqual([x["title"] for x in prev["items"]], [brume["title"]])  # Nuit polaire : déjà hors de la bibliothèque
-        # titre « gardé sur le disque » : jamais proposé
+        self.assertEqual([x["title"] for x in prev["items"]], [brume["title"]])  # Nuit polaire: already outside the library
+        # title "kept on the disk": never proposed
         self.admin.call("POST", "/api/admin/cold/free/keep", {"root": brume["id"]})
         st, prev = self.admin.call("GET", "/api/admin/cold/free/preview")
         self.assertEqual(prev["count"], 0)
         self.admin.call("POST", "/api/admin/cold/free/keep", {"root": brume["id"], "keep": False})
-        # à valider : proposé seulement
+        # to approve: proposed only
         st, r = self.admin.call("POST", "/api/admin/cold/free/run")
         self.assertEqual(r["new"], 1, r)
         self.assertEqual(self.free_state(brume["id"])[0]["state"], "proposed")
         self.assertTrue(os.path.isfile(brume["key"]))
-        # validé : copie (déjà faite sur S3 en test 05 : elle suffit), puis 7 jours de délai
+        # approved: copy (already made on S3 in test 05: it is enough), then a 7-day delay
         st, r = self.admin.call("POST", "/api/admin/cold/free/approve", {"roots": [brume["id"]]})
         self.assertEqual(r["approved"], 1)
         g = self.free_state(brume["id"])[0]
         self.assertEqual(g["state"], "pending", g)
         self.assertGreater(g["delete_after"], time.time() + 6 * 86400)
-        # regardé pendant le délai : on garde
+        # watched during the delay: kept
         db.run("INSERT INTO progress(user_id, rating_key, position_ms, duration_ms, updated_at) VALUES(1, ?, 1000, 5000, ?)",
                (str(brume["id"]), int(time.time())))
         self.admin.call("POST", "/api/admin/cold/free/run")
         self.assertEqual(self.free_state(brume["id"]), [])
         self.assertTrue(os.path.isfile(brume["key"]))
-        # plus tard, toujours pas regardé, en automatique et sans délai : supprimé de la bibliothèque, lu depuis la copie
+        # later, still not watched, automatic and with no delay: deleted from the library, played from the copy
         db.run("DELETE FROM progress")
         self.admin.call("PUT", "/api/admin/cold/free", {"mode": "auto", "delay_days": 0})
         st, r = self.admin.call("POST", "/api/admin/cold/free/run")
-        st, r = self.admin.call("POST", "/api/admin/cold/free/run")  # copie vérifiée -> suppression
+        st, r = self.admin.call("POST", "/api/admin/cold/free/run")  # copy checked -> deletion
         self.assertFalse(os.path.exists(brume["key"]), r)
         st, r = self.admin.call("GET", "/api/admin/cold/free")
         self.assertEqual(r["freed"]["n"], 1)
@@ -657,15 +657,15 @@ class ColdStorageTest(unittest.TestCase):
             FakeArr.calls = []
             coldfree.radarr_delete(arr, row)
             self.assertEqual([c[0] for c in FakeArr.calls], ["GET", "PUT", "DELETE"])
-            self.assertEqual(FakeArr.calls[1][2], {"movieIds": [7], "monitored": False})  # plus surveillé, d'abord
+            self.assertEqual(FakeArr.calls[1][2], {"movieIds": [7], "monitored": False})  # no longer monitored, first
             self.assertEqual(FakeArr.calls[2][1], "/api/v3/moviefile/70")
-            # pas le même fichier (autre version) : rien n'est supprimé
+            # not the same file (other version): nothing is deleted
             FakeArr.movies[0]["movieFile"]["size"] = 999
             FakeArr.calls = []
             with self.assertRaises(coldfree.FreeError):
                 coldfree.radarr_delete(arr, row)
             self.assertFalse([c for c in FakeArr.calls if c[0] == "DELETE"])
-            # Sonarr : épisode retrouvé par saison / numéro, fichier à deux épisodes : les deux ne sont plus surveillés
+            # Sonarr: episode found by season / number, two-episode file: both are no longer monitored
             FakeArr.series = [{"id": 3, "tvdbId": 555, "tmdbId": 99}]
             FakeArr.episodes = [{"id": 31, "seasonNumber": 1, "episodeNumber": 1, "episodeFileId": 300},
                                 {"id": 32, "seasonNumber": 1, "episodeNumber": 2, "episodeFileId": 300},
@@ -676,41 +676,41 @@ class ColdStorageTest(unittest.TestCase):
                                    {"tvdb_id": 555}, 1)
             self.assertIn(("PUT", "/api/v3/episode/monitor", {"episodeIds": [31, 32], "monitored": False}), FakeArr.calls)
             self.assertEqual(FakeArr.calls[-1], ("DELETE", "/api/v3/episodefile/300"))
-            # par l'API : méthode par défaut « Radarr / Sonarr » dès qu'ils sont configurés
+            # through the API: default method "Radarr / Sonarr" as soon as they are set up
             st, r = self.admin.call("PUT", "/api/admin/cold/free", {"radarr_url": url, "radarr_key": key})
             self.assertEqual(r["conf"]["secrets_set"], ["radarr_key"])
             self.assertNotIn("radarr_key", r["conf"])
             st, r = self.admin.call("GET", "/api/admin/cold/free")
-            self.assertEqual({l["kind"]: l["method"] for l in r["libraries"]}["movie"], "write")  # choisi en test 07
+            self.assertEqual({l["kind"]: l["method"] for l in r["libraries"]}["movie"], "write")  # chosen in test 07
             self.assertEqual(self.admin.call("PUT", "/api/admin/cold/free", {"radarr_key": "court"})[0], 400)
         finally:
             srv.shutdown()
 
     def test_09_compress_archives(self):
-        """Archives réencodées en HEVC (processeur ici) : plus petites, lues avec leurs propres pistes."""
+        """Archives re-encoded in HEVC (processor here): smaller, played with their own tracks."""
         mid = self.movie["id"]
         st, c = self.admin.call("GET", "/api/admin/cold/compress")
-        self.assertIsNone(c["hw"])  # pas de carte graphique : l'interface le signale
-        self.assertGreaterEqual(c["todo"]["count"], 1)  # Nuit polaire (H.264) sur WebDAV
+        self.assertIsNone(c["hw"])  # no graphics card: the interface says so
+        self.assertGreaterEqual(c["todo"]["count"], 1)  # Nuit polaire (H.264) on WebDAV
         before = self.ctx.db.one("SELECT * FROM cold_copies WHERE item_id=? AND compressed=0", (mid,))
-        old_gain = cold_mod.MIN_GAIN
-        cold_mod.MIN_GAIN = 5  # vidéo de test minuscule : on accepte tout gain
+        old_gain = cold_mod.compression.MIN_GAIN
+        cold_mod.compression.MIN_GAIN = 5  # tiny test video: any gain is accepted
         try:
             self.admin.call("PUT", "/api/admin/cold/settings", {"compress": True, "compress_quality": "small"})
             st, r = self.admin.call("POST", "/api/admin/cold/compress", {})
             self.assertGreaterEqual(r["queued"], 1, r)
             self.wait_jobs(300)
         finally:
-            cold_mod.MIN_GAIN = old_gain
+            cold_mod.compression.MIN_GAIN = old_gain
         after = self.ctx.db.one("SELECT * FROM cold_copies WHERE item_id=? AND store_id=?", (mid, before["store_id"]))
         self.assertEqual(after["compressed"], 1, after)
         self.assertTrue(after["name"].endswith(".mkv"))
         self.assertEqual(after["orig_size"], before["size"])
         self.assertEqual(json.loads(after["probe"])["video"]["codec"], "hevc")
-        self.assertEqual(len(json.loads(after["probe"])["audio"]), 2)  # les deux pistes son gardées
+        self.assertEqual(len(json.loads(after["probe"])["audio"]), 2)  # both audio tracks kept
         if after["name"] != before["name"]:
-            self.assertNotIn(urllib.parse.unquote("/dav/" + before["name"]), FakeDAV.files)  # ancienne copie effacée
-        # lecture : la copie compressée décide (HEVC : conversion pour un navigateur qui ne le lit pas)
+            self.assertNotIn(urllib.parse.unquote("/dav/" + before["name"]), FakeDAV.files)  # old copy erased
+        # playback: the compressed copy decides (HEVC: conversion for a browser that cannot play it)
         self.admin.call("PUT", "/api/admin/cold/extra", {"clear_cache": True})
         st, p = self.admin.call("POST", "/api/play", {"id": str(mid), "caps": {"video": ["h264"], "audio": ["aac"], "containers": ["mp4"]}})
         self.assertEqual(st, 200, p)
@@ -720,7 +720,7 @@ class ColdStorageTest(unittest.TestCase):
         self.admin.call("POST", "/api/stop", {"stream": p["stream"]})
         st, c = self.admin.call("GET", "/api/admin/cold/compress")
         self.assertGreaterEqual(c["done"]["n"], 1)
-        # vidéo déjà en HEVC : archivée sans changement
+        # video already in HEVC: archived unchanged
         brume = self.ctx.db.one("SELECT id FROM items WHERE title LIKE 'Brume%'")
         usb = os.path.join(self.work, "usb-hevc")
         os.makedirs(usb)

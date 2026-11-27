@@ -1,6 +1,6 @@
 import { bulkSelection } from './bulk.js';
 import { canDownload, downloadDialog } from './item.js';
-import { get } from '../api.js';
+import { get, put } from '../api.js';
 import { state } from '../app.js';
 import { clear, fmtDuration, h, icon, img, posterCard, progressBar, select, spinner, store, toast } from '../ui.js';
 import { pinButton } from '../pins.js';
@@ -9,9 +9,12 @@ import { renderPhotos } from './photos.js';
 import { renderBooks } from './books.js';
 
 const PAGE = 60;
-// filtres de la page (paramètres de l'adresse, transmis tels quels au serveur et épinglables sur l'accueil)
+// page filters (address parameters, passed as is to the server and pinnable on the home page)
 const FILTERS = ['genre', 'watched', 'decade', 'duration', 'res', 'hdr', 'audio', 'subs', 'rating'];
 const MODES = [['poster', 'grid', 'Affiches'], ['wide', 'wide', 'Vignettes'], ['list', 'list', 'Liste']];
+
+// sorts that show the most recent or the highest first (as on the server side, catalog.SORTS)
+const DESC_FIRST = new Set(['added', 'year', 'release', 'rating', 'mine', 'watched']);
 
 export async function renderLibrary(main, sid, ctx) {
   const lib = state.me.libraries.find((l) => l.id === sid);
@@ -19,15 +22,19 @@ export async function renderLibrary(main, sid, ctx) {
   if (lib.type === 'photo') { await renderPhotos(main, lib, ctx); return; }
   if (lib.type === 'audiobook') { await renderBooks(main, lib, ctx); return; }
   document.title = `${lib.title} · Noxa`;
-  const sort = ctx.query.get('sort') || 'title';
+  // sort: the address's, otherwise the last chosen in this library (kept in the account), otherwise the title
+  const saved = ((state.me.prefs || {}).lib_sorts || {})[String(sid)] || {};
+  const sort = ctx.query.get('sort') || saved.sort || 'title';
+  const dir = ctx.query.get('dir') || (!ctx.query.get('sort') && saved.dir) || (DESC_FIRST.has(sort) ? 'desc' : 'asc');
   const genre = ctx.query.get('genre') || '';
   const view = ctx.query.get('view') || '';
-  // première page des titres demandée en même temps que les filtres (un aller-retour de moins si le serveur est loin)
+  // first page of titles requested together with the filters (one round trip less when the server is far)
   const firstQ = new URLSearchParams();
   for (const k of FILTERS) if (ctx.query.get(k)) firstQ.set(k, ctx.query.get(k));
   firstQ.set('start', 0);
   firstQ.set('size', PAGE);
   firstQ.set('sort', sort);
+  firstQ.set('dir', dir);
   let firstPage = get(`/api/libraries/${sid}/items?${firstQ}`);
   firstPage.catch(() => {}); // erreur reprise par more()
   const [genres, collections, facets] = await Promise.all([
@@ -59,11 +66,24 @@ export async function renderLibrary(main, sid, ctx) {
   };
   const pick = (key, options, label) => select(options, ctx.query.get(key) || '',
     { onchange: (e) => setQuery(key, e.target.value), 'aria-label': label });
+  const setSort = (s, d) => {
+    const all = { ...((state.me.prefs || {}).lib_sorts || {}), [String(sid)]: { sort: s, dir: d } };
+    if (state.me.prefs) state.me.prefs.lib_sorts = all;
+    put('/api/me/prefs', { lib_sorts: all }).catch(() => {}); // remembered for the next visit, on all devices
+    const q = new URLSearchParams(ctx.query);
+    q.set('sort', s);
+    q.set('dir', d);
+    location.hash = `#/library/${sid}?${q}`;
+  };
   const sortSel = select([['title', tr('Titre')], ['added', tr('Date d’ajout')], ['year', tr('Année')], ['release', tr('Date de sortie')],
-    ['rating', tr('Note')], ['mine', tr('Ma note')]], sort, { onchange: (e) => setQuery('sort', e.target.value), 'aria-label': tr('Trier') });
+    ['rating', tr('Note')], ['mine', tr('Ma note')], ['watched', tr('Dernier visionnage')]], sort,
+  { onchange: (e) => setSort(e.target.value, DESC_FIRST.has(e.target.value) ? 'desc' : 'asc'), 'aria-label': tr('Trier') });
+  const dirLabel = dir === 'desc' ? tr('Ordre décroissant') : tr('Ordre croissant');
+  const dirBtn = h('button.btn.small', { type: 'button', title: dirLabel, 'aria-label': dirLabel,
+    onclick: () => setSort(sort, dir === 'desc' ? 'asc' : 'desc') }, icon(dir === 'desc' ? 'down' : 'up'));
   const genreSel = pick('genre', [['', tr('Tous les genres')], ...genres.map((g) => [g.id, g.title])], tr('Genre'));
 
-  // panneau des autres filtres (ouvert d'office si l'un d'eux est actif)
+  // panel of the other filters (opened by default when one of them is active)
   const show = lib.type === 'show';
   const panel = h('div.filter-panel', { hidden: !active.some((k) => k !== 'genre') },
     h('label.filter', h('span', tr('Visionnage')), pick('watched', [['', tr('Tous')], ['unwatched', show ? tr('Pas commencées') : tr('Non vus')],
@@ -89,7 +109,7 @@ export async function renderLibrary(main, sid, ctx) {
     onclick: (e) => { panel.hidden = !panel.hidden; e.currentTarget.setAttribute('aria-expanded', String(!panel.hidden)); } },
   icon('list'), tr('Filtres'), active.filter((k) => k !== 'genre').length ? h('span.count-badge', active.filter((k) => k !== 'genre').length) : null);
 
-  // épingler : le genre seul, ou toute la combinaison de filtres
+  // pin: the genre alone, or the whole combination of filters
   const describe = () => {
     const parts = [];
     if (genre) parts.push(genre);
@@ -102,7 +122,7 @@ export async function renderLibrary(main, sid, ctx) {
   const pin = active.length === 1 && genre ? pinButton({ type: 'genre', ref: genre, lib: sid, title: `${genre} · ${lib.title}` })
     : active.length ? pinButton({ type: 'filter', ref: filterQuery().toString(), lib: sid, title: describe() }) : null;
 
-  // au hasard : un film (lancé tout de suite, de préférence pas encore vu) ou une série (sa fiche), selon le genre choisi
+  // random: a movie (started right away, preferably not watched yet) or a show (its page), according to the chosen genre
   const random = h('button.btn.small', { type: 'button', title: show ? tr('Une série au hasard') : tr('Un film au hasard'),
     onclick: async () => {
       try {
@@ -113,7 +133,7 @@ export async function renderLibrary(main, sid, ctx) {
       } catch (e) { toast(e.message, 'bad'); }
     } }, icon('shuffle'), tr('Au hasard'));
 
-  // affichage : affiches, vignettes larges ou liste détaillée (retenu pour chaque bibliothèque, sur cet appareil)
+  // display: posters, wide thumbnails or detailed list (remembered for each library, on this device)
   let mode = store(`libview:${sid}`) || 'poster';
   if (!MODES.some(([m]) => m === mode)) mode = 'poster';
   const modes = h('div.seg', MODES.map(([m, ic, label]) => h('button.seg-btn', { type: 'button', title: tr(label), 'aria-label': tr(label),
@@ -122,13 +142,13 @@ export async function renderLibrary(main, sid, ctx) {
   const count = h('span.muted');
   const grid = h(mode === 'list' ? 'div.lib-list' : mode === 'wide' ? 'div.grid.wide' : 'div.grid');
   const sentinel = h('div.sentinel');
-  // bibliothèque d'un serveur lié : un simple badge, elle s'utilise comme les autres
+  // library of a linked server: a simple badge, it is used like the others
   const server = lib.server ? h('span.server-badge', { title: tr('Bibliothèque du serveur lié « {server} »', { server: lib.server }) }, icon('link'), lib.server) : null;
-  // sélection multiple : marquer vus, télécharger, playlist, masquer… (et métadonnées, collection pour un administrateur)
+  // multiple selection: mark watched, download, playlist, hide… (and metadata, collection for an administrator)
   const cards = new Map();
   const bulk = bulkSelection(grid, cards, { downloadDialog, canDownload });
   clear(main, h('div.page-head', h('h1', lib.title), server, count,
-    h('div.filters', sortSel, genreSel, filterBtn, random, modes, bulk.button, pin)), panel, viewTabs, grid, sentinel, bulk.bar);
+    h('div.filters', sortSel, dirBtn, genreSel, filterBtn, random, modes, bulk.button, pin)), panel, viewTabs, grid, sentinel, bulk.bar);
 
   const render = (c) => { cards.set(String(c.id), c); return mode === 'list' ? listRow(c) : mode === 'wide' ? wideLibCard(c) : posterCard(c); };
   let start = 0, total = Infinity, loading = false;
@@ -141,6 +161,7 @@ export async function renderLibrary(main, sid, ctx) {
       q.set('start', start);
       q.set('size', PAGE);
       q.set('sort', sort);
+      q.set('dir', dir);
       const early = start === 0 ? firstPage : null;
       firstPage = null;
       const r = await (early || get(`/api/libraries/${sid}/items?${q}`));
@@ -164,7 +185,7 @@ export async function renderLibrary(main, sid, ctx) {
   await more();
 }
 
-// vignette large (image de fond) qui ouvre la fiche
+// wide thumbnail (backdrop) that opens the title page
 function wideLibCard(c) {
   const thumb = c.art || c.thumb;
   return h('a.card.wide', { href: `#/item/${c.id}`, title: c.title },
@@ -173,7 +194,7 @@ function wideLibCard(c) {
     h('div.card-title', c.title), h('div.card-sub', String(c.year || '')));
 }
 
-// ligne de la liste détaillée : affiche, titre, année, durée ou nombre d'épisodes, note, état
+// row of the detailed list: poster, title, year, duration or number of episodes, rating, state
 function listRow(c) {
   const facts = [c.year, c.type === 'show' ? plural(c.leaves || 0, '{n} épisode', '{n} épisodes') : fmtDuration(c.duration),
     c.rating ? `★ ${c.rating}` : null, c.content_rating].filter(Boolean);

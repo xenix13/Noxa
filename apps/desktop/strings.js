@@ -1,4 +1,4 @@
-// Textes de l'application de bureau (le reste de l'interface vient du serveur, déjà traduit).
+// Texts of the desktop app (the rest of the interface comes from the server, already translated).
 const FR = {
   title: 'Noxa',
   setupTitle: 'Votre serveur Noxa',

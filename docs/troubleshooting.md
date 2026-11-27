@@ -7,7 +7,7 @@
 - **Settings → Overview → Server status:** memory, swap, load and, for each stream, the mode (direct, remux, transcode), its reason, the **conversion speed** (below ×1 the CPU cannot keep up) and the last ffmpeg messages.
 - **⋯ → File information** on a movie or episode lists the file's tracks (codecs, languages, HDR…).
 - **The ⚙ menu of the player** shows how the current video is played and why.
-- **Logs:** `journalctl -u seance -f` (Docker: `docker logs -f noxa`). Set `SEANCE_DEBUG=1` in `/etc/seance/seance.env` and restart to log the ffmpeg commands.
+- **Logs:** `journalctl -u seance -f` (Docker: `docker logs -f noxa`). Set `NOXA_DEBUG=1` in `/etc/seance/seance.env` and restart to log the ffmpeg commands.
 - **Updates:** `/var/log/seance-update.log`.
 
 ## Common problems
@@ -21,7 +21,7 @@
 | A movie is matched to the wrong title | Title page → **⋯ → Identify…**, or rename it `Title (Year)` |
 | Episodes "not recognized" | Add `S01E02` or ` - 02` to the file name |
 | "Too many simultaneous transcodes" | Raise the limit if the CPU allows it (*Conversion and audio → Transcoding*), set up a graphics card, or use H.264 sources |
-| Playback does not start | `journalctl -u seance -f` while trying; `SEANCE_DEBUG=1` shows the ffmpeg commands |
+| Playback does not start | `journalctl -u seance -f` while trying; `NOXA_DEBUG=1` shows the ffmpeg commands |
 | Stuttering, swap full (LXC) | A 4K transcode uses 0.5 to 0.7 GB: plan 2 GB of RAM per simultaneous conversion and 1 to 2 GB of swap |
 | Colours washed out on an HDR movie | Check that tone mapping is not off (*Conversion and audio → Transcoding → HDR movies*) |
 | Slow pages | Requests over 5 s are logged ("Requête lente : GET /api/…", the server log is in French): `journalctl -u seance \| grep 'Requête lente'`. On a distant server (high latency), the first load is the slowest; later loads come from the device cache |

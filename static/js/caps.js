@@ -1,5 +1,5 @@
-// Profil du navigateur : ce que cet appareil sait décoder, pour ne
-// convertir que le nécessaire (lecture et téléchargements).
+// Browser profile: what this device can decode, so that only what is
+// needed gets converted (playback and downloads).
 let capsCache = null;
 export function browserCaps() {
   if (capsCache) return capsCache;

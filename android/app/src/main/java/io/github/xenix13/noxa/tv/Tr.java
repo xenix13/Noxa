@@ -1,0 +1,183 @@
+package io.github.xenix13.noxa.tv;
+
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * App language, as in the web interface: the text in the code is in French and serves as the key,
+ * Tr.t("Paramètres") returns the translation in the chosen language (or the French when there is none).
+ * The language is the account's (answer of /api/me), kept for the first screen at the next launch;
+ * before the first sign-in, it is the device's.
+ */
+final class Tr {
+    static String lang = "fr";
+    private static final Map<String, String> EN = new HashMap<>();
+
+    private Tr() {}
+
+    /** At launch: the language of the last signed-in account, otherwise the device's. */
+    static void init() {
+        String saved = Api.store().getString("lang", null);
+        lang = saved != null ? saved : "fr".equals(Locale.getDefault().getLanguage()) ? "fr" : "en";
+    }
+
+    /** Language of the signed-in account. */
+    static void use(String l) {
+        if (!"fr".equals(l) && !"en".equals(l)) return;
+        lang = l;
+        Api.store().edit().putString("lang", l).apply();
+    }
+
+    /** The same French word can need two translations: the key then carries a context ("réglages|Lecture"). */
+    static String t(String fr) {
+        String s = "en".equals(lang) ? EN.get(fr) : null;
+        return s != null ? s : fr.substring(fr.indexOf('|') + 1);
+    }
+
+    static String[] all(String[] fr) {
+        String[] out = new String[fr.length];
+        for (int i = 0; i < fr.length; i++) out[i] = t(fr[i]);
+        return out;
+    }
+
+    private static void en(String fr, String en) {
+        EN.put(fr, en);
+    }
+
+    static {
+        en("Session expirée : reconnectez-vous", "Session expired: sign in again");
+        en("Erreur du serveur (", "Server error (");
+        en("Le serveur ne répond pas. Vérifiez la connexion réseau.", "The server is not responding. Check the network connection.");
+        en("Réponse inattendue du serveur", "Unexpected response from the server");
+        en("Ce serveur a répondu ", "This server responded ");
+        en(" : s'agit-il bien d'un serveur Noxa ?", ": is it really a Noxa server?");
+        en("Ce n'est pas un serveur Noxa.", "This is not a Noxa server.");
+        en("Impossible de joindre le serveur. Vérifiez l'adresse et la connexion réseau.",
+                "Cannot reach the server. Check the address and the network connection.");
+        en("Accueil", "Home");
+        en("Plus", "More");
+        en("Quitter Noxa ?", "Quit Noxa?");
+        en("Quitter", "Quit");
+        en("Rester", "Stay");
+        en("Chargement…", "Loading…");
+        en("Reprendre", "Resume");
+        en("Lecture", "Play");
+        en("Reprendre à ", "Resume at ");
+        en("Depuis le début", "From the beginning");
+        en("   ·   reprise à ", "   ·   resume at ");
+        en("Ma liste", "My list");
+        en("Rien à afficher pour l'instant : les bibliothèques sont peut-être vides.",
+                "Nothing to show yet: the libraries may be empty.");
+        en("Titre", "Title");
+        en("Ajouts récents", "Recently added");
+        en("Année", "Year");
+        en("Note", "Rating");
+        en("Trier : ", "Sort: ");
+        en("Trier par", "Sort by");
+        en("Cette bibliothèque est vide.", "This library is empty.");
+        en("La chaîne ne répond pas (", "The channel is not responding (");
+        en("Ensuite : ", "Next: ");
+        en("\nHaut / bas pour changer de chaîne, Retour pour quitter.", "\nUp / down to change channel, Back to quit.");
+        en("TV en direct", "Live TV");
+        en("Aucune chaîne disponible.", "No channels available.");
+        en("Connexion à ", "Connecting to ");
+        en("Le serveur ", "The server ");
+        en(" ne répond pas. ", " is not responding. ");
+        en("Vérifiez la connexion réseau ou modifiez l'adresse.", "Check the network connection or change the address.");
+        en("Rechercher", "Search");
+        en("Paramètres", "Settings");
+        en("Épisode suivant dans ", "Next episode in ");
+        en("Audio et sous-titres", "Audio and subtitles");
+        en("Épisode suivant", "Next episode");
+        en("Passer le générique", "Skip credits");
+        en("Réessayer", "Retry");
+        en("Retour", "Back");
+        en("Saison ", "Season ");
+        en(" · Épisode ", " · Episode ");
+        en("connexion au serveur", "connecting to the server");
+        en("lecture directe du fichier", "direct play of the file");
+        en("flux préparé par le serveur (remux)", "stream prepared by the server (remux)");
+        en("conversion de la vidéo par le serveur", "video converted by the server");
+        en("Lecture directe trop lente : passage par le serveur", "Direct play too slow: switching to the server");
+        en("Conversion trop lente sur le serveur (", "Server conversion too slow (");
+        en(") : qualité réduite pour ce titre", "): quality reduced for this title");
+        en("Le serveur ne convertit pas cette vidéo assez vite (", "The server cannot convert this video fast enough (");
+        en("Connexion trop lente : qualité réduite", "Connection too slow: quality lowered");
+        en("La lecture ne démarre pas (", "Playback does not start (");
+        en("Le serveur ou le partage réseau est peut-être lent. Réessayez, ou attendez encore un peu.",
+                "The server or the network share may be slow. Retry, or wait a little longer.");
+        en("Aucun", "None");
+        en("Audio : ", "Audio: ");
+        en("Sous-titres : ", "Subtitles: ");
+        en("Audio", "Audio");
+        en("Flux interrompu, reconnexion…", "Stream interrupted, reconnecting…");
+        en("La lecture s'est interrompue (", "Playback stopped (");
+        en("Titre d'un film, d'une série, d'un épisode…", "Title of a movie, a show, an episode…");
+        en("Saisissez au moins deux lettres.", "Type at least two letters.");
+        en("Films", "Movies");
+        en("Séries", "Shows");
+        en("Épisodes", "Episodes");
+        en("Aucun résultat pour « ", "No results for “");
+        en(" ».", "”.");
+        en("réglages|Lecture", "Playback");
+        en(" · É", " · E");
+        en("Langue", "Language");
+        en("Français", "French");
+        en("Anglais", "English");
+        en("Japonais", "Japanese");
+        en("Espagnol", "Spanish");
+        en("Allemand", "German");
+        en("Italien", "Italian");
+        en("Portugais", "Portuguese");
+        en("Coréen", "Korean");
+        en("Version originale", "Original version");
+        en("Langue audio", "Audio language");
+        en("Sous-titres", "Subtitles");
+        en("Si l'audio est dans une autre langue", "If the audio is in another language");
+        en("Toujours", "Always");
+        en("Jamais", "Never");
+        en("Langue des sous-titres", "Subtitle language");
+        en("Qualité", "Quality");
+        en("Originale (recommandé)", "Original (recommended)");
+        en("480p (connexion lente)", "480p (slow connection)");
+        en("Épisode suivant automatique", "Play next episode automatically");
+        en("Passer les génériques de début", "Skip opening credits");
+        en("Compte", "Account");
+        en("Profil", "Profile");
+        en("Changer", "Change");
+        en("Langue / Language", "Langue / Language");
+        en("Se déconnecter", "Sign out");
+        en("Se déconnecter ?", "Sign out?");
+        en("Annuler", "Cancel");
+        en("Serveur", "Server");
+        en("Adresse", "Address");
+        en("Changer de serveur ?", "Change server?");
+        en("Vous devrez vous reconnecter sur le nouveau serveur.", "You will have to sign in again on the new server.");
+        en("Noxa pour Android TV, version ", "Noxa for Android TV, version ");
+        en("Activé", "On");
+        en("Désactivé", "Off");
+        en("Adresse du serveur Noxa", "Noxa server address");
+        en("Exemple : https://noxa.mondomaine.fr ou 192.168.1.20:8420", "Example: https://noxa.mydomain.com or 192.168.1.20:8420");
+        en("Continuer", "Continue");
+        en("Saisissez l'adresse du serveur.", "Enter the server address.");
+        en("Connexion", "Sign in");
+        en("Identifiant", "Username");
+        en("Mot de passe", "Password");
+        en("Se connecter", "Sign in");
+        en("Changer de serveur", "Change server");
+        en("Double authentification", "Two-factor authentication");
+        en("Saisissez le code à 6 chiffres de votre application d'authentification,\n",
+                "Enter the 6-digit code from your authenticator app,\n");
+        en("ou l'un de vos codes de secours.", "or one of your recovery codes.");
+        en("Code", "Code");
+        en("Valider", "Confirm");
+        en("Code de secours utilisé. Il en reste ", "Recovery code used. Remaining: ");
+        en("Délai", "Timed out");
+        en("Qui regarde ?", "Who's watching?");
+        en("Code PIN", "PIN code");
+        en("Code de double authentification", "Two-factor authentication code");
+        en("Langues audio et sous-titres, qualité, épisode suivant : ces réglages suivent votre compte et se changent depuis le téléphone ou l'ordinateur.",
+                "Audio and subtitle languages, quality, next episode: these settings follow your account and are changed from the phone or computer.");
+    }
+}

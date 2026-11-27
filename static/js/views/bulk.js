@@ -1,12 +1,12 @@
-// Sélection multiple dans une bibliothèque : un bouton « Sélectionner », puis un clic sur les titres les coche au
-// lieu de les ouvrir, et une barre d'actions s'applique à toute la sélection (vus / non vus, téléchargement,
-// playlist, masquer ; pour un administrateur : métadonnées, collection).
+// Multiple selection in a library: a "Select" button, then a click on the titles ticks them
+// instead of opening them, and an action bar applies to the whole selection (watched / unwatched, download,
+// playlist, hide; for an administrator: metadata, collection).
 import { get, post, put } from '../api.js';
 import { state } from '../app.js';
 import { h, icon, modal, toast } from '../ui.js';
 import { plural, tr } from '../i18n.js';
 
-// une action sur chaque titre, quatre à la fois -> nombre de réussites
+// one action on each title, four at a time -> number of successes
 async function each(ids, fn) {
   let ok = 0;
   let next = 0;
@@ -52,7 +52,7 @@ async function pickCollection(firstId) {
   return chosen || (name.value.trim() ? { title: name.value.trim() } : null);
 }
 
-// grid : conteneur des cartes (liens vers #/item/<id>) ; cards : Map id -> carte reçue du serveur
+// grid: container of the cards (links to #/item/<id>); cards: Map id -> card received from the server
 export function bulkSelection(grid, cards, { downloadDialog, canDownload }) {
   const picked = new Set();
   let on = false;
@@ -133,7 +133,7 @@ export function bulkSelection(grid, cards, { downloadDialog, canDownload }) {
     }) : null,
     h('button.btn.small.primary.bulk-done', { type: 'button', onclick: () => toggle(false) }, tr('Terminé')));
 
-  // en mode sélection, un clic coche au lieu d'ouvrir
+  // in selection mode, a click ticks instead of opening
   grid.addEventListener('click', (e) => {
     if (!on) return;
     const a = e.target.closest('a[href^="#/item/"]');
@@ -155,7 +155,7 @@ export function bulkSelection(grid, cards, { downloadDialog, canDownload }) {
     button.classList.toggle('primary', on);
     paint();
   }
-  // nouvelles cartes chargées pendant qu'on fait défiler : cochées si elles l'étaient
+  // new cards loaded while scrolling: ticked if they were
   new MutationObserver(() => { if (on) paint(); }).observe(grid, { childList: true });
   return { button, bar, active: () => on };
 }

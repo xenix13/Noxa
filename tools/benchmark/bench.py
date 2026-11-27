@@ -23,7 +23,6 @@ import http.client
 import json
 import os
 import platform
-import re
 import shutil
 import socket
 import statistics
@@ -37,7 +36,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 IMAGES = {
-    "noxa": "ghcr.io/xenix13/noxa:4.1.4",
+    "noxa": "ghcr.io/xenix13/noxa:4.2.0",
     "jellyfin": "jellyfin/jellyfin:10.10.7",
     "plex": "plexinc/pms-docker:1.43.5.11079-b3b13e506",
 }
@@ -268,7 +267,8 @@ class Noxa(Server):
         return ["-v", f"{self.data}:/data"]
 
     def h(self):
-        return {"Cookie": self.cookie, "X-Seance": "1"}  # X-Seance: Noxa's CSRF guard for anything but GET
+        # Noxa's CSRF guard for anything but GET: X-Noxa since 4.5, X-Seance before (both sent: any version works)
+        return {"Cookie": self.cookie, "X-Noxa": "1", "X-Seance": "1"}
 
     def setup(self):
         wait_http(self.base + "/api/version", ok=(200, 401, 404))
@@ -280,7 +280,7 @@ class Noxa(Server):
         code = open(code_file).read().strip()
         req = urllib.request.Request(self.base + "/api/setup", method="POST",
                                      data=json.dumps({"username": USER, "password": PASSWORD, "language": "en"}).encode(),
-                                     headers={"Content-Type": "application/json", "X-Setup-Code": code, "X-Seance": "1"})
+                                     headers={"Content-Type": "application/json", "X-Setup-Code": code, "X-Noxa": "1", "X-Seance": "1"})
         with NO_PROXY.open(req, timeout=30) as r:
             self.cookie = "; ".join(c.split(";")[0] for c in r.headers.get_all("Set-Cookie") or [])
         # same as the others: no preview thumbnails (Plex makes them at night, Jellyfin not by default)

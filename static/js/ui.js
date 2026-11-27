@@ -39,8 +39,8 @@ function append(el, children) {
   }
 }
 
-// Images encore en chargement sur la page qu'on quitte : abandonnées. Le navigateur n'ouvre que 6 connexions vers
-// le serveur ; sans cela, la page suivante attend derrière les affiches de la précédente.
+// Pictures still loading on the page being left: abandoned. The browser only opens 6 connections to
+// the server; without this, the next page waits behind the posters of the previous one.
 export function cancelImages(el) {
   for (const im of el.querySelectorAll('img')) {
     if (!im.complete) im.removeAttribute('src');
@@ -53,12 +53,12 @@ export function clear(el, ...children) {
   return el;
 }
 
-// Préférences locales du navigateur (volume, filtre…) : sans effet si le stockage est indisponible.
+// Local browser preferences (volume, filter…): no effect when storage is unavailable.
 export function store(key, value) {
   try {
     if (value === undefined) return localStorage.getItem(key);
     localStorage.setItem(key, value);
-  } catch { /* stockage indisponible (navigation privée…) */ }
+  } catch { /* storage unavailable (private browsing…) */ }
   return null;
 }
 
@@ -80,10 +80,6 @@ export function fmtDuration(ms) {
   const min = Math.round(ms / 60000);
   if (min < 60) return `${min} min`;
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
-}
-
-export function fmtDate(ts) {
-  return new Date(ts * 1000).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export function episodeCode(c) {
@@ -174,7 +170,7 @@ export function toast(message, kind = 'info', action = null) {
     box = h('div#toasts', { role: 'status', 'aria-live': 'polite' });
     document.body.append(box);
   }
-  for (const old of [...box.children]) if (old.firstChild && old.firstChild.textContent === message) old.remove(); // pas de pile de messages identiques
+  for (const old of [...box.children]) if (old.firstChild && old.firstChild.textContent === message) old.remove(); // no stack of identical messages
   const t = h(`div.toast.${kind}`, message, action ? h('button.toast-action', {
     onclick: () => { t.remove(); action.onClick(); } }, action.label) : null);
   box.append(t);
@@ -227,21 +223,21 @@ export function select(options, value, attrs = {}) {
   return h('select', attrs, options.map(([v, l]) => h('option', { value: v, selected: String(v) === String(value) }, l)));
 }
 
-// Ordre choisi par l'utilisateur : les clés connues dans son ordre, puis les nouvelles à leur place par défaut.
+// Order chosen by the user: the known keys in their order, then the new ones at their default place.
 export function arrange(keys, order = []) {
   const known = order.filter((k) => keys.includes(k));
   const rest = keys.filter((k) => !known.includes(k));
   return [...known, ...rest];
 }
 
-// hls.js (400 Ko) : chargé seulement quand un lecteur en a besoin, pas sur chaque page
+// hls.js (400 KB): loaded only when a player needs it, not on every page
 let hlsPromise = null;
 export function loadHls() {
   if (window.Hls) return Promise.resolve();
   hlsPromise = hlsPromise || new Promise((resolve) => {
     const s = document.createElement('script');
     s.src = '/vendor/hls.min.js';
-    s.onload = s.onerror = () => resolve(); // absent : le lecteur affiche son message d'erreur
+    s.onload = s.onerror = () => resolve(); // missing: the player shows its error message
     document.head.append(s);
   });
   return hlsPromise;
@@ -265,7 +261,7 @@ export function avatar(user, size = 32) {
   const el = h('span.avatar', { style: { background: user.avatar_color, width: `${size}px`, height: `${size}px`,
     fontSize: `${Math.round(size * 0.45)}px` } }, initial);
   if (user.avatar) {
-    // image du profil ; l'initiale reste dessous si elle ne se charge pas
+    // profile picture; the initial stays underneath if it does not load
     const pic = h('img', { src: user.avatar, alt: '', loading: 'lazy', decoding: 'async' });
     pic.addEventListener('error', () => pic.remove());
     el.append(pic);
@@ -296,7 +292,7 @@ export function posterCard(c, { href } = {}) {
   if (c.type === 'show' && c.latest) sub = tr('Nouveau : S{season} E{episode}', { season: c.latest.season, episode: c.latest.episode });
   if (c.type === 'season') sub = tr('{p1} épisodes', { p1: c.leaves || 0 });
   const thumb = c.type === 'episode' ? (c.show_thumb || c.thumb) : c.thumb;
-  // repères affichés selon le profil (Paramètres → Apparence) : définition, HDR, nouveauté, note
+  // badges shown according to the profile (Settings → Appearance): resolution, HDR, new, rating
   const isNew = c.added && Date.now() / 1000 - c.added < 7 * 86400 && !c.watched && c.type !== 'episode';
   const flags = [c.res === '4K' ? h('span.card-q', '4K') : null, c.hdr ? h('span.card-q', 'HDR') : null,
     isNew ? h('span.card-new', tr('Nouveau')) : null,
@@ -322,9 +318,9 @@ export function wideCard(c, { onPlay, onWatched } = {}) {
     h('div.card-title', title),
     h('div.card-sub', String(sub), left ? h('span.muted', ` — ${left}`) : null));
   if (!onWatched) return card;
-  // bouton à côté du lien (pas dedans) : « marquer comme vu » sans lancer la lecture
+  // button next to the link (not inside): "mark as watched" without starting playback
   const label = c.type === 'episode' ? tr('Marquer « {p1} » comme vu', { p1: episodeCode(c) }) : tr('Marquer comme vu');
-  // et un accès discret à la fiche (de la série pour un épisode), sans reprendre la lecture
+  // and a discreet access to the title page (of the show for an episode), without resuming playback
   const about = c.type === 'episode' ? tr('Fiche de la série') : tr('Fiche du film');
   return h('div.card-slot', card,
     h('a.card-watch.card-about', { href: `#/item/${c.show_id || c.id}`, title: about, 'aria-label': `${about} : ${title}` }, icon('info')),
@@ -345,12 +341,12 @@ export function row(title, items, render, opts = {}) {
     track);
 }
 
-// Menu « ⋯ » : bouton + liste d'actions, fermé au clic extérieur ou avec Échap.
+// "⋯" menu: button + list of actions, closed on an outside click or with Escape.
 export function moreMenu(items, label = tr('Plus d’actions')) {
   const list = h('div.more-list', { role: 'menu', hidden: true });
   const backdrop = h('div.more-backdrop');
   const close = () => {
-    if (list.contains(document.activeElement)) btn.focus({ preventScroll: true }); // télécommande : on revient au bouton
+    if (list.contains(document.activeElement)) btn.focus({ preventScroll: true }); // remote control: back to the button
     list.hidden = true; document.removeEventListener('click', onDoc, true); document.removeEventListener('keydown', onKey);
     window.removeEventListener('scroll', onMove); window.removeEventListener('resize', onMove);
     backdrop.remove();
@@ -359,9 +355,9 @@ export function moreMenu(items, label = tr('Plus d’actions')) {
     list.classList.remove('more-fade');
   };
   const onDoc = (e) => { if (!wrap.contains(e.target) && !list.contains(e.target)) close(); };
-  // à l'ouverture, le menu est posé sur la page (hors de tout conteneur qui le couperait) : sur téléphone, en
-  // feuille en bas de l'écran ; ailleurs, sous le bouton (ou au-dessus s'il y a plus de place), recalé dans la
-  // fenêtre, et qui défile s'il est plus haut que la place disponible
+  // when opened, the menu is placed on the page (outside any container that would clip it): on a phone, as a
+  // sheet at the bottom of the screen; elsewhere, under the button (or above when there is more room), moved back into the
+  // window, and scrolling when it is taller than the available space
   const place = () => {
     if (window.innerWidth <= 600) {
       list.classList.add('sheet');
@@ -375,20 +371,20 @@ export function moreMenu(items, label = tr('Plus d’actions')) {
     const w = list.offsetWidth, ht = list.scrollHeight, m = 8, H = window.innerHeight;
     list.style.left = `${Math.round(Math.min(Math.max(m, b.left), window.innerWidth - m - w))}px`;
     let top;
-    if (ht > H - 2 * m) { // plus haut que la fenêtre : toute la hauteur, et il défile
+    if (ht > H - 2 * m) { // taller than the window: full height, and it scrolls
       top = m;
       list.style.maxHeight = `${H - 2 * m}px`; list.style.overflowY = 'auto';
-    } else if (b.bottom + 6 + ht <= H - m) top = b.bottom + 6;     // sous le bouton
-    else if (b.top - 6 - ht >= m) top = b.top - 6 - ht;             // au-dessus
-    else top = H - m - ht;                                          // décalé pour tenir entier
+    } else if (b.bottom + 6 + ht <= H - m) top = b.bottom + 6;     // under the button
+    else if (b.top - 6 - ht >= m) top = b.top - 6 - ht;             // above
+    else top = H - m - ht;                                          // shifted to fit entirely
     list.style.top = `${Math.round(top)}px`;
     fade();
   };
-  // menu qui défile : le bas s'estompe tant qu'il reste des options plus bas (sinon elles semblent manquer)
+  // scrolling menu: the bottom fades while there are more options below (otherwise they seem missing)
   const fade = () => list.classList.toggle('more-fade', list.scrollHeight - list.scrollTop - list.clientHeight > 4);
   list.addEventListener('scroll', fade, { passive: true });
   const onKey = (e) => { if (e.key === 'Escape') close(); };
-  const onMove = () => { if (list.classList.contains('floating')) close(); }; // la page bouge : le menu ne suit pas
+  const onMove = () => { if (list.classList.contains('floating')) close(); }; // the page moves: the menu does not follow
   for (const it of items.filter(Boolean)) {
     if (it.divider) { list.append(h('div.more-divider')); continue; }
     if (it.heading) { list.append(h('div.more-heading', it.heading)); continue; }
@@ -404,7 +400,7 @@ export function moreMenu(items, label = tr('Plus d’actions')) {
       document.addEventListener('keydown', onKey);
       window.addEventListener('scroll', onMove, { passive: true }); window.addEventListener('resize', onMove);
       const first = list.querySelector('.more-item');
-      if (first) first.focus({ preventScroll: true }); // au clavier / à la télécommande : on est dans le menu
+      if (first) first.focus({ preventScroll: true }); // with the keyboard / remote: focus is in the menu
     } else close();
   } }, icon('more'));
   const wrap = h('div.more-wrap', btn, list);

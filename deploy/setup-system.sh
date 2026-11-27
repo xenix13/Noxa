@@ -43,7 +43,7 @@ cat > /usr/local/bin/noxa <<CMD
 #   noxa list-users                 accounts and the state of their two-factor authentication
 #   noxa reset-2fa <username>       turns off two-factor authentication for an account
 if [ "\$(id -u)" -ne 0 ]; then echo "Run as root: sudo noxa …" >&2; exit 1; fi
-cd "$APP_DIR" && exec runuser -u seance -- /usr/bin/python3 -m seance --data "$DATA_DIR" "\$@"
+cd "$APP_DIR" && exec runuser -u seance -- /usr/bin/python3 -m noxa --data "$DATA_DIR" "\$@"
 CMD
 chmod 755 /usr/local/bin/noxa
 ln -sf noxa /usr/local/bin/nexis  # former name of the command (Nexis)

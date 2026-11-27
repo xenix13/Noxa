@@ -6,8 +6,8 @@ import { onGroups } from '../groups.js';
 import { pinRow, pins } from '../pins.js';
 import { tr } from '../i18n.js';
 
-// Dernier accueil reçu : affiché tout de suite au retour sur la page (depuis les Paramètres, une fiche…), puis
-// mis à jour en arrière-plan s'il a changé. Propre au compte et à ses réglages.
+// Last home received: shown right away when coming back to the page (from Settings, a title page…), then
+// updated in the background if it changed. Specific to the account and its settings.
 let lastHome = null;
 const HOME_KEEP_MS = 10 * 60 * 1000;
 const homeKey = () => `${state.me.user.id}|${JSON.stringify(state.me.prefs)}`;
@@ -26,8 +26,8 @@ export async function renderHome(main, ctx, { fresh = false, preset = null } = {
   }
   if (!ctx.isCurrent()) return;
   const parts = [];
-  const sections = new Map(); // clé -> rangée ; affichées dans l'ordre choisi (Paramètres → Accueil et menu)
-  // bannière : choisie dans Paramètres → Accueil et menu (reprise, ajout récent, au hasard, liste, aucune)
+  const sections = new Map(); // key -> row; shown in the chosen order (Settings → Home and menu)
+  // banner: chosen in Settings → Home and menu (resume, recent addition, random, list, none)
   const mode = data.hero_mode || 'auto';
   const hero = mode === 'none' ? null : mode === 'resume' ? data.continue[0] : mode === 'auto' ? (data.continue[0] || data.hero) : data.hero;
   if (hero) {
@@ -49,7 +49,7 @@ export async function renderHome(main, ctx, { fresh = false, preset = null } = {
           hero.type === 'show' ? null : h('a.btn.light.lg', { href: playHref }, icon('play'), resume && hero.position ? tr('Reprendre') : tr('bouton|Lecture')),
           h('a.btn.ghost.lg', { href: infoHref }, tr('Plus d’infos'))))));
   }
-  // groupes en cours : rangée tenue à jour en direct (vide et invisible quand il n'y en a pas)
+  // running groups: row kept up to date live (empty and invisible when there are none)
   const togetherBox = h('div.together-row');
   sections.set('together', togetherBox);
   const stopGroups = onGroups((groups) => {
@@ -60,9 +60,9 @@ export async function renderHome(main, ctx, { fresh = false, preset = null } = {
   ctx.setCleanup(stopGroups);
   const continueRow = (items) => row(tr('Reprendre et à suivre'), items, (c) => wideCard(c, { onWatched }), { wide: true });
   let current = continueRow(data.continue);
-  // « marquer comme vu » : la carte s'efface, l'épisode suivant prend sa place ; annulable
+  // "mark as watched": the card fades, the next episode takes its place; can be undone
   async function refreshRow(c) {
-    if (hero && String(hero.id) === String(c.id)) { stopGroups(); await renderHome(main, ctx, { fresh: true }); return; } // la grande affiche change aussi
+    if (hero && String(hero.id) === String(c.id)) { stopGroups(); await renderHome(main, ctx, { fresh: true }); return; } // the big poster changes too
     const fresh = await get('/api/home');
     if (!ctx.isCurrent()) return;
     const next = continueRow(fresh.continue) || h('div', { hidden: true });
@@ -87,7 +87,7 @@ export async function renderHome(main, ctx, { fresh = false, preset = null } = {
   }
   sections.set('continue', current);
   sections.set('watchlist', row(tr('À regarder'), data.watchlist, (c) => posterCard(c), { href: '#/watchlist' }));
-  // suggestions calculées à partir de ce qui a été regardé récemment (genres, réalisateurs, acteurs)
+  // suggestions computed from what was watched recently (genres, directors, actors)
   sections.set('suggest', row(tr('Suggestions'), data.suggestions, (c) => posterCard(c)));
   const because = (data.because || []).map((b) => row(tr(b.seed.type === 'show' ? 'Parce que vous avez regardé la série {title}' : 'Parce que vous avez regardé {title}', { title: b.seed.title }),
     b.items, (c) => posterCard(c)));
@@ -98,7 +98,7 @@ export async function renderHome(main, ctx, { fresh = false, preset = null } = {
     const title = r.library.type === 'show' ? tr('Nouveaux épisodes · {title}', { title: r.library.title }) : tr('Ajoutés récemment · {title}', { title: r.library.title });
     sections.set(`lib:${r.library.id}`, row(title, r.items, (c) => posterCard(c), { href: `#/library/${r.library.id}` }));
   }
-  // rangées épinglées (collections, playlists, genres), chargées en parallèle
+  // pinned rows (collections, playlists, genres), loaded in parallel
   const myPins = pins();
   const pinRows = await Promise.all(myPins.map(pinRow));
   if (!ctx.isCurrent()) return;
@@ -115,7 +115,7 @@ export async function renderHome(main, ctx, { fresh = false, preset = null } = {
   }
   clear(main, parts);
   if (stale) {
-    // accueil gardé en mémoire : on vérifie qu'il est toujours à jour, et on le redessine seulement s'il a changé
+    // home kept in memory: check it is still up to date, and redraw it only if it changed
     try {
       const next = await get('/api/home');
       const text = JSON.stringify(next);
@@ -126,6 +126,6 @@ export async function renderHome(main, ctx, { fresh = false, preset = null } = {
       stopGroups();
       await renderHome(main, ctx, { preset: next });
       window.scrollTo(0, y);
-    } catch { /* hors ligne ou serveur occupé : on garde ce qui est affiché */ }
+    } catch { /* offline or server busy: keep what is shown */ }
   }
 }

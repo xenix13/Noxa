@@ -1,0 +1,196 @@
+"""Detection of intros (openings) and end credits by audio fingerprint, for files without
+usable chapters (audio fingerprints compared from one episode to the next).
+
+The episodes of a season share the same opening song and the same credits. The
+Chromaprint fingerprint (provided by ffmpeg) of the start and the end of each episode is computed, then,
+between two episodes, the longest passage whose fingerprints look alike (up to an offset) is searched for.
+
+A fingerprint is a series of 32-bit integers, one every ~0.124 s. Two points "match"
+when they differ by few bits. The plausible offsets are found first thanks to the identical values
+(inverted index), then, for each one, the longest series of matching points is measured (tolerating
+small gaps).
+"""
+import json
+import logging
+import os
+import struct
+import subprocess
+
+from . import media
+
+log = logging.getLogger("noxa.intro")
+
+POINT = 0.1238              # duration of a fingerprint point (s)
+MAX_BIT_DIFF = 6            # differing bits tolerated between two "identical" points
+MAX_GAP = int(3.5 / POINT)  # gap tolerated in a series (sound effects, dialogue on top…)
+TOP_SHIFTS = 8
+
+
+class FingerprintError(Exception):
+    pass
+
+
+_supported = None
+
+
+def supported():
+    global _supported
+    if _supported is None:
+        try:
+            out = subprocess.run([media.FFMPEG, "-hide_banner", "-muxers"], capture_output=True, timeout=20).stdout
+            _supported = b"chromaprint" in out
+        except (OSError, subprocess.SubprocessError):
+            _supported = False
+    return _supported
+
+
+def fingerprint(path, start, length):
+    """Fingerprint of the passage [start, start+length] (seconds) of the first audio track."""
+    cmd = [media.FFMPEG, "-hide_banner", "-nostdin", "-v", "error", "-ss", f"{max(0.0, start):.2f}", "-t", f"{length:.2f}",
+           *media.LOCAL_ONLY, "-i", path, "-map", "0:a:0", "-vn", "-sn", "-ac", "1", "-f", "chromaprint",
+           "-fp_format", "raw", "-"]
+    try:
+        p = subprocess.run(cmd, capture_output=True, timeout=max(120, int(length)), stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        raise FingerprintError("délai dépassé")
+    except OSError as e:
+        raise FingerprintError(str(e))
+    if p.returncode != 0:
+        msg = (p.stderr or b"").decode("utf-8", "replace").strip().splitlines()
+        raise FingerprintError(msg[-1] if msg else "empreinte impossible")
+    data = p.stdout[: len(p.stdout) // 4 * 4]
+    return list(struct.unpack(f"<{len(data) // 4}I", data))
+
+
+def _shifts(a, b):
+    """Most frequent offsets (position in b - position in a) among the identical values."""
+    index = {}
+    for j, v in enumerate(b):
+        index.setdefault(v, []).append(j)
+    counts = {}
+    for i, v in enumerate(a):
+        for j in index.get(v, ()):
+            d = j - i
+            counts[d] = counts.get(d, 0) + 1
+    # almost identical values: neighbouring offsets are grouped
+    ranked = sorted(counts.items(), key=lambda kv: -kv[1])
+    out = []
+    for d, n in ranked:
+        if n < 3:
+            break
+        if all(abs(d - o) > 2 for o in out):
+            out.append(d)
+        if len(out) >= TOP_SHIFTS:
+            break
+    return out
+
+
+def _longest_run(a, b, shift):
+    """Longest series of matching points for this offset -> (start in a, end in a) in points."""
+    lo = max(0, -shift)
+    hi = min(len(a), len(b) - shift)
+    best = (0, 0)
+    run_start = None
+    last_match = None
+    for i in range(lo, hi):
+        if (a[i] ^ b[i + shift]).bit_count() <= MAX_BIT_DIFF:
+            if run_start is None or i - last_match > MAX_GAP:
+                if run_start is not None and last_match - run_start > best[1] - best[0]:
+                    best = (run_start, last_match)
+                run_start = i
+            last_match = i
+    if run_start is not None and last_match - run_start > best[1] - best[0]:
+        best = (run_start, last_match)
+    return best
+
+
+def common_segment(a, b, min_s, max_s):
+    """Longest common passage (between min_s and max_s seconds) -> ((a_start, a_end), (b_start, b_end)) in s."""
+    if not a or not b:
+        return None
+    found = None
+    for shift in _shifts(a, b):
+        s, e = _longest_run(a, b, shift)
+        dur = (e - s) * POINT
+        if dur < min_s:
+            continue
+        if dur > max_s:
+            # common passage too long (recap, same scene): the end is kept, on the song side
+            s = e - int(max_s / POINT)
+            dur = max_s
+        if not found or dur > found[0]:
+            found = (dur, (s * POINT, e * POINT), ((s + shift) * POINT, (e + shift) * POINT))
+    return (found[1], found[2]) if found else None
+
+
+class FingerprintCache:
+    """Fingerprints kept on disk (computing them reads the file again); key = file + passage analysed."""
+
+    def __init__(self, base):
+        self.base = base
+        os.makedirs(base, exist_ok=True)
+
+    def _path(self, item, part, minutes):
+        size = item["file_size"] or 0
+        return os.path.join(self.base, f"f{size}_{item['file_mtime'] or 0}_{part}{minutes}.json")
+
+    def get(self, item, part, minutes):
+        """part = 'head' (start) or 'tail' (end). Returns (fingerprint, start of the passage in s)."""
+        path = self._path(item, part, minutes)
+        try:
+            with open(path, encoding="utf-8") as f:
+                d = json.load(f)
+            return d["fp"], d["start"]
+        except (OSError, ValueError, KeyError):
+            pass
+        duration = (item["duration_ms"] or 0) / 1000
+        length = min(minutes * 60, duration)
+        start = 0.0 if part == "head" else max(0.0, duration - length)
+        if media.is_strm(item["key"]):
+            raise FingerprintError("flux distant (.strm) : pas d'analyse")
+        fp = fingerprint(item["key"], start, length)
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            json.dump({"fp": fp, "start": start}, f)
+        os.replace(path + ".tmp", path)
+        return fp, start
+
+
+def detect_season(episodes, cache, part, minutes, min_s, max_s, cancelled=lambda: False):
+    """For a season: {episode id: (start, end) in seconds in the file} of the common passage.
+
+    Each episode is compared with its neighbours (next, previous, then one further); the longest
+    common passage found is kept."""
+    prints = {}
+
+    def fp(ep):
+        if ep["id"] not in prints:
+            try:
+                prints[ep["id"]] = cache.get(ep, part, minutes)
+            except FingerprintError as e:
+                log.info("Empreinte de %s : %s", ep["key"], e)
+                prints[ep["id"]] = None
+        return prints[ep["id"]]
+
+    found = {}
+    n = len(episodes)
+    for i, ep in enumerate(episodes):
+        if cancelled():
+            break
+        mine = fp(ep)
+        if not mine or not mine[0]:
+            continue
+        best = None
+        for j in (i + 1, i - 1, i + 2, i - 2):
+            if not 0 <= j < n:
+                continue
+            other = fp(episodes[j])
+            if not other or not other[0]:
+                continue
+            seg = common_segment(mine[0], other[0], min_s, max_s)
+            if seg and (not best or seg[0][1] - seg[0][0] > best[1] - best[0]):
+                best = seg[0]
+            if best and best[1] - best[0] >= min(max_s, 80):
+                break  # whole song found: no need to compare further
+        if best:
+            found[ep["id"]] = (mine[1] + best[0], mine[1] + best[1])
+    return found

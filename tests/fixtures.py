@@ -1,4 +1,4 @@
-"""Génère une petite médiathèque de test avec ffmpeg, et un faux TMDB."""
+"""Generates a small test media library with ffmpeg, and a fake TMDB."""
 import http.server
 import io
 import json
@@ -35,7 +35,7 @@ def ff(*args):
 
 
 def make_media(root, long_seconds=90):
-    """Crée films/, series/, animes/. Retourne le dict des chemins."""
+    """Creates films/, series/, animes/. Returns the dict of paths."""
     films = os.path.join(root, "films")
     series = os.path.join(root, "series")
     animes = os.path.join(root, "animes")
@@ -49,13 +49,13 @@ def make_media(root, long_seconds=90):
     with open(os.path.join(tmp, "a.ass"), "w") as f:
         f.write(ASS)
 
-    # 1. MP4 H.264 + AAC dans son dossier, avec poster.jpg -> lecture directe
+    # 1. MP4 H.264 + AAC in its folder, with poster.jpg -> direct play
     d = os.path.join(films, "Le Grand Voyage (2019)")
     os.makedirs(d, exist_ok=True)
     ff(*src, "-t", str(long_seconds), *x264, "-c:a", "aac", "-movflags", "+faststart",
        os.path.join(d, "Le Grand Voyage (2019).mp4"))
     ff("-f", "lavfi", "-i", "color=c=0x335577:s=400x600", "-frames:v", "1", os.path.join(d, "poster.jpg"))
-    # bonus locaux (conventions courantes) : dossier Trailers/ et suffixe -featurette
+    # local extras (common conventions): Trailers/ folder and -featurette suffix
     os.makedirs(os.path.join(d, "Trailers"), exist_ok=True)
     ff(*src, "-t", "8", *x264, "-c:a", "aac", os.path.join(d, "Trailers", "Bande annonce officielle.mp4"))
     ff(*src, "-t", "8", *x264, "-c:a", "aac", os.path.join(d, "Le Grand Voyage (2019)-featurette.mkv"))
@@ -72,25 +72,25 @@ def make_media(root, long_seconds=90):
     # 3. HEVC -> transcodage
     d = os.path.join(films, "Brume (2022)")
     os.makedirs(d, exist_ok=True)
-    # avec des sous-titres PGS (Blu-ray) : rectangle rouge de 1 à 4 s
+    # with PGS subtitles (Blu-ray): red rectangle from 1 to 4 s
     from tests.pgs import make_sup
     make_sup(os.path.join(tmp, "brume.sup"), size=(320, 180), box=(80, 20), pos=(120, 140))
     ff("-copyts", *src, "-i", os.path.join(tmp, "brume.sup"), "-t", "20", "-map", "0:v", "-map", "1:a", "-map", "2:s",
        "-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=none",
        "-pix_fmt", "yuv420p", "-c:a", "aac", "-c:s", "copy", "-metadata:s:s:0", "language=fre",
        os.path.join(d, "Brume.2022.HEVC.mkv"))
-    # un .nfo avec un identifiant TMDB
+    # an .nfo with a TMDB id
     with open(os.path.join(d, "Brume.2022.HEVC.nfo"), "w") as f:
         f.write("<movie><title>Brume</title><year>2022</year><uniqueid type=\"tmdb\">5003</uniqueid></movie>")
 
-    # 4. Série classique
+    # 4. Regular show
     for s, e in ((1, 1), (1, 2), (1, 3), (2, 1)):
         d = os.path.join(series, "Les Veilleurs", f"Season {s:02d}")
         os.makedirs(d, exist_ok=True)
         ff(*src, "-t", "12", *x264, "-c:a", "aac", os.path.join(d, f"Les.Veilleurs.S{s:02d}E{e:02d}.720p.WEB.mkv"))
 
-    # 5. Anime : numérotation « - 01 », sous-titres ASS ou SRT internes
-    # (ffmpeg ne sait pas fabriquer de sous-titres image PGS/VobSub : l'incrustation est testée à part)
+    # 5. Anime: "- 01" numbering, internal ASS or SRT subtitles
+    # (ffmpeg cannot make PGS/VobSub picture subtitles: burning in is tested separately)
     d = os.path.join(animes, "Kaze no Michi")
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(tmp, "chapters.txt"), "w") as f:
@@ -135,7 +135,7 @@ SHOWS = {
 }
 
 
-# catalogue « streaming » (titres absents de la bibliothèque, sauf 5001 et 7002)
+# "streaming" catalogue (titles missing from the library, except 5001 and 7002)
 STREAM = {
     "movie": [{"id": 9101, "title": "Film Netflix", "release_date": "2024-03-01", "poster_path": "/p9101.jpg",
                "overview": "Un film du catalogue.", "vote_average": 7.1, "popularity": 90},
@@ -270,13 +270,13 @@ class FakeTMDB:
 
 # ------------------------------------------------------------------ faux Seerr
 class FakeSeerr:
-    """Imite l'API de Seerr (Overseerr / Jellyseerr)."""
+    """Imitates the Seerr API (Overseerr / Jellyseerr)."""
 
     def __init__(self, key="cle-seerr-0123456789"):
         self.key = key
         self.users = [{"id": 1, "displayName": "alex", "email": "alex@example.org"},
                       {"id": 2, "displayName": "Léa M.", "username": "lea", "email": "lea@example.org"}]
-        self.media = {("movie", 5003): 5}   # disponible côté Seerr (déjà téléchargé)
+        self.media = {("movie", 5003): 5}   # available on the Seerr side (already downloaded)
         self.requests = []
         server = self
 
@@ -306,7 +306,6 @@ class FakeSeerr:
 
     def handle(self, h, method):
         u = urllib.parse.urlsplit(h.path)
-        q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
         n = int(h.headers.get("Content-Length") or 0)
         body = json.loads(h.rfile.read(n)) if n else None
         if h.headers.get("X-Api-Key") != self.key:

@@ -1,4 +1,4 @@
-"""Magasin de thèmes : format vérifié (ni code ni image), thèmes fournis, index en ligne, thèmes installés.
+"""Theme store: format checked (neither code nor picture), shipped themes, online index, installed themes.
 
 python3 -m unittest tests.test_themes
 """
@@ -13,9 +13,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client
 
-from seance import themes
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import themes
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 NEON = {"schema": 1, "id": "essai-neon", "name": {"fr": "Essai néon", "en": "Neon test"}, "author": "quelquun", "version": 1,
         "dark": True, "colors": {"bg": "#07060d", "surface": "#120f22", "surface2": "#1d1836", "text": "#f3f0ff",
@@ -56,7 +56,7 @@ class ThemesTest(unittest.TestCase):
         cls.admin.call("POST", "/api/admin/users", {"username": "lea", "password": "motdepasse2"})
         cls.lea = Client(base)
         cls.lea.call("POST", "/api/login", {"username": "lea", "password": "motdepasse2"})
-        # index en ligne : celui d'un faux dépôt (adresse posée directement : l'interface n'accepte que https)
+        # online index: that of a fake repository (address set directly: the interface only accepts https)
         cls.ctx.db.set_setting("themes_index_url", f"http://127.0.0.1:{cls.host.server_address[1]}/index.json")
 
     @classmethod
@@ -73,7 +73,7 @@ class ThemesTest(unittest.TestCase):
     def test_01_format(self):
         t = themes.validate(NEON)
         self.assertEqual((t["id"], t["font"], t["effects"]), ("essai-neon", "mono", ["neon"]))
-        # pas de CSS, pas d'image, pas de champ inconnu
+        # no CSS, no picture, no unknown field
         for change, expect in (
                 ({"css": "body{}"}, "champs inconnus"),
                 ({"colors": dict(NEON["colors"], bg="url(http://x/y.png)")}, "colors.bg"),
@@ -88,13 +88,13 @@ class ThemesTest(unittest.TestCase):
                 ({"style": "barre"}, "style"),
                 ({"author": "pas un identifiant"}, "author")):
             self.assertIn(expect, self.problems(dict(NEON, **change)), change)
-        # lisibilité : texte trop pâle, bouton illisible, « dark » faux
+        # readability: text too pale, unreadable button, wrong "dark"
         self.assertIn("contraste texte / fond", self.problems(dict(NEON, colors=dict(NEON["colors"], text="#333344"))))
         self.assertIn("boutons", self.problems(dict(NEON, colors=dict(NEON["colors"], on_accent="#ff00cc"))))
         self.assertIn("dark", self.problems(dict(NEON, dark=False)))
 
     def test_02_bundled_themes(self):
-        """Thèmes fournis : tous valides, et index.json à jour (sinon : python3 -m seance.themes build static/themes)."""
+        """Shipped themes: all valid, and index.json up to date (otherwise: python3 -m noxa.themes build static/themes)."""
         path = os.path.join(STATIC, "themes")
         ts, errors = themes.load_dir(path)
         self.assertEqual(errors, [])
@@ -110,21 +110,21 @@ class ThemesTest(unittest.TestCase):
         st, r = self.admin.call("GET", "/api/themes?refresh=1")
         self.assertEqual(st, 200, r)
         ids = [t["id"] for t in r["themes"]]
-        self.assertIn("essai-neon", ids)                 # thème de la communauté
-        self.assertNotIn("mauvais", ids)                  # illisible : écarté, les autres restent
+        self.assertIn("essai-neon", ids)                 # community theme
+        self.assertNotIn("mauvais", ids)                  # unreadable: discarded, the others stay
         term = next(t for t in r["themes"] if t["id"] == "terminal")
-        self.assertEqual((term["version"], term["source"]), (7, "bundled"))  # version plus récente du magasin
+        self.assertEqual((term["version"], term["source"]), (7, "bundled"))  # more recent version from the store
         self.assertEqual((r["store"]["count"], r["store"]["error"]), (1, None))
-        # un compte (pas administrateur) ne force pas la relecture
+        # an account (not administrator) does not force a re-read
         hits = Index.hits
         self.lea.call("GET", "/api/themes?refresh=1")
         self.assertEqual(Index.hits, hits)
-        # magasin injoignable : thèmes fournis seulement, et le dernier index connu reste
+        # store unreachable: shipped themes only, and the last known index stays
         Index.body = b"{pas du json"
         st, r = self.admin.call("GET", "/api/themes?refresh=1")
         self.assertTrue(r["store"]["error"])
         self.assertIn("essai-neon", [t["id"] for t in r["themes"]])
-        # désactivé par l'administrateur
+        # turned off by the administrator
         st, c = self.admin.call("PUT", "/api/admin/themes", {"enabled": False})
         self.assertEqual((st, c["enabled"]), (200, False))
         self.assertNotIn("essai-neon", [t["id"] for t in self.lea.call("GET", "/api/themes")[1]["themes"]])

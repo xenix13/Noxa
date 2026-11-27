@@ -16,7 +16,7 @@ import { renderPerson } from './views/person.js';
 import { renderRemote } from './views/remote.js';
 import { renderShared } from './views/photos.js';
 import { renderBook } from './views/books.js';
-import './remote.js'; // télécommande, clavier et manette
+import './remote.js'; // remote control, keyboard and gamepad
 import { aboutDialog } from './about.js';
 import { applyDevice, device } from './device.js';
 import { createGroupDialog, currentGroups, isFreshFeed, onGroups, startGroupsFeed, stopGroupsFeed } from './groups.js';
@@ -32,8 +32,8 @@ export const state = { me: null, status: null };
 const root = document.getElementById('app');
 let cleanup = null;
 let renderToken = 0;
-// Retour en arrière : chaque page visitée porte un numéro (history.state), et sa position de défilement est gardée ;
-// revenir sur une page déjà vue (bouton Retour) la rouvre là où on l'avait laissée
+// Going back: each visited page carries a number (history.state), and its scroll position is kept;
+// coming back to a page already seen (Back button) reopens it where it was left
 const scrolls = new Map();
 let pageSeq = 0, pageNo = 0;
 function enterPage() {
@@ -49,7 +49,7 @@ function enterPage() {
 }
 function restoreScroll(y, token) {
   if (!y) return;
-  // la page grandit encore (images, rangées) : on réessaie tant qu'elle n'est pas assez haute
+  // the page is still growing (pictures, rows): try again while it is not tall enough
   let tries = 0;
   const go = () => {
     if (token !== renderToken) return;
@@ -58,7 +58,7 @@ function restoreScroll(y, token) {
   };
   go();
 }
-// lecteur réduit : il continue pendant la navigation, dans un coin de l'écran (en dehors de #app)
+// mini player: it keeps playing during navigation, in a corner of the screen (outside #app)
 let mini = null;
 
 function closeMini() {
@@ -77,11 +77,11 @@ function minimize(m) {
   }
   closeMini();
   mini = m;
-  cleanup = null; // la page suivante ne doit pas arrêter la lecture
+  cleanup = null; // the next page must not stop playback
   dock.append(m.el);
 }
 
-// fonds d'écran en dégradé (Paramètres → Apparence → Fond d'écran)
+// gradient wallpapers (Settings → Appearance → Wallpaper)
 export const GRADIENTS = {
   aurora: 'linear-gradient(135deg, #0f2027, #203a43 45%, #2c5364)',
   sunset: 'linear-gradient(135deg, #3a1c71, #d76d77 55%, #ffaf7b)',
@@ -97,7 +97,7 @@ let lastPrefs = null;
 if (systemLight && systemLight.addEventListener) {
   systemLight.addEventListener('change', () => { if (lastPrefs && lastPrefs.theme === 'auto') applyPrefs(lastPrefs); });
 }
-let daily = null; // fond du jour, demandé une fois par jour
+let daily = null; // background of the day, asked for once a day
 async function dailyWallpaper() {
   const day = new Date().toDateString();
   if (daily && daily.day === day) return daily.path;
@@ -105,12 +105,12 @@ async function dailyWallpaper() {
   return daily.path;
 }
 
-// --- thèmes installés : uniquement des couleurs vérifiées (#rrggbb), des nombres et des mots d'une liste fixe,
-// posés en variables CSS ; jamais de CSS venu d'ailleurs
+// --- installed themes: only checked colours (#rrggbb), numbers and words from a fixed list,
+// set as CSS variables; never CSS from elsewhere
 const THEME_VARS = { bg: '--bg', surface: '--surface', surface2: '--surface-2', text: '--text', muted: '--muted', line: '--line',
   on_accent: '--ink-on-accent', accent2: '--accent-2' };
 const OVERLAY_FX = ['scanlines', 'grain', 'vignette'];
-// ciel étoilé : petits points répétés (effet « stars »)
+// starry sky: small repeated dots ("stars" effect)
 const STARS = ['radial-gradient(1px 1px at 20px 30px, #fff9 50%, transparent 51%)', 'radial-gradient(1px 1px at 120px 80px, #fff7 50%, transparent 51%)',
   'radial-gradient(1.5px 1.5px at 60px 150px, #fffa 50%, transparent 51%)', 'radial-gradient(1px 1px at 170px 200px, #fff6 50%, transparent 51%)',
   'radial-gradient(1.5px 1.5px at 230px 40px, #fff8 50%, transparent 51%)'];
@@ -153,13 +153,13 @@ export function applyPrefs(prefs) {
   const r = document.documentElement;
   lastPrefs = prefs;
   r.style.setProperty('--accent', prefs.accent);
-  // thème installé (magasin, import, éditeur) : ses couleurs et effets ; sinon un thème intégré
+  // installed theme (store, import, editor): its colours and effects; otherwise a built-in theme
   const custom = customTheme(prefs);
   paintTheme(custom);
-  // thème automatique : clair ou sombre comme l'appareil (et suit son changement)
+  // automatic theme: light or dark like the device (and follows its change)
   r.dataset.theme = custom ? (custom.dark ? 'dark' : 'light')
     : prefs.theme === 'auto' ? (systemLight && systemLight.matches ? 'light' : 'dark') : prefs.theme;
-  // style de l'interface (mise en page) : celui de cet appareil s'il en a un, sinon celui du profil
+  // interface style (layout): this device's when it has one, otherwise the profile's
   r.dataset.style = device().ui_style || prefs.ui_style || 'classic';
   r.dataset.text = prefs.text_size || 'm';
   r.dataset.density = prefs.density || 'normal';
@@ -167,23 +167,23 @@ export function applyPrefs(prefs) {
     ['cards-no-watched', prefs.card_watched === false], ['cards-no-quality', prefs.card_quality === false],
     ['cards-no-new', prefs.card_new === false], ['cards-rating', !!prefs.card_rating]]) r.classList.toggle(cls, on);
   const kids = !!(state.me && state.me.user && state.me.user.kids);
-  r.classList.toggle('kids', kids); // interface enfant : grandes vignettes, menu simplifié
+  r.classList.toggle('kids', kids); // kids interface: big thumbnails, simplified menu
   r.dataset.poster = kids ? 'l' : prefs.poster_size;
   r.classList.toggle('no-spoilers', !!prefs.hide_spoilers);
-  // fond d'écran du profil, estompé derrière l'interface : l'image d'un titre, une couleur, un dégradé, un titre
-  // différent chaque jour, ou une image envoyée
+  // profile wallpaper, faded behind the interface: a title's picture, a colour, a gradient, a different
+  // title each day, or an uploaded picture
   const setWall = (css) => {
     r.classList.toggle('has-wallpaper', !!css);
     if (css) r.style.setProperty('--wallpaper', css); else r.style.removeProperty('--wallpaper');
   };
   const mode = prefs.wallpaper_mode || 'title';
-  if (mode === 'title') setWall(prefs.wallpaper ? `url("${img(prefs.wallpaper, 960, 540)}")` : ''); // flouté : pas besoin de plus
+  if (mode === 'title') setWall(prefs.wallpaper ? `url("${img(prefs.wallpaper, 960, 540)}")` : ''); // blurred: no need for more
   else if (mode === 'color') setWall(`linear-gradient(${prefs.wallpaper_color}, ${prefs.wallpaper_color})`);
   else if (mode === 'gradient') setWall(GRADIENTS[prefs.wallpaper_gradient] || GRADIENTS.aurora);
   else if (mode === 'upload') setWall(`url("/api/me/wallpaper/image?v=${prefs.wallpaper_version || state.wallVersion || 0}")`);
   else if (mode === 'daily') dailyWallpaper().then((p) => { if (lastPrefs === prefs) setWall(p ? `url("${img(p, 960, 540)}")` : ''); });
   else setWall('');
-  // barre d'état du téléphone / de la fenêtre installée à la couleur du thème
+  // status bar of the phone / installed window in the theme's colour
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(r).getPropertyValue('--bg').trim() || '#0b0b0e';
 }
@@ -192,17 +192,17 @@ export async function refreshMe() {
   state.me = await get('/api/me');
   state.offline = false;
   if (state.me.user.language !== lang && /^#\/(login|profiles)/.test(location.hash)) {
-    history.replaceState(null, '', '#/'); // profil choisi : après le rechargement, on arrive sur l'accueil
+    history.replaceState(null, '', '#/'); // profile chosen: after the reload, land on the home page
   }
-  if (useLanguage(state.me.user.language)) return new Promise(() => {}); // rechargement dans la langue du compte
+  if (useLanguage(state.me.user.language)) return new Promise(() => {}); // reload in the account's language
   applyPrefs(state.me.prefs);
-  rememberMe(state.me); // pour retrouver ses téléchargements hors ligne
-  syncProgress(state.me.user.id); // positions enregistrées hors ligne
-  pump(); // téléchargements à reprendre
+  rememberMe(state.me); // to find one's offline downloads
+  syncProgress(state.me.user.id); // positions saved offline
+  pump(); // downloads to resume
   return state.me;
 }
 
-// Hors ligne (serveur injoignable) : on bascule sur les téléchargements de la dernière personne connectée
+// Offline (server unreachable): switch to the downloads of the last person signed in
 async function offlineMode(e, page, parts, token) {
   const me = rememberedMe();
   if (e.status !== 0 || !me || !offlineSupported() || !(await listDownloads(me.user.id)).length) return false;
@@ -227,7 +227,7 @@ async function offlineMode(e, page, parts, token) {
   await renderDownloads(main, ctx, { offline: true });
   return true;
 }
-// anti-spoiler : un clic sur un résumé masqué l'affiche
+// anti-spoiler: a click on a hidden overview shows it
 document.addEventListener('click', (e) => {
   const sp = e.target.closest && e.target.closest('.no-spoilers .spoiler:not(.revealed)');
   if (sp) { sp.classList.add('revealed'); e.preventDefault(); }
@@ -240,7 +240,7 @@ window.addEventListener('online', () => {
   route();
 });
 
-// Le proxy (nginx…) répond « Bad Gateway » le temps que Noxa redémarre : on réessaie tout seul
+// The proxy (nginx…) answers "Bad Gateway" while Noxa restarts: retry automatically
 function restarting(token) {
   clear(root, h('div.center-page', h('div.restart-box', spinner(), h('h2', tr('Noxa redémarre…')),
     h('p.muted', tr('La page se rechargera automatiquement dès que le serveur répond.')))));
@@ -258,16 +258,16 @@ function parseHash() {
   return { parts: path.split('/').filter(Boolean), query: new URLSearchParams(qs || '') };
 }
 
-// icône affichée selon le style (barre latérale, arrondi) ; le texte reste le libellé du lien
+// icon shown depending on the style (sidebar, rounded); the text stays the link's label
 function navLink(href, label, active, ico) {
   return h('a.nav-link', { href, class: active ? 'nav-link active' : 'nav-link', title: label },
     icon(ico || 'folder', 'nav-ico'), h('span.nav-label', label));
 }
 const LIB_ICONS = { movie: 'film', show: 'tv', photo: 'folder', audiobook: 'headphones', music: 'headphones' };
 
-// Liens de la barre du haut, dans l'ordre choisi par l'utilisateur (Paramètres → Accueil et menu)
+// Top bar links, in the order chosen by the user (Settings → Home and menu)
 let startPending = true;
-applyDevice(); // réglages propres à cet appareil (animations, télécommande)
+applyDevice(); // settings specific to this device (animations, remote control)
 
 export function navItems(me) {
   const items = [{ key: 'home', href: '#/', label: tr('Accueil'), fixed: true, icon: 'home' },
@@ -285,8 +285,8 @@ function navLinks(me, active) {
     .map((i) => navLink(i.href, i.label, active === i.key, i.icon));
 }
 
-// après un changement dans Réglages : on redessine les liens sans recharger la page
-// Nouveaux épisodes des séries suivies : cloche avec le nombre de non-lus, liste au clic (marquée lue à l'ouverture)
+// after a change in Settings: the links are redrawn without reloading the page
+// New episodes of followed shows: bell with the unread count, list on click (marked read when opened)
 function notifBell(me) {
   const badge = h('span.notif-badge', { hidden: !me.notifications }, String(me.notifications || ''));
   const list = h('div.notif-menu.user-menu', { hidden: true, role: 'menu' });
@@ -316,7 +316,7 @@ function notifBell(me) {
   return h('div.user-wrap.notif-wrap', btn, list);
 }
 
-// Nom ou photo du profil modifiés : la barre du haut suit sans recharger la page
+// Profile name or picture changed: the top bar follows without reloading the page
 export function repaintUser() {
   const me = state.me;
   if (!me) return;
@@ -353,7 +353,7 @@ function shell(active) {
     h('a', { href: '#/history' }, tr('Historique')),
     me.features && me.features.downloads && offlineSupported() ? h('a', { href: '#/downloads' }, tr('Téléchargements')) : null,
     h('a', { href: '#/settings' }, tr('Paramètres')),
-    // installer Noxa (application native ou web, et les autres appareils) ; dans l'application : la page Applications
+    // install Noxa (native or web app, and the other devices); inside the app: the Apps page
     h('button.install-app', { hidden: !canInstall(), onclick: () => install() }, icon('install'), tr('Installer l’application')),
     h('a.apps-link', { href: '#/apps', hidden: canInstall() }, tr('Applications')),
     h('button', { onclick: () => aboutDialog(state.status && state.status.version) }, tr('À propos')),
@@ -367,7 +367,7 @@ function shell(active) {
       if (first) first.focus({ preventScroll: true });
     } }, avatar(me.user, 34));
   const header = h('header.topbar',
-    // bouton « précédent » : l'application de bureau et la web app installée n'ont pas celui du navigateur
+    // "back" button: the desktop app and the installed web app do not have the browser's
     h('button.icon-btn.topbar-back', { type: 'button', 'aria-label': tr('Retour'), title: tr('Retour'), hidden: active === 'home',
       onclick: () => { if (history.length > 1) history.back(); else location.hash = '#/'; } }, icon('back')),
     h('a.logo', { href: '#/', 'aria-label': tr('Noxa — accueil') }, h('span.logo-mark', { 'aria-hidden': 'true' }), 'Noxa'),
@@ -382,7 +382,7 @@ function shell(active) {
   const main = h('main.content');
   const banner = me.warning ? h('div.banner-error', me.warning) : null;
   clear(root, header, banner, main);
-  // barre transparente au-dessus de l'image d'accueil, opaque dès qu'on fait défiler
+  // transparent bar above the home picture, opaque as soon as the page scrolls
   const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 24);
   onScroll();
   window.removeEventListener('scroll', window.__nexisScroll || (() => {}));
@@ -391,7 +391,7 @@ function shell(active) {
   return main;
 }
 
-// Raccourci « Regarder ensemble » de la barre du haut, tenu à jour par la liste en direct
+// "Watch together" shortcut in the top bar, kept up to date by the live list
 function paintTogetherSlot(slot, list = currentGroups()) {
   if (!slot) return;
   const mine = list.find((g) => g.member);
@@ -406,10 +406,10 @@ function paintTogetherSlot(slot, list = currentGroups()) {
   slot.replaceChildren(...(pill ? [pill] : []));
 }
 onGroups((list) => paintTogetherSlot(document.querySelector('.topbar .together-slot'), list));
-// lecture lancée dans un groupe dont on fait partie, pendant qu'on navigue ailleurs : on propose de la rejoindre
+// playback started in a group one belongs to, while browsing elsewhere: suggest joining it
 const launched = new Map();
 onGroups((list) => {
-  const fresh = isFreshFeed(); // liste rouverte (retour du lecteur…) : on ne sait pas ce qu'on a manqué, on ne propose rien
+  const fresh = isFreshFeed(); // list reopened (back from the player…): what was missed is unknown, suggest nothing
   for (const g of list) {
     const was = launched.get(g.id);
     const now = g.member && g.item && !g.item.hidden ? g.item.id : null;
@@ -422,7 +422,7 @@ onGroups((list) => {
 
 async function logout() {
   closeMini();
-  forgetMe(); // appareil partagé : le mode hors ligne ne montre plus les téléchargements de cette personne
+  forgetMe(); // shared device: offline mode no longer shows this person's downloads
   stopGroupsFeed();
   try { await post('/api/logout'); } catch { /* ignore */ }
   state.me = null;
@@ -440,7 +440,7 @@ async function route() {
 
   if (!state.status) {
     try { state.status = await get('/api/status'); } catch (e) {
-      if (updatePending()) { followUpdate(); return; } // page rechargée pendant une mise à jour
+      if (updatePending()) { followUpdate(); return; } // page reloaded during an update
       if ([502, 503, 504].includes(e.status)) { restarting(token); return; }
       if (await offlineMode(e, page, parts, token)) return;
       clear(root, h('div.center-page', errorBox(e, () => location.reload())));
@@ -449,10 +449,10 @@ async function route() {
     if (await resumeUpdate(state.status)) return;
   }
   if (page === 'apps') {
-    // applications à installer : lisible sans être connecté (lien de la page de connexion)
+    // apps to install: readable without being signed in (link from the sign-in page)
     document.body.classList.remove('playing');
     if (!state.me) {
-      try { await get('/api/me', { quiet401: true }); await refreshMe(); } catch { /* pas connecté */ }
+      try { await get('/api/me', { quiet401: true }); await refreshMe(); } catch { /* not signed in */ }
     }
     if (token !== renderToken) return;
     const { renderApps } = await import('./views/apps.js');
@@ -463,7 +463,7 @@ async function route() {
     return;
   }
   if (page === 'share' && parts[1]) {
-    // album photo partagé par lien : consultable sans compte
+    // photo album shared by link: viewable without an account
     document.body.classList.remove('playing');
     const main = h('main.main.share-page');
     clear(root, h('header.share-head', h('span.logo', h('span.logo-mark', { 'aria-hidden': 'true' }), 'Noxa')), main);
@@ -475,7 +475,7 @@ async function route() {
     document.title = tr('Installation · Noxa');
     return renderSetup(root, () => { state.status = null; state.me = null; location.hash = '#/admin/libraries'; route(); });
   }
-  if (page === 'login' || page === 'profiles') stopGroupsFeed(); // la liste suit la personne connectée
+  if (page === 'login' || page === 'profiles') stopGroupsFeed(); // the list follows the signed-in person
   if (page === 'login') {
     document.title = tr('Connexion · Noxa');
     return renderLogin(root, async () => { await refreshMe(); location.hash = '#/profiles'; });
@@ -497,7 +497,7 @@ async function route() {
     }
   }
   if (token !== renderToken) return;
-  // page d'ouverture choisie par l'utilisateur (Paramètres → Accueil et menu), seulement à l'ouverture de l'appli
+  // start page chosen by the user (Settings → Home and menu), only when the app opens
   if (startPending) {
     startPending = false;
     const target = page === '' ? navItems(state.me).find((i) => i.key === state.me.prefs.start_page && i.key !== 'home') : null;
@@ -508,7 +508,7 @@ async function route() {
   const ctx = { query, parts, isCurrent: () => token === renderToken, setCleanup: (fn) => { cleanup = fn; },
     minimize, closeMini };
   if (page === 'play' && mini && mini.itemId === parts[1]) {
-    // on agrandit le lecteur réduit : la lecture continue sans recharger
+    // the mini player is enlarged: playback goes on without reloading
     document.body.classList.add('playing');
     const m = mini;
     mini = null;
@@ -516,9 +516,9 @@ async function route() {
     cleanup = m.stop;
     return;
   }
-  if (page === 'offline') ctx.offline = true; // téléchargement lu depuis l'appareil (aussi en ligne : pas de réseau utilisé)
+  if (page === 'offline') ctx.offline = true; // download played from the device (also online: no network used)
   if (page === 'play' || page === 'tv' || page === 'offline') {
-    closeMini(); // une autre vidéo remplace celle du lecteur réduit
+    closeMini(); // another video replaces the mini player's
     document.body.classList.add('playing');
     const stopPlayer = page === 'tv' ? await renderLivePlayer(root, parts[1], ctx) : await renderPlayer(root, parts[1], ctx);
     if (token === renderToken) cleanup = stopPlayer;
@@ -576,14 +576,14 @@ document.addEventListener('error', (e) => {
 document.addEventListener('click', () => {
   document.querySelectorAll('.user-menu, .notif-menu').forEach((m) => { m.hidden = true; });
 });
-// Images des pages : fondu quand elles sont chargées (celles déjà en cache s'affichent tout de suite).
+// Page pictures: fade in once loaded (those already cached show right away).
 function fadeImage(im) {
   if (im.complete || im.classList.contains('fade') || im.closest('.player')) return;
   im.classList.add('fade');
   const done = () => im.classList.add('in');
   im.addEventListener('load', done, { once: true });
   im.addEventListener('error', done, { once: true });
-  setTimeout(done, 8000); // filet de sécurité : jamais d'image restée invisible
+  setTimeout(done, 8000); // safety net: never a picture left invisible
 }
 new MutationObserver((records) => {
   for (const r of records) {
@@ -596,7 +596,7 @@ new MutationObserver((records) => {
 }).observe(document.getElementById('app') || document.body, { childList: true, subtree: true });
 
 setupInstall();
-// raccourcis partout : « ? » affiche l'aide, « / » place le curseur dans la recherche
+// shortcuts everywhere: "?" shows the help, "/" puts the cursor in the search
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || (e.target.closest && e.target.closest('input, select, textarea, [contenteditable]'))) return;
   if (document.querySelector('.modal-overlay')) return;

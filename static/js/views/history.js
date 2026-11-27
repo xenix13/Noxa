@@ -7,7 +7,7 @@ const monthNames = (month) => [...Array(12)].map((_, i) => new Date(2000, i, 15)
 const MONTHS = monthNames('short');
 const MONTHS_LONG = monthNames('long');
 
-// Bilan : temps passé, titres et genres préférés, sur une année ou un mois
+// Summary: time spent, favourite titles and genres, over a year or a month
 async function renderRecap(box, ctx) {
   const years = await get('/api/history/years').catch(() => []);
   if (!ctx.isCurrent() || !years.length) return;

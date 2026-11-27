@@ -1,4 +1,4 @@
-"""Tâches planifiées, images de chapitres, détection des intros, TV en direct, « Regarder ensemble ».
+"""Scheduled tasks, chapter pictures, intro detection, live TV, "Watch together".
 
 python3 -m unittest tests.test_features
 """
@@ -14,19 +14,19 @@ import unittest
 from tests.test_api import STATIC, TMDB, Client, media_root, wait_scan  # noqa: F401  (TMDB : variables d'environnement)
 from tests.fixtures import ff
 
-from seance import tasks as tasks_mod
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import tasks as tasks_mod
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 
 def tone(path, seconds, a, b, c):
-    """Audio « musical » propre à chaque passage (des tons qui varient), pour l'empreinte audio."""
+    """"Musical" audio specific to each passage (varying tones), for the audio fingerprint."""
     ff("-f", "lavfi", "-i", f"aevalsrc='0.4*sin(2*PI*t*(220+180*sin(t*{a}+{b})))+0.2*sin(2*PI*t*(660+300*sin(t*{c})))'"
        f":d={seconds}:s=44100", path)
 
 
 def make_intro_season(root):
-    """Trois épisodes qui partagent la même chanson d'ouverture (85 s), à des moments différents."""
+    """Three episodes that share the same opening song (85 s), at different times."""
     tmp = os.path.join(root, "_tmp")
     season = os.path.join(root, "Sans Chapitres", "Season 01")
     os.makedirs(tmp, exist_ok=True)
@@ -55,7 +55,7 @@ class FeaturesTest(unittest.TestCase):
         cls.work = tempfile.mkdtemp()
         cls.media = os.path.join(cls.work, "media")
         shutil.copytree(media_root(), cls.media)
-        from seance import scanner
+        from noxa import scanner
         scanner.RECENT_SECONDS = 0
         cls.ctx = Ctx(os.path.join(cls.work, "data"), STATIC)
         cls.server = Server(("127.0.0.1", 0), make_handler(build_app(cls.ctx)))
@@ -100,7 +100,7 @@ class FeaturesTest(unittest.TestCase):
     def item(self, title):
         return self.ctx.db.one("SELECT * FROM items WHERE title=?", (title,))
 
-    # ------------------------------------------------------------ tâches
+    # ------------------------------------------------------------ tasks
     def test_task_schedule(self):
         anchor = time.mktime((2026, 10, 23, 10, 0, 0, 0, 0, -1))  # vendredi 23/10/2026 10:00 (heure locale)
         nxt = tasks_mod.next_run({"mode": "daily", "time": "03:00"}, None, anchor)
@@ -126,7 +126,7 @@ class FeaturesTest(unittest.TestCase):
                          (200, {"mode": "weekly", "weekday": 2, "time": "04:30"}, "stale", 15), t)
         self.assertEqual(time.localtime(t["next"]).tm_wday, 2)
         self.assertEqual(self.admin.call("POST", "/api/admin/tasks/nope/run")[0], 404)
-        # actualisation des métadonnées « incomplètes » (ici : rien à faire ou quelques éléments)
+        # refresh of "incomplete" metadata (here: nothing to do or a few items)
         last = self.run_task("metadata", scope="all", libraries=[self.libs["Films"]])
         self.assertEqual(last["status"], "ok", last)
         self.assertIn("actualisé", last["summary"])
@@ -144,17 +144,17 @@ class FeaturesTest(unittest.TestCase):
         st, d = self.admin.call("GET", f"/api/items/{ep['id']}")
         self.assertEqual([c["title"] for c in d["chapters"]], ["Prologue", "Opening", "Partie A", "Ending", "Preview"])
         self.assertTrue(all(c["image"] for c in d["chapters"]))
-        # à la demande (la vignette d'un chapitre affichée avant le passage de la tâche)
+        # on demand (a chapter thumbnail shown before the task runs)
         st, body, h = self.lea.call("GET", d["chapters"][2]["image"], raw=True)
         self.assertEqual((st, body[:3], h["Content-Type"]), (200, b"\xff\xd8\xff", "image/jpeg"))
         self.assertEqual(self.lea.call("GET", f"/api/items/{ep['id']}/chapters/9.jpg")[0], 404)
-        # la tâche fabrique les autres et note le fichier comme traité
+        # the task makes the others and notes the file as done
         last = self.run_task("chapters", pause_playback=False)
         self.assertEqual(last["status"], "ok", last)
         folder = self.ctx.chapter_images.folder(ep)
         self.assertEqual(sorted(os.listdir(folder)), ["0.jpg", "1.jpg", "2.jpg", "3.jpg", "4.jpg"])
         self.assertTrue(self.ctx.db.scalar("SELECT 1 FROM media_analysis WHERE item_id=? AND kind='chapters'", (ep["id"],)))
-        self.assertIn("prêtes", self.run_task("chapters")["summary"])  # rien de neuf au second passage
+        self.assertIn("prêtes", self.run_task("chapters")["summary"])  # nothing new on the second pass
 
     # ------------------------------------------------------------ intros par empreinte audio
     def test_intro_detection(self):
@@ -175,7 +175,7 @@ class FeaturesTest(unittest.TestCase):
                 self.assertEqual(m["source"], "audio")
                 self.assertAlmostEqual(m["start"] / 1000, starts[e["idx"]], delta=4)
                 self.assertAlmostEqual(m["end"] / 1000, starts[e["idx"]] + 85, delta=4)
-            # un repère posé à la main n'est jamais écrasé
+            # a marker set by hand is never overwritten
             self.admin.call("PUT", f"/api/admin/markers/{eps[0]['id']}", {"kind": "intro", "start": 1000, "end": 2000})
             self.ctx.db.run("DELETE FROM media_analysis WHERE item_id=?", (eps[0]["id"],))
             self.run_task("intros")
@@ -184,7 +184,7 @@ class FeaturesTest(unittest.TestCase):
         finally:
             self.admin.call("DELETE", f"/api/admin/libraries/{lib['id']}")
 
-    # ------------------------------------------------------------ TV en direct
+    # ------------------------------------------------------------ live TV
     def test_live_dead_channels_hidden(self):
         import http.server
         import socketserver
@@ -217,12 +217,12 @@ class FeaturesTest(unittest.TestCase):
             def names():
                 st, live = self.lea.call("GET", "/api/live")
                 return sorted(c["name"] for c in live["channels"] if c["name"] in ("Bonne", "Morte", "Fermee"))
-            time.sleep(1.5)  # première vérification lancée en fond après l'ajout
-            self.ctx.live.check_channels(int(sid))  # deux échecs d'affilée : masquées
+            time.sleep(1.5)  # first check started in the background after adding
+            self.ctx.live.check_channels(int(sid))  # two failures in a row: hidden
             self.assertEqual(names(), ["Bonne"])
             st, r = self.admin.call("GET", "/api/admin/live")
             self.assertEqual(next(x for x in r["sources"] if x["id"] == sid)["dead"], 2)
-            # une chaîne qui remarche réapparaît
+            # a channel that works again reappears
             self.ctx.db.run("UPDATE live_channels SET url=? WHERE name='Morte'", (f"http://127.0.0.1:{port}/ok.m3u8",))
             self.ctx.live.check_channels(int(sid))
             self.assertEqual(names(), ["Bonne", "Morte"])
@@ -273,16 +273,16 @@ class FeaturesTest(unittest.TestCase):
             self.assertEqual(live["groups"], ["Généralistes", "Cinéma"])
             voyage, brume = live["channels"]
             self.assertEqual((voyage["number"], voyage["now"]["title"], voyage["next"]["title"]), (1, "Le journal", "Le film du soir"))
-            self.assertEqual(brume["now"]["title"], "Documentaire")  # guide relié par le nom de la chaîne
+            self.assertEqual(brume["now"]["title"], "Documentaire")  # guide linked through the channel name
             self.assertEqual(self.lea.call("GET", f"/api/live/logo/{voyage['id']}")[0], 404)  # logo injoignable
-            # favoris (par personne) et guide
+            # favourites (per person) and guide
             self.lea.call("POST", f"/api/live/{brume['id']}/favorite", {"on": True})
             st, g = self.lea.call("GET", "/api/live/guide?group=__fav__&hours=3")
             self.assertEqual([c["name"] for c in g["channels"]], ["Brume HD"])
             self.assertFalse(self.admin.call("GET", "/api/live")[1]["channels"][1]["favorite"])
             st, g = self.lea.call("GET", "/api/live/guide?hours=6")
             self.assertEqual([p["title"] for p in g["channels"][0]["programmes"]], ["Le journal", "Le film du soir"])
-            # lecture : flux HLS (MPEG-TS) fabriqué par ffmpeg, partagé entre spectateurs
+            # playback: HLS stream (MPEG-TS) made by ffmpeg, shared between viewers
             st, p = self.lea.call("POST", f"/api/live/{voyage['id']}/play")
             self.assertEqual((st, p["mode"]), (200, "copy"), p)
             st, pl, h = self.lea.call("GET", p["url"], raw=True)
@@ -293,28 +293,28 @@ class FeaturesTest(unittest.TestCase):
             st, p2 = self.admin.call("POST", f"/api/live/{voyage['id']}/play")
             self.assertEqual(p2["session"], p["session"])
             self.assertEqual(self.admin.call("GET", "/api/admin/live")[1]["sessions"][0]["viewers"], ["Léa", "alex"])
-            # limite de chaînes simultanées
+            # limit of simultaneous channels
             self.admin.call("PUT", "/api/admin/live/settings", {"max_sessions": 1})
             st, err = self.lea.call("POST", f"/api/live/{brume['id']}/play")
             self.assertEqual(st, 503, err)
             self.assertIn("maximum", err["error"])
             self.admin.call("PUT", "/api/admin/live/settings", {"max_sessions": 3})
             st, p3 = self.lea.call("POST", f"/api/live/{brume['id']}/play")
-            self.assertEqual((st, p3["mode"]), (200, "transcode"), p3)  # HEVC : converti en H.264
+            self.assertEqual((st, p3["mode"]), (200, "transcode"), p3)  # HEVC: converted to H.264
             st, pl3, _ = self.lea.call("GET", p3["url"], raw=True)
             self.assertEqual(st, 200, pl3)
             for c in (self.lea, self.admin):
                 c.call("POST", f"/api/live/s/{p['session']}/stop")
             self.lea.call("POST", f"/api/live/s/{p3['session']}/stop")
             self.assertEqual(self.lea.call("GET", p["url"])[0], 404)
-            # profils avec restriction d'âge : option pour masquer la TV
+            # age-restricted profiles: option to hide the TV
             self.admin.call("PUT", "/api/admin/live/settings", {"hide_restricted": True})
             self.ctx.db.run("UPDATE users SET max_age=12 WHERE username='lea'")
             self.assertEqual(self.lea.call("GET", "/api/live")[0], 404)
             self.assertFalse(self.lea.call("GET", "/api/me")[1]["features"]["live"])
             self.ctx.db.run("UPDATE users SET max_age=NULL WHERE username='lea'")
             self.admin.call("PUT", "/api/admin/live/settings", {"hide_restricted": False})
-            # tâche planifiée d'actualisation
+            # scheduled refresh task
             last = self.run_task("livetv")
             self.assertEqual(last["status"], "ok", last)
             self.assertIn("3 chaîne(s)", last["summary"])
@@ -324,20 +324,20 @@ class FeaturesTest(unittest.TestCase):
 
     # ------------------------------------------------------------ fichiers .strm
     def test_strm_remote_file(self):
-        """Un .strm (adresse http) : scanné comme un film, lu via Noxa (jamais en direct), pas d'analyse lourde."""
+        """A .strm (http address): scanned like a movie, played through Noxa (never directly), no heavy analysis."""
         import functools
         import http.server
         src = os.path.join(self.media, "films", "Le Grand Voyage (2019)")
         srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(
             http.server.SimpleHTTPRequestHandler, directory=src))
-        srv.handle_error = lambda *a: None  # ffmpeg coupe la connexion en s'arrêtant
+        srv.handle_error = lambda *a: None  # ffmpeg cuts the connection when it stops
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         folder = os.path.join(self.media, "films", "Lointain (2020)")
         os.makedirs(folder)
         with open(os.path.join(folder, "Lointain (2020).strm"), "w") as f:
             f.write(f"http://127.0.0.1:{srv.server_address[1]}/Le Grand Voyage (2019).mp4".replace(" ", "%20") + "\n")
         with open(os.path.join(folder, "Piège (2020).strm"), "w") as f:
-            f.write("file:///etc/passwd\n")  # refusé : pas de fichier local par ce biais
+            f.write("file:///etc/passwd\n")  # refused: no local file this way
         try:
             self.admin.call("POST", "/api/admin/scan", {"library": self.libs["Films"]})
             wait_scan(self.admin)
@@ -345,10 +345,10 @@ class FeaturesTest(unittest.TestCase):
             self.assertIsNotNone(row)
             self.assertGreater(row["duration_ms"], 1000)
             self.assertIsNone(self.ctx.db.one("SELECT id FROM items WHERE key LIKE '%Piège%'"))
-            self.assertFalse(self.ctx.subtitles.needs_trick(row))  # pas de vignettes : relirait tout le flux
+            self.assertFalse(self.ctx.subtitles.needs_trick(row))  # no thumbnails: it would read the whole stream again
             st, p = self.admin.call("POST", "/api/play", {"id": row["id"], "quality": "original"})
             self.assertEqual(st, 200, p)
-            self.assertNotEqual(p["mode"], "direct")  # relayé par Noxa
+            self.assertNotEqual(p["mode"], "direct")  # relayed by Noxa
             for _ in range(60):
                 st, body, h = self.admin.call("GET", p["url"], raw=True)
                 if st == 200:
@@ -365,7 +365,7 @@ class FeaturesTest(unittest.TestCase):
 
     # ------------------------------------------------------------ regarder ensemble
     def events(self, client, gid, n, timeout=10, path=None):
-        """Lit n événements SSE du groupe (connexion HTTP brute avec le cookie de session)."""
+        """Reads n SSE events of the group (raw HTTP connection with the session cookie)."""
         cookie = "; ".join(f"{c.name}={c.value}" for c in client.jar)
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=timeout)
         conn.request("GET", path or f"/api/together/{gid}/events", headers={"Cookie": cookie})
@@ -392,7 +392,7 @@ class FeaturesTest(unittest.TestCase):
         st, g = self.admin.call("POST", "/api/together", {"item_id": film["id"], "position": 5000, "name": "Soirée cinéma"})
         self.assertEqual(st, 200, g)
         gid = g["id"]
-        self.assertEqual((g["playing"], g["waiting"], g["is_host"]), (True, True, True))  # on attend que l'hôte ait chargé
+        self.assertEqual((g["playing"], g["waiting"], g["is_host"]), (True, True, True))  # wait until the host has loaded
         st, lst = self.lea.call("GET", "/api/together")
         self.assertEqual([(x["name"], x["item"]["title"], x["member"]) for x in lst], [("Soirée cinéma", "Le Grand Voyage", False)])
         st, j = self.lea.call("POST", f"/api/together/{gid}/join")
@@ -401,23 +401,23 @@ class FeaturesTest(unittest.TestCase):
         try:
             self.assertEqual([e["type"] for e in ev], ["members", "state"])
             self.assertEqual({m["name"] for m in ev[0]["members"]}, {"alex", "Léa"})
-            # l'hôte est prêt : la lecture démarre pour tout le monde
+            # the host is ready: playback starts for everyone
             st, s = self.admin.call("POST", f"/api/together/{gid}/cmd", {"action": "ready"})
             self.assertEqual((s["playing"], s["waiting"]), (True, False), s)
-            # Léa met en pause : la position est partagée
+            # Léa pauses: the position is shared
             st, s = self.lea.call("POST", f"/api/together/{gid}/cmd", {"action": "pause", "position": 12000})
             self.assertEqual((s["playing"], s["position"]), (False, 12000))
-            # un saut pendant la lecture : on attend que chacun ait rechargé
+            # a seek during playback: wait until everyone has reloaded
             self.lea.call("POST", f"/api/together/{gid}/cmd", {"action": "play", "position": 12000})
             st, s = self.lea.call("POST", f"/api/together/{gid}/cmd", {"action": "seek", "position": 60000})
             self.assertEqual((s["waiting"], s["waiting_for"]), (True, ["alex"]), s)
             st, s = self.admin.call("POST", f"/api/together/{gid}/cmd", {"action": "ready"})
             self.assertFalse(s["waiting"])
-            # coupure réseau chez quelqu'un : tout le groupe attend
+            # network cut on someone's side: the whole group waits
             st, s = self.admin.call("POST", f"/api/together/{gid}/cmd", {"action": "buffering"})
             self.assertEqual((s["waiting"], s["waiting_for"]), (True, ["alex"]))
             self.admin.call("POST", f"/api/together/{gid}/cmd", {"action": "ready"})
-            # Léa change de langue : tout le monde attend à sa position, plus longtemps qu'une simple coupure
+            # Léa changes language: everyone waits at her position, longer than a simple cut
             st, s = self.lea.call("POST", f"/api/together/{gid}/cmd",
                                   {"action": "buffering", "position": 70000, "reason": "reload"})
             self.assertEqual((s["waiting"], s["waiting_for"], s["position"]), (True, ["Léa"], 70000), s)
@@ -425,11 +425,11 @@ class FeaturesTest(unittest.TestCase):
             self.assertEqual(g.wait_timer.interval, 60)
             st, s = self.lea.call("POST", f"/api/together/{gid}/cmd", {"action": "ready"})
             self.assertEqual((s["waiting"], s["playing"]), (False, True))
-            # changement d'épisode / de film
+            # change of episode / movie
             other = self.item("Nuit polaire")
             st, s = self.admin.call("POST", f"/api/together/{gid}/cmd", {"action": "item", "item_id": int(other["id"])})
             self.assertEqual((s["item_id"], s["position"], s["waiting"]), (str(other["id"]), 0, True))
-            # seul l'hôte contrôle
+            # only the host controls
             st, v = self.admin.call("PUT", f"/api/together/{gid}", {"host_only": True})
             self.assertTrue(v["host_only"])
             self.assertEqual(self.lea.call("POST", f"/api/together/{gid}/cmd", {"action": "pause"})[0], 403)
@@ -438,7 +438,7 @@ class FeaturesTest(unittest.TestCase):
             self.assertEqual(self.lea.call("POST", f"/api/together/{gid}/cmd", {"action": "dance"})[0], 400)
         finally:
             conn.close()
-        # l'hôte s'en va : Léa devient l'hôte
+        # the host leaves: Léa becomes the host
         self.admin.call("POST", f"/api/together/{gid}/leave")
         st, v = self.lea.call("GET", f"/api/together/{gid}")
         self.assertEqual((v["owner"], v["is_host"]), ("Léa", True))
@@ -470,8 +470,8 @@ class FeaturesTest(unittest.TestCase):
         self.lea.call("POST", f"/api/together/{gid}/leave")
 
     def test_watch_together_live_list_and_lobby(self):
-        """Liste des groupes en direct, groupe créé à l'avance (salon), présence tant que Noxa est ouvert."""
-        from seance import syncplay
+        """Live group list, group created in advance (room), presence while Noxa is open."""
+        from noxa import syncplay
         got = []
 
         def listen():
@@ -481,7 +481,7 @@ class FeaturesTest(unittest.TestCase):
         t = threading.Thread(target=listen)
         t.start()
         time.sleep(0.5)
-        # salon : groupe sans film, créé à l'avance
+        # room: group without a movie, created in advance
         st, g = self.admin.call("POST", "/api/together", {"name": "Vendredi soir"})
         self.assertEqual((st, g["item"], g["playing"]), (200, None, False))
         gid = g["id"]
@@ -493,16 +493,16 @@ class FeaturesTest(unittest.TestCase):
         self.assertEqual((s["item_id"], s["waiting"]), (str(film["id"]), True))
         t.join(10)
         lists = [e["groups"] for e in got if e["type"] == "groups"]
-        self.assertEqual(lists[0], [])  # rien au départ
+        self.assertEqual(lists[0], [])  # nothing at first
         self.assertEqual([(x["name"], x["item"], x["member"], x["is_host"]) for x in lists[1]],
-                         [("Vendredi soir", None, False, False)])  # créé : apparaît chez Léa sans recharger
-        self.assertTrue(lists[2][0]["member"])  # Léa a rejoint
-        self.assertEqual(lists[3][0]["item"]["title"], "Le Grand Voyage")  # le film est lancé
-        # présence : membre sans lecteur ouvert, mais Noxa ouvert -> on reste dans le groupe
+                         [("Vendredi soir", None, False, False)])  # created: appears on Léa's side without reloading
+        self.assertTrue(lists[2][0]["member"])  # Léa joined
+        self.assertEqual(lists[3][0]["item"]["title"], "Le Grand Voyage")  # the movie is started
+        # presence: member without an open player, but Noxa open -> stays in the group
         old = syncplay.GONE_AFTER
         syncplay.GONE_AFTER = 0
         try:
-            # (Léa a encore sa liste en direct ouverte ; alex aussi, le temps du test)
+            # (Léa still has her live list open; alex too, for the duration of the test)
             q = self.ctx.together.watch({"id": self.ctx.db.scalar("SELECT id FROM users WHERE username='alex'")})
             time.sleep(0.05)
             self.ctx.together.reap()
@@ -513,7 +513,7 @@ class FeaturesTest(unittest.TestCase):
             self.ctx.together.reap()
             members = {m["name"] for m in self.lea.call("GET", f"/api/together/{gid}")[1]["members"]}
             self.assertEqual(members, {"Léa"})
-            # salon oublié sur un écran resté allumé : la présence ne garde pas membre indéfiniment
+            # room forgotten on a screen left on: presence does not keep someone a member forever
             g = self.ctx.together.get(gid)
             g.members[next(iter(g.members))].seen -= syncplay.PRESENT_FOR + 1
             self.ctx.together.reap()
@@ -523,8 +523,8 @@ class FeaturesTest(unittest.TestCase):
         self.lea.call("POST", f"/api/together/{gid}/leave")
 
     def test_watch_together_feed_ends_with_session(self):
-        """Déconnexion (ou compte supprimé) : la liste en direct s'arrête."""
-        from seance import syncplay
+        """Sign-out (or account deleted): the live list stops."""
+        from noxa import syncplay
         c = Client(self.base)
         c.call("POST", "/api/login", {"username": "lea", "password": "motdepasse2"})
         old, syncplay.FEED_PING = syncplay.FEED_PING, 0.5
@@ -536,7 +536,7 @@ class FeaturesTest(unittest.TestCase):
             self.assertEqual(resp.status, 200)
             c.call("POST", "/api/logout")
             t0 = time.time()
-            resp.read()  # se termine quand le serveur coupe le flux
+            resp.read()  # ends when the server cuts the stream
             self.assertLess(time.time() - t0, 5)
             conn.close()
         finally:

@@ -270,7 +270,7 @@ def srt(path, lines):
 
 
 def nfo(path, root, fields):
-    out = [f"<?xml version='1.0' encoding='utf-8'?>", f"<{root}>"]
+    out = ["<?xml version='1.0' encoding='utf-8'?>", f"<{root}>"]
     for k, v in fields:
         if isinstance(v, dict):
             out.append(f"  <{k}>" + "".join(f"<{a}>{escape(str(b))}</{a}>" for a, b in v.items()) + f"</{k}>")

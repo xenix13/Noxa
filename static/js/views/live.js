@@ -1,6 +1,6 @@
-// TV en direct : grille des chaînes (programme en cours / à suivre), guide des programmes et lecteur.
+// Live TV: channel grid (current / next programme), programme guide and player.
 import { get, post } from '../api.js';
-import { clear, errorBox, h, icon, loadHls, modal, spinner, store, toast } from '../ui.js';
+import { clear, h, icon, loadHls, modal, spinner, store, toast } from '../ui.js';
 import { tr, locale } from '../i18n.js';
 
 const PX_PER_HOUR = 320;
@@ -112,7 +112,7 @@ export async function renderLive(main, ctx) {
   const data = await get('/api/live');
   if (!ctx.isCurrent()) return;
   const view = ctx.query.get('view') === 'guide' ? 'guide' : 'channels';
-  // filtre : null = toutes, '__fav__' = favoris, sinon nom du groupe ('' = sans groupe)
+  // filter: null = all, '__fav__' = favourites, otherwise group name ('' = no group)
   const saved = store('seance.live.group');
   const filter = { group: null, q: '' };
   if (saved === '__fav__') filter.group = '__fav__';

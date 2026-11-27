@@ -1,12 +1,12 @@
-// Illustrations des avatars (dessins originaux, viewBox 0 0 100 100, sans fond : le fond est choisi à part).
-// Contenu fixe écrit dans le code : utilisé tel quel pour dessiner l'aperçu et l'image envoyée au serveur.
+// Avatar illustrations (original drawings, viewBox 0 0 100 100, no background: the background is chosen separately).
+// Fixed content written in the code: used as is to draw the preview and the picture sent to the server.
 import { MOTIFS } from './avatars.js';
 import { tr } from './i18n.js';
 
 const OUT = 'stroke="#1d1d27" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"';
 
 export const ART = {
-  // ---------------------------------------------------------------- Cinéma
+  // ---------------------------------------------------------------- Cinema
   popcorn: [tr('Pop-corn'), 'cinema', `
     <g ${OUT}>
       <circle cx="34" cy="34" r="10" fill="#fff6dd"/><circle cx="48" cy="26" r="11" fill="#fffaf0"/><circle cx="62" cy="33" r="10" fill="#fff3cf"/>
@@ -73,7 +73,7 @@ export const ART = {
       <path d="M36 32h28" stroke="#f4a3a8" stroke-width="3"/>
     </g>`],
 
-  // ---------------------------------------------------------------- Séries et TV
+  // ---------------------------------------------------------------- Shows and TV
   teleretro: [tr('Télé rétro'), 'tv', `
     <g ${OUT}>
       <path d="M38 22L28 10M62 22l10-12" fill="none"/>
@@ -250,7 +250,7 @@ export const ART = {
     </g>`],
 };
 
-// motifs simples (première galerie), en blanc sur le fond choisi
+// simple patterns (first gallery), in white on the chosen background
 for (const [id, d] of Object.entries(MOTIFS)) {
   ART[`motif-${id}`] = [tr(id.charAt(0).toUpperCase() + id.slice(1)), 'motifs',
     `<path d="${d}" fill="#fff" transform="translate(18 18) scale(2.66)" style="filter:drop-shadow(0 .4px .6px rgba(0,0,0,.3))"/>`];
@@ -263,7 +263,7 @@ export const BACKGROUNDS = [['#ff9a3d', '#e2513a'], ['#5b8def', '#2f3fbf'], ['#3
   ['#ff6f91', '#c2185b'], ['#2dd4bf', '#0e7490'], ['#ffd23f', '#f08a24'], ['#8e9aaf', '#3d4a5c'],
   ['#f472b6', '#7c3aed'], ['#60a5fa', '#10b981'], ['#fb7185', '#f59e0b'], ['#1e293b', '#0b0b0e']];
 
-// fond conseillé pour chaque illustration (modifiable dans le choix d'avatar)
+// background advised for each illustration (can be changed in the avatar choice)
 export const DEFAULT_BG = {
   'motif-etoile': 0, 'motif-coeur': 4, 'motif-lune': 1, 'motif-eclair': 6, 'motif-note': 3, 'motif-soleil': 6,
   'motif-montagne': 2, 'motif-feuille': 9, 'motif-flamme': 10, 'motif-pellicule': 8, 'motif-couronne': 6, 'motif-patte': 7, popcorn: 1, clap: 6, bobine: 10, ticket: 3, lunettes3d: 3, camera: 6, projecteur: 1, fauteuil: 7,
@@ -275,13 +275,13 @@ let seq = 0;
 export function artSvg(id, bg = null, size = 100) {
   const [, , body] = ART[id];
   const [a, b] = BACKGROUNDS[bg ?? DEFAULT_BG[id] ?? 0];
-  const gid = `bg${(seq += 1)}`; // identifiant unique : plusieurs avatars dans la même page
+  const gid = `bg${(seq += 1)}`; // unique id: several avatars on the same page
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}">`
     + `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs>`
     + `<rect width="100" height="100" fill="url(#${gid})"/><g transform="translate(6 6) scale(0.88)">${body}</g></svg>`;
 }
 
-// image JPEG 256 × 256 (data URL) pour l'envoi au serveur
+// 256 × 256 JPEG picture (data URL) to send to the server
 export function artDataUrl(id, bg = null) {
   return new Promise((resolve, reject) => {
     const img = new Image();

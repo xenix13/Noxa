@@ -36,7 +36,7 @@
   </form>
 </main>
 <script>
-  const A = window.NexisAndroid;
+  const A = window.NoxaAndroid;
   const T = JSON.parse(A.strings());
   const q = new URLSearchParams(location.search);
   const $ = (id) => document.getElementById(id);
@@ -53,7 +53,7 @@
     $('retry').textContent = T.retry;
     $('retry').onclick = () => A.retry();
   }
-  // réponse du serveur choisi (appelée par l'application)
+  // answer about the chosen server (called by the app)
   window.onServerResult = (ok, error) => {
     if (ok) return;
     $('error').textContent = error;

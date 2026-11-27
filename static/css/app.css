@@ -1,4 +1,4 @@
-/* Noxa — feuille de style unique (direction « Grand écran ») */
+/* Noxa — single stylesheet ("Big screen" direction) */
 @font-face { font-family: "Outfit"; src: url("/fonts/outfit.woff") format("woff"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "Inter"; src: url("/fonts/inter.woff") format("woff"); font-weight: 100 900; font-display: swap; }
 :root {
@@ -14,7 +14,7 @@
   --ok: #3dd68c;
   --radius: 10px;
   --topbar-h: 76px;
-  --safe-top: 0px; /* hauteur de la barre d'état de l'iPhone dans l'application installée */
+  --safe-top: 0px; /* height of the iPhone status bar in the installed app */
   --poster-w: 160px;
   --display: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -40,7 +40,7 @@
 }
 :root[data-theme="contrast"] .card-img, :root[data-theme="contrast"] .panel { outline: 1px solid var(--line); }
 :root[data-theme="contrast"] a:focus-visible, :root[data-theme="contrast"] button:focus-visible { outline: 3px solid var(--accent); }
-/* taille du texte et densité (réglages du profil) */
+/* text size and density (profile settings) */
 :root[data-text="s"] body { zoom: 0.92; }
 :root[data-text="l"] body { zoom: 1.1; }
 :root[data-text="xl"] body { zoom: 1.22; }
@@ -52,7 +52,7 @@
 :root[data-density="comfy"] .row-track { gap: 22px; }
 :root[data-density="comfy"] .row { margin-bottom: 44px; }
 :root[data-density="comfy"] .block { margin: 46px 0; }
-/* cartes : éléments affichés selon le profil */
+/* cards: elements shown according to the profile */
 html.cards-no-titles .card.poster .card-title, html.cards-no-titles .card.poster .card-sub { display: none; }
 html.cards-no-progress .card .progress { display: none; }
 html.cards-no-watched .badge.done { display: none; }
@@ -90,7 +90,7 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.2; }
 /* ---------- boot / logo ---------- */
 .boot { min-height: 100vh; display: grid; place-items: center; }
 .logo { display: flex; align-items: center; gap: 10px; font: 800 24px var(--display); letter-spacing: -0.01em; flex: none; }
-.logo-mark { width: 36px; height: 36px; flex: none; background: url("/img/nexis-logo.webp") center/contain no-repeat; }
+.logo-mark { width: 36px; height: 36px; flex: none; background: url("/img/noxa-logo.webp") center/contain no-repeat; }
 .logo-mark.big { width: 96px; height: 96px; }
 .boot .logo-mark { animation: pulse 1.4s ease-in-out infinite; filter: drop-shadow(0 0 24px rgba(255, 138, 31, 0.4)); }
 @keyframes pulse { 50% { opacity: 0.45; transform: scale(0.96); } }
@@ -254,8 +254,8 @@ a.row-title:hover { color: var(--accent); }
 .row-nav { display: flex; gap: 4px; }
 .row-track { display: grid; grid-auto-flow: column; grid-auto-columns: var(--poster-w); gap: 14px; overflow-x: auto;
   scroll-snap-type: x mandatory; scrollbar-width: none;
-  /* une rangée qui défile coupe tout ce qui dépasse : marge pour l'affiche sélectionnée (soulevée, agrandie,
-     cadre de 3 px à 3 px), compensée par une marge négative pour ne rien décaler */
+  /* a scrolling row clips everything that sticks out: margin for the selected poster (lifted, enlarged,
+     3 px frame), offset by a negative margin so nothing shifts */
   padding: 16px 16px 12px; margin: -16px -16px -4px; scroll-padding-inline: 16px; }
 .row-track::-webkit-scrollbar { display: none; }
 .wide-row .row-track { grid-auto-columns: calc(var(--poster-w) * 1.75); }
@@ -503,7 +503,7 @@ body.playing { overflow: hidden; background: #000; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
-/* ---------- bibliothèques, identification ---------- */
+/* ---------- libraries, identification ---------- */
 .folder-path { font-family: ui-monospace, monospace; font-size: 13px; padding: 8px 10px; background: var(--bg); border-radius: 8px;
   margin-bottom: 8px; word-break: break-all; }
 .folder-list { display: flex; flex-direction: column; max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
@@ -535,7 +535,7 @@ body.playing { overflow: hidden; background: #000; }
 .empty .btn { margin-top: 12px; }
 @media (max-width: 760px) { .grid-search { grid-template-columns: 1fr; } .path-row { flex-wrap: wrap; } }
 img.broken { visibility: hidden; }
-/* ---------- partages réseau ---------- */
+/* ---------- network shares ---------- */
 .share-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
 .share-pick { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 .share-pick:hover, .share-pick.on { border-color: var(--accent); }
@@ -553,7 +553,7 @@ img.broken { visibility: hidden; }
 .copy-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .copy-row input { font-family: ui-monospace, monospace; font-size: 12px; }
 h3.sub { font-size: 15px; margin: 22px 0 10px; }
-/* ---------- aperçus et chapitres ---------- */
+/* ---------- previews and chapters ---------- */
 .tl-chapters { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 .tl-chapter { position: absolute; top: -1px; bottom: -1px; width: 3px; margin-left: -1px; background: rgba(0, 0, 0, 0.75); }
 .tl-tip { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; text-align: center; max-width: 280px; }
@@ -562,7 +562,7 @@ h3.sub { font-size: 15px; margin: 22px 0 10px; }
 .tl-preview-chapter:empty { display: none; }
 .tl-preview-time { font-size: 13px; }
 .chapters-col { min-width: 260px; }
-/* ---------- menu ⋯ et choix des pistes ---------- */
+/* ---------- ⋯ menu and track choice ---------- */
 .more-wrap { position: relative; display: inline-block; }
 .btn.icon-only { padding: 10px; }
 .more-list { position: absolute; left: 0; top: calc(100% + 6px); z-index: 40; min-width: 240px; max-width: calc(100vw - 16px); background: var(--surface);
@@ -600,7 +600,7 @@ h3.sub { font-size: 15px; margin: 22px 0 10px; }
 .pin-key { height: 56px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); font-size: 22px; font-weight: 600; cursor: pointer; }
 .pin-key:hover { background: var(--bg); }
 .form-sub { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 18px 0 6px; }
-/* ---------- collections, playlists, à regarder ---------- */
+/* ---------- collections, playlists, watchlist ---------- */
 .view-tabs { margin: -8px 0 22px; }
 .btn.icon-only.on { color: var(--accent); }
 .card-img.mosaic { display: grid; grid-template-columns: repeat(4, 1fr); }
@@ -615,7 +615,7 @@ h3.sub { font-size: 15px; margin: 22px 0 10px; }
 .modal:has(.trailer-box) { max-width: 920px; }
 textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: inherit; font: inherit; }
 
-/* ------------------------------------------------------------ Découvrir */
+/* ------------------------------------------------------------ Discover */
 .discover-search { display: flex; align-items: center; gap: 8px; margin-left: auto; background: var(--surface);
   border: 1px solid var(--line); border-radius: 99px; padding: 0 14px; min-width: min(360px, 100%); }
 .discover-search .icon { width: 18px; height: 18px; fill: var(--muted); flex: none; }
@@ -671,7 +671,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 @media (max-width: 700px) {
   .discover-search { margin-left: 0; width: 100%; }
 }
-/* rendu ASS (libass) : canevas au-dessus de la vidéo, sous les commandes */
+/* ASS rendering (libass): canvas above the video, under the controls */
 .player .JASSUB { position: absolute !important; inset: 0; pointer-events: none; z-index: 2; }
 .sub-top { top: 6%; bottom: auto !important; }
 .player:not(.idle) .sub-top { top: 14%; }
@@ -680,7 +680,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 .subs-pending { position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%); z-index: 4; padding: 6px 14px;
   border-radius: 99px; background: rgba(0, 0, 0, 0.6); color: rgba(255, 255, 255, 0.85); font-size: 0.9rem; pointer-events: none; }
 
-/* ---------- chapitres en vignettes (lecteur et fiche) ---------- */
+/* ---------- chapters as thumbnails (player and title page) ---------- */
 .chapter-strip { display: flex; gap: 22px; overflow-x: auto; scroll-snap-type: x proximity; padding: 4px 2px 10px;
   scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent; }
 .chapter-card { flex: none; width: 200px; display: flex; flex-direction: column; gap: 2px; padding: 0; border: 0;
@@ -730,7 +730,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
   background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); white-space: nowrap; }
 .group-pill .icon { width: 16px; height: 16px; }
 
-/* ---------- TV en direct ---------- */
+/* ---------- live TV ---------- */
 .live-tabs { margin-bottom: 0; }
 .live-tabs .tab { display: inline-flex; align-items: center; gap: 8px; }
 .live-tabs .icon { width: 18px; height: 18px; }
@@ -805,7 +805,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
   .guide-prog > span { left: 130px; }
 }
 
-/* ---------- tâches planifiées ---------- */
+/* ---------- scheduled tasks ---------- */
 .task-group { margin-bottom: 22px; }
 .task-group > h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 0 0 10px; }
 .task-row { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
@@ -830,7 +830,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 .task-meta .icon { width: 14px; height: 14px; vertical-align: -2px; }
 .admin-body > .panel + .panel, .admin-body > section.panel + section.panel { margin-top: 16px; }
 
-/* ---------- lecteur réduit (continue pendant la navigation) ---------- */
+/* ---------- mini player (keeps playing during navigation) ---------- */
 .mini-bar { display: none; }
 .player.mini { inset: auto 20px 20px auto; width: min(400px, calc(100vw - 32px)); height: auto; aspect-ratio: 16 / 9;
   border-radius: 14px; z-index: 150; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -852,7 +852,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 }
 @media (max-width: 760px) { .player.mini { inset: auto 12px 12px auto; width: min(300px, calc(100vw - 24px)); } }
 
-/* ---------- « marquer comme vu » sur les cartes de Reprendre et à suivre ---------- */
+/* ---------- "mark as watched" on the Continue and Up next cards ---------- */
 .card-slot { position: relative; min-width: 0; scroll-snap-align: start; transition: opacity 0.25s, transform 0.25s; }
 .card-slot.leaving { opacity: 0.25; transform: scale(0.96); pointer-events: none; }
 .card-watch { position: absolute; top: 8px; right: 8px; z-index: 2; width: 34px; height: 34px; display: grid; place-items: center;
@@ -866,7 +866,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 @media (hover: none) { .card-watch { opacity: 0.9; } }
 .toast-action { pointer-events: auto; margin-left: 14px; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
 
-/* ---------- Réglages : ordre de l'accueil et de la barre du haut ---------- */
+/* ---------- Settings: order of the home page and the top bar ---------- */
 .layout-list { list-style: none; margin: 4px 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .layout-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 6px; border-radius: 10px;
   background: var(--surface-2); transition: opacity 0.2s, background 0.2s; }
@@ -878,7 +878,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 .layout-label .muted { font-weight: 400; }
 .layout-item .icon-btn[disabled] { opacity: 0.25; cursor: default; }
 
-/* ---------- animations (désactivées si le système demande moins de mouvement) ---------- */
+/* ---------- animations (off when the system asks for less motion) ---------- */
 :root { --ease-out: cubic-bezier(.2, .8, .2, 1); }
 @keyframes fade-up { from { opacity: 0; transform: translateY(14px); } }
 @keyframes fade-in { from { opacity: 0; } }
@@ -886,14 +886,14 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 @keyframes modal-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } }
 @keyframes hero-zoom { from { transform: scale(1.06); } }
 
-/* changement de page : le contenu monte doucement */
+/* page change: the content rises gently */
 .content > :not(.hero):not(.detail) { animation: fade-up 0.45s var(--ease-out) backwards; }
 .content > :nth-child(2) { animation-delay: 0.04s; }
 .content > :nth-child(3) { animation-delay: 0.08s; }
 .content > :nth-child(4) { animation-delay: 0.12s; }
 .content > :nth-child(n+5) { animation-delay: 0.16s; }
 
-/* grande affiche de l'accueil et fiche : fond qui se pose, texte en cascade */
+/* big home poster and title page: background settling, text in cascade */
 .hero { animation: fade-in 0.6s ease-out backwards; }
 .hero-body > * { animation: fade-up 0.6s var(--ease-out) backwards; }
 .hero-body > :nth-child(2) { animation-delay: 0.06s; }
@@ -904,7 +904,7 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 .detail-poster { animation: fade-up 0.5s var(--ease-out) backwards; }
 .detail-inner > :not(.detail-poster) { animation: fade-up 0.5s var(--ease-out) 0.08s backwards; }
 
-/* cartes : arrivée en cascade dans les rangées et les grilles */
+/* cards: arriving in cascade in the rows and grids */
 .row-track > *, .grid > * { animation: fade-up 0.4s var(--ease-out) backwards; }
 .row-track > :nth-child(2), .grid > :nth-child(2) { animation-delay: 0.03s; }
 .row-track > :nth-child(3), .grid > :nth-child(3) { animation-delay: 0.06s; }
@@ -914,24 +914,24 @@ textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px soli
 .row-track > :nth-child(7), .grid > :nth-child(7) { animation-delay: 0.18s; }
 .row-track > :nth-child(n+8), .grid > :nth-child(n+8) { animation-delay: 0.21s; }
 
-/* images : fondu à l'arrivée plutôt qu'un affichage brutal ligne par ligne */
+/* pictures: fade in on arrival rather than an abrupt line-by-line display */
 img.fade { opacity: 0; transition: opacity 0.4s ease-out; }
 img.fade.in { opacity: 1; }
 
-/* menus, fenêtres */
+/* menus, dialogs */
 .user-menu:not([hidden]), .more-list:not([hidden]) { animation: pop-in 0.16s var(--ease-out); transform-origin: top right; }
 .modal-overlay { animation: fade-in 0.18s ease-out; }
 .modal { animation: modal-in 0.26s var(--ease-out); }
 .player-menu:not([hidden]) { animation: pop-in 0.16s var(--ease-out); }
 
-/* barre du haut : soulignement du lien actif qui se déploie */
+/* top bar: underline of the active link that unfolds */
 .nav-link::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 2px; height: 2px; border-radius: 2px;
   background: var(--accent); transform: scaleX(0); transition: transform 0.25s var(--ease-out); }
 .nav-link:hover::after { transform: scaleX(0.4); opacity: 0.6; }
 .nav-link.active::after { transform: scaleX(1); opacity: 1; animation: grow-x 0.35s var(--ease-out); }
 @keyframes grow-x { from { transform: scaleX(0); } }
 
-/* boutons : léger enfoncement au clic */
+/* buttons: slight press on click */
 .btn, .ctl, .icon-btn { transition: transform 0.12s ease-out, background 0.15s, color 0.15s, border-color 0.15s, filter 0.15s; }
 .btn:active, .ctl:active, .icon-btn:active { transform: scale(0.96); }
 
@@ -939,7 +939,7 @@ img.fade.in { opacity: 1; }
   img.fade { opacity: 1; transition: none; }
 }
 
-/* ---------- Regarder ensemble : bouton de création, groupe en cours, salon ---------- */
+/* ---------- Watch together: create button, running group, room ---------- */
 .group-new { position: relative; color: var(--text); }
 .group-new .icon { width: 22px; height: 22px; fill: currentColor; }
 .group-new .plus { position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px; border-radius: 50%; display: grid;
@@ -962,7 +962,7 @@ img.fade.in { opacity: 1; }
 .lobby-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 @media (max-width: 760px) { .group-new { display: none; } }
 
-/* ---------- application installée (web app) ---------- */
+/* ---------- installed app (web app) ---------- */
 .topbar-back { color: var(--text); flex: none; margin-right: -10px; }
 .topbar-back[hidden] { display: none; }
 .user-menu .install-app { display: flex; align-items: center; gap: 8px; color: var(--accent); font-weight: 600; }
@@ -971,14 +971,14 @@ img.fade.in { opacity: 1; }
 .install-steps ol { padding-left: 20px; line-height: 1.9; }
 .install-steps .icon { width: 18px; height: 18px; vertical-align: -3px; fill: var(--accent); }
 @media (display-mode: standalone) {
-  /* iPhone : la barre d'état est par-dessus l'application (black-translucent) */
+  /* iPhone: the status bar is over the app (black-translucent) */
   :root { --safe-top: env(safe-area-inset-top, 0px); }
   .player-top { padding-top: env(safe-area-inset-top); }
   .controls { padding-bottom: env(safe-area-inset-bottom); }
-  body { overscroll-behavior-y: none; } /* pas de « tirer pour rafraîchir » qui recharge l'application */
+  body { overscroll-behavior-y: none; } /* no "pull to refresh" that reloads the app */
 }
 
-/* ---------- téléchargements (regarder hors ligne) ---------- */
+/* ---------- downloads (watch offline) ---------- */
 .dl-list { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
 .dl-row { display: flex; align-items: center; gap: 16px; padding: 10px; border-radius: 12px; background: var(--surface); }
 .dl-thumb { position: relative; flex: none; width: 160px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--surface-2); }
@@ -999,14 +999,14 @@ img.fade.in { opacity: 1; }
 @media (max-width: 760px) {
   .dl-thumb { width: 112px; }
   .dl-row { gap: 10px; align-items: flex-start; }
-  .dl-actions .btn { display: none; } /* la vignette suffit pour lancer */
+  .dl-actions .btn { display: none; } /* the thumbnail is enough to start */
 }
 
 .dl-room { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }
 .dl-room:empty { display: none; }
 .dl-room p { margin: 0; flex: 1; min-width: 240px; color: var(--muted); }
 
-/* ---------- télécommande, clavier, manette : on voit toujours où l'on est ---------- */
+/* ---------- remote control, keyboard, gamepad: where one is is always visible ---------- */
 .card:focus-visible .card-img, html.remote .card:focus .card-img, .dl-thumb:focus-visible, .episode-thumb:focus-visible {
   outline: 3px solid var(--accent); outline-offset: 3px; }
 html.remote :focus { outline: 3px solid var(--accent); outline-offset: 3px; }
@@ -1015,7 +1015,7 @@ html.remote .card:focus .card-img { transform: translateY(-4px) scale(1.04); }
 .card-slot:focus-within .card-watch { opacity: 1; }
 html.remote .player .ctl:focus { background: rgba(255, 255, 255, 0.2); outline-offset: 0; }
 
-/* ---- mise à jour : indicateur (administrateurs), suivi, redémarrage */
+/* ---- update: indicator (administrators), progress, restart */
 .update-btn { position: relative; color: var(--accent); display: inline-grid; place-items: center; }
 .update-btn .icon { width: 24px; height: 24px; fill: currentColor; }
 .update-btn::after { content: ''; position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%;
@@ -1025,7 +1025,7 @@ html.remote .player .ctl:focus { background: rgba(255, 255, 255, 0.2); outline-o
   background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); }
 .update-box { width: 100%; max-width: 520px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
   padding: 24px; display: grid; gap: 12px; min-width: 0; max-height: calc(100dvh - 32px); overflow-y: auto; }
-.update-box > * { min-width: 0; }  /* le journal déplié ne doit pas élargir l'encadré au-delà de l'écran */
+.update-box > * { min-width: 0; }  /* the unfolded log must not widen the box beyond the screen */
 @media (max-width: 520px) { .update-overlay { padding: 10px; } .update-box { padding: 18px; } }
 .update-box h2 { margin: 0; }
 .update-bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
@@ -1040,7 +1040,7 @@ html.remote .player .ctl:focus { background: rgba(255, 255, 255, 0.2); outline-o
 @media (prefers-reduced-motion: reduce) { .update-btn::after { animation: none; } }
 .update-box .modal-actions:empty { display: none; }
 
-/* ---- Paramètres : menu groupé + une page par sujet */
+/* ---- Settings: grouped menu + one page per topic */
 .settings-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 32px; align-items: start; max-width: 1180px; }
 .settings-nav { position: sticky; top: calc(var(--topbar-h) + var(--safe-top) + 8px); display: grid; gap: 18px;
   max-height: calc(100vh - var(--topbar-h) - var(--safe-top) - 24px); overflow-y: auto; padding: 2px 4px 16px 2px; scrollbar-width: thin; }
@@ -1074,13 +1074,13 @@ html.remote .player .ctl:focus { background: rgba(255, 255, 255, 0.2); outline-o
   .settings-group .settings-link:first-of-type:last-of-type { border-radius: 12px; }
   .settings-link::after { content: '›'; margin-left: auto; color: var(--muted); font-size: 20px; line-height: 1; }
   .settings-link.active { box-shadow: none; }
-  /* téléphone : d'abord le menu, puis la page choisie (avec un lien de retour) */
+  /* phone: the menu first, then the chosen page (with a back link) */
   .settings-page.no-section .settings-content { display: none; }
   .settings-page:not(.no-section) .settings-nav, .settings-page:not(.no-section) > .page-head { display: none; }
   .settings-back { display: inline-flex; }
   .settings-head h2 { font-size: 22px; }
 }
-/* paramètres : le menu reste en place, seule la page choisie arrive en douceur */
+/* settings: the menu stays in place, only the chosen page arrives smoothly */
 .content > .settings-page { animation: none; }
 .settings-content { animation: fade-up 0.3s var(--ease-out) backwards; }
 @media (prefers-reduced-motion: reduce) { .settings-content { animation: none; } }
@@ -1092,12 +1092,12 @@ html.remote .player .ctl:focus { background: rgba(255, 255, 255, 0.2); outline-o
 .sec-list .sec-ok strong { color: var(--ok); }
 .sec-list .sec-warn strong { color: var(--accent); }
 
-/* aperçu du style des sous-titres (Paramètres → Lecture) */
+/* subtitle style preview (Settings → Playback) */
 .sub-preview { position: relative; height: 150px; border-radius: 10px; overflow: hidden; margin-bottom: 16px;
   background: linear-gradient(160deg, #2c3e50 0%, #7f8c8d 45%, #d7c49e 100%); }
 .sub-preview .sub-layer { bottom: var(--sub-bottom, 9%); font-size: 18px; }
 
-/* anti-spoiler : vignettes floutées et résumés masqués pour les épisodes non vus (clic pour afficher) */
+/* anti-spoiler: blurred thumbnails and hidden overviews for unwatched episodes (click to show) */
 .no-spoilers .spoiler-img { overflow: hidden; }
 .no-spoilers .spoiler-img img { filter: blur(16px) brightness(0.75); transform: scale(1.12); }
 .no-spoilers .spoiler:not(.revealed) { filter: blur(6px); cursor: pointer; user-select: none; transition: filter 0.2s; }
@@ -1111,21 +1111,21 @@ html.remote .player .ctl:focus { background: rgba(255, 255, 255, 0.2); outline-o
 .modal:has(.avatar-picker) { max-width: 820px; }
 .avatar-picker { display: grid; grid-template-columns: 170px 1fr; gap: 24px; align-items: start; }
 .avatar-side { display: grid; justify-items: center; gap: 8px; }
-/* 12 fonds : 4 colonnes × 3 lignes, dans la largeur de la colonne */
+/* 12 backgrounds: 4 columns × 3 rows, within the column width */
 .avatar-side .swatches { display: grid; grid-template-columns: repeat(4, 30px); gap: 10px; justify-content: center; }
 .avatar-preview { width: 160px; height: 160px; border-radius: 50%; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
 .avatar-preview svg { display: block; }
 .avatar-preview-label { font-weight: 700; }
-/* catégories sur une seule ligne ; sur un écran étroit, elles défilent horizontalement */
+/* categories on a single line; on a narrow screen, they scroll horizontally */
 .avatar-tabs { margin-bottom: 14px; flex-wrap: nowrap; }
 .avatar-tabs .tab { flex: none; padding: 8px 14px; white-space: nowrap; }
 .avatar-main { min-width: 0; }
 @media (max-width: 640px) { .avatar-picker { grid-template-columns: 1fr; } .avatar-preview { width: 120px; height: 120px; } .avatar-preview svg { width: 120px; height: 120px; }
   .avatar-tabs { flex-wrap: wrap; justify-content: center; } .avatar-tabs .tab { padding: 6px 12px; font-size: 14px; } }
-/* réglage de l'appareil : animations réduites */
+/* device setting: reduced animations */
 .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation: none !important; transition: none !important; }
 
-/* interface enfant : grandes vignettes, textes plus gros, barre du haut simplifiée */
+/* kids interface: big thumbnails, bigger text, simplified top bar */
 html.kids .group-new, html.kids .together-slot { display: none; }
 html.kids .card-title { font-size: 16px; }
 html.kids .row-title { font-size: 24px; }
@@ -1133,7 +1133,7 @@ html.kids .nav-link { font-size: 17px; }
 html.kids .card, html.kids .card-img { border-radius: 16px; }
 html.kids .card:focus-visible, html.kids .card:hover { transform: scale(1.04); }
 
-/* notifications de nouveaux épisodes */
+/* new episode notifications */
 .notif-btn { position: relative; color: var(--text); }
 .notif-btn .icon { width: 24px; height: 24px; fill: currentColor; }
 .notif-badge { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px;
@@ -1148,7 +1148,7 @@ html.kids .card:focus-visible, html.kids .card:hover { transform: scale(1.04); }
 .notif-text .muted { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notif-empty, .notif-foot { padding: 8px 16px 12px; margin: 0; }
 
-/* bilan de visionnage (Historique) */
+/* viewing summary (History) */
 .recap { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 24px; }
 .recap-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
 .recap-head h2 { margin: 0 auto 0 0; font-size: 20px; }
@@ -1168,12 +1168,12 @@ html.kids .card:focus-visible, html.kids .card:hover { transform: scale(1.04); }
 .recovery-codes code { user-select: all; letter-spacing: 0.05em; }
 .twofa-admin { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px;
   border-radius: 8px; background: color-mix(in srgb, var(--ok) 12%, transparent); }
-/* À propos, attribution des données (TMDB, JustWatch) */
+/* About, data attribution (TMDB, JustWatch) */
 .data-credit { margin-top: 32px; }
 .about ul { margin: 6px 0 12px; padding-left: 20px; line-height: 1.7; }
 .about .sub { margin-top: 18px; }
 
-/* Serveurs liés : invitation à copier */
+/* Linked servers: invitation to copy */
 .invite-text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; resize: none; }
 .peer-row .grow { min-width: 0; }
 .peer-actions { display: flex; align-items: center; gap: 8px; }
@@ -1186,13 +1186,13 @@ html.kids .card:focus-visible, html.kids .card:hover { transform: scale(1.04); }
 .peer-lib { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
 .peer-lib select { max-width: 260px; }
 @media (max-width: 640px) { .peer-lib { flex-wrap: wrap; } .peer-lib select { max-width: none; width: 100%; } }
-/* bibliothèque d'un serveur lié : simple badge */
+/* library of a linked server: simple badge */
 .server-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 12px;
   color: var(--muted); border: 1px solid var(--line); }
 .server-badge svg { width: 13px; height: 13px; }
 .account-pick input { width: 180px; margin-left: 6px; padding: 4px 8px; }
 
-/* ------------------------------------------------------------ photothèque */
+/* ------------------------------------------------------------ photo library */
 .crumbs { margin: -6px 0 16px; color: var(--muted); font-size: 14px; }
 .crumbs:empty { display: none; }
 .crumbs a { color: var(--muted); }
@@ -1230,7 +1230,7 @@ body.viewer-open { overflow: hidden; }
   border-radius: var(--radius); font-size: 14px; line-height: 1.6; }
 @media (hover: none) { .viewer-nav { display: none; } }
 
-/* ------------------------------------------------------------ filtres et affichage des bibliothèques */
+/* ------------------------------------------------------------ library filters and display */
 .filter-panel { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; padding: 14px 16px; margin: -6px 0 20px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 .filter-panel[hidden] { display: none; }
@@ -1269,7 +1269,7 @@ kbd { display: inline-block; min-width: 26px; padding: 2px 7px; border-radius: 6
 .keys-edit { display: grid; gap: 6px; margin: 10px 0; }
 .keys-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--radius); background: var(--surface-2); }
 
-/* ------------------------------------------------------------ télécommande */
+/* ------------------------------------------------------------ remote control */
 .remote-list .tabs { margin-bottom: 16px; }
 .remote-card { max-width: 520px; display: grid; gap: 16px; padding: 20px; border-radius: var(--radius); background: var(--surface);
   border: 1px solid var(--line); }
@@ -1307,7 +1307,7 @@ kbd { display: inline-block; min-width: 26px; padding: 2px 7px; border-radius: 6
 .cast-box > svg { width: 56px; height: 56px; color: var(--accent); }
 .cast-ctl { display: flex; gap: 12px; }
 
-/* carte des photos (tuiles OpenStreetMap) */
+/* photo map (OpenStreetMap tiles) */
 .photo-map { position: relative; height: min(62vh, 560px); margin: 8px 0 24px; border-radius: 14px; overflow: hidden;
   background: var(--surface-2); touch-action: none; user-select: none; cursor: grab; border: 1px solid var(--line); }
 .photo-map:active { cursor: grabbing; }
@@ -1335,7 +1335,7 @@ kbd { display: inline-block; min-width: 26px; padding: 2px 7px; border-radius: 6
   padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
 .backup-row .bad { color: #ff6b6b; }
 
-/* choix de langues (OpenSubtitles) et résultats de recherche */
+/* language choice (OpenSubtitles) and search results */
 button.chip { border: 1px solid var(--line); cursor: pointer; }
 button.chip[aria-pressed="true"] { background: var(--accent); color: var(--ink-on-accent); border-color: transparent; }
 .os-results { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow-y: auto; margin-top: 10px; }
@@ -1345,7 +1345,7 @@ button.chip[aria-pressed="true"] { background: var(--accent); color: var(--ink-o
 .os-badge { display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 4px; font-size: 11px; background: var(--line); }
 .os-badge.good { background: color-mix(in srgb, #3dd68c 30%, transparent); }
 
-/* alertes des administrateurs */
+/* administrator alerts */
 .alert-list { display: flex; flex-direction: column; gap: 6px; }
 .alert-row { display: block; padding: 10px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, #ff6b6b 45%, transparent);
   background: color-mix(in srgb, #ff6b6b 10%, var(--surface)); }
@@ -1353,11 +1353,11 @@ button.chip[aria-pressed="true"] { background: var(--accent); color: var(--ink-o
 .alert-conf { margin-top: 12px; }
 .alert-conf summary { cursor: pointer; color: var(--muted); }
 
-/* code de liaison Trakt */
+/* Trakt link code */
 .trakt-code { font: 700 32px/1.2 var(--mono, monospace); letter-spacing: .2em; padding: 14px 18px; margin: 10px 0 16px;
   border-radius: 12px; background: var(--surface-2); display: inline-block; user-select: all; }
 
-/* lecteur audio (livres audio) : barre en bas, qui reste pendant la navigation */
+/* audio player (audiobooks): bar at the bottom, which stays during navigation */
 html.has-audio body { padding-bottom: 96px; }
 .audio-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; background: color-mix(in srgb, var(--surface) 96%, transparent);
   backdrop-filter: blur(12px); border-top: 1px solid var(--line); padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
@@ -1417,14 +1417,14 @@ html.has-audio body { padding-bottom: 96px; }
   .book-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
 }
 
-/* administration d'un serveur lié : sélecteur en haut des pages d'administration */
+/* administration of a linked server: selector at the top of the administration pages */
 .server-pick { margin-bottom: 18px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
 .server-pick label { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 600; }
 .server-pick select { flex: 1; min-width: 200px; max-width: 420px; }
 .server-pick.remote { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .server-pick p { margin: 8px 0 0; }
 
-/* sauvegardes : stockages externes et recopies */
+/* backups: external storages and copies */
 .remote-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .remote-card { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 .remote-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1433,7 +1433,7 @@ html.has-audio body { padding-bottom: 96px; }
 .copy-status .bad, .remote-card .bad { color: #ff6b6b; }
 .backup-name { display: block; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; margin-top: 2px; }
 
-/* Apparence : vignettes des thèmes, couleur libre, dégradés */
+/* Appearance: theme thumbnails, free colour, gradients */
 .theme-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
 .theme-tile { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 12px; border: 2px solid var(--line);
   background: var(--surface-2); cursor: pointer; text-align: left; }
@@ -1467,7 +1467,7 @@ html.has-audio body { padding-bottom: 96px; }
 .nav-link { display: inline-flex; align-items: center; gap: 8px; }
 .nav-ico { display: none; width: 1.15em; height: 1.15em; }
 
-/* ---------- Verre dépoli : barre flottante, panneaux translucides, bannière en carte ---------- */
+/* ---------- Frosted glass: floating bar, translucent panels, banner as a card ---------- */
 :root[data-style="glass"] { --radius: 16px; --glass: color-mix(in srgb, var(--surface) 58%, transparent);
   --glass-line: color-mix(in srgb, var(--text) 11%, transparent); }
 :root[data-style="glass"]:not(.has-wallpaper) body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
@@ -1490,7 +1490,7 @@ html.has-audio body { padding-bottom: 96px; }
 :root[data-style="glass"] .hero-body { padding: 0 clamp(24px, 4vw, 56px) clamp(32px, 6vh, 56px); }
 :root[data-style="glass"] .panel, :root[data-style="glass"] .modal, :root[data-style="glass"] .user-menu, :root[data-style="glass"] .error-box {
   background: color-mix(in srgb, var(--surface) 72%, transparent); border: 1px solid var(--glass-line); border-radius: 22px; }
-/* flou réservé à ce qui flotte (menus, fenêtres) : sous chaque panneau, il était recalculé à chaque image du défilement */
+/* blur kept for what floats (menus, dialogs): under each panel, it was recomputed at each frame of scrolling */
 :root[data-style="glass"] .modal, :root[data-style="glass"] .user-menu {
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
 :root[data-style="glass"] .modal { background: color-mix(in srgb, var(--surface) 82%, transparent); }
@@ -1505,7 +1505,7 @@ html.has-audio body { padding-bottom: 96px; }
 :root[data-style="glass"] .detail-poster { border-radius: 22px; border: 1px solid var(--glass-line); }
 :root[data-style="glass"] .settings-link { border-radius: 14px; }
 
-/* ---------- Barre latérale : navigation à gauche (grand écran ; en haut sur téléphone) ---------- */
+/* ---------- Sidebar: navigation on the left (big screen; at the top on a phone) ---------- */
 @media (min-width: 901px) {
   :root[data-style="sidebar"] { --topbar-h: 0px; --side-w: 240px; }
   :root[data-style="sidebar"] .topbar { position: fixed; top: 0; left: 0; bottom: 0; width: var(--side-w); z-index: 60;
@@ -1536,7 +1536,7 @@ html.has-audio body { padding-bottom: 96px; }
   :root[data-style="sidebar"] #toasts { left: calc(50% + var(--side-w) / 2); }
 }
 
-/* ---------- Épuré : plat, angles droits, titres discrets, aucune ombre ---------- */
+/* ---------- Clean: flat, square corners, discreet titles, no shadow ---------- */
 :root[data-style="minimal"] { --radius: 3px; --topbar-h: 60px; }
 :root[data-style="minimal"] h1, :root[data-style="minimal"] h2, :root[data-style="minimal"] h3, :root[data-style="minimal"] .row-title,
 :root[data-style="minimal"] .hero-title, :root[data-style="minimal"] .detail-title, :root[data-style="minimal"] .page-head h1 {
@@ -1570,7 +1570,7 @@ html.has-audio body { padding-bottom: 96px; }
 :root[data-style="minimal"] .detail-backdrop { opacity: .22; }
 :root[data-style="minimal"] .toggle-ui, :root[data-style="minimal"] .toggle-ui::after { border-radius: 2px; }
 
-/* ---------- Cinéma : bannière plein écran, titres sur les affiches, fiche en grand ---------- */
+/* ---------- Cinema: fullscreen banner, titles on the posters, big title page ---------- */
 @media (min-width: 761px) { :root[data-style="cinema"] .nav { justify-content: safe center; } }
 :root[data-style="cinema"] .nav-link { text-transform: uppercase; font-size: 13px; letter-spacing: .1em; }
 :root[data-style="cinema"] .hero { min-height: 100vh; min-height: 100svh; align-items: center; }
@@ -1603,7 +1603,7 @@ html.has-audio body { padding-bottom: 96px; }
 :root[data-style="cinema"] .detail-title { font-size: clamp(38px, 6vw, 84px); text-transform: uppercase; letter-spacing: -0.01em; }
 :root[data-style="cinema"] .panel { border-radius: 8px; }
 
-/* ---------- Arrondi : formes très arrondies, menu en pastilles, boutons en dégradé ---------- */
+/* ---------- Rounded: very rounded shapes, pill menu, gradient buttons ---------- */
 :root[data-style="rounded"] { --radius: 22px; --grad: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #ff3d8b)); }
 :root[data-style="rounded"] .nav { flex: 0 1 auto; margin: 0 auto; padding: 4px; gap: 2px; border-radius: 99px;
   background: color-mix(in srgb, var(--text) 8%, transparent); }
@@ -1632,7 +1632,7 @@ html.has-audio body { padding-bottom: 96px; }
   :root[data-style="glass"] .hero { border-radius: 22px; }
 }
 
-/* ---------- maquettes des styles (Paramètres → Apparence) ---------- */
+/* ---------- style mock-ups (Settings → Appearance) ---------- */
 .style-tiles { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 .style-hint { font-size: 12px; color: var(--muted); line-height: 1.35; text-align: left; }
 .style-tile .theme-name { text-align: left; }
@@ -1670,7 +1670,7 @@ html.has-audio body { padding-bottom: 96px; }
 .style-preview[data-s="rounded"] .sp-hero { border-radius: 0 0 12px 12px; }
 .style-preview[data-s="rounded"] .sp-row b { border-radius: 8px; }
 
-/* ---------- effets visuels allégés (Paramètres → Cet appareil) : pour une TV ou un appareil modeste ---------- */
+/* ---------- lighter visual effects (Settings → This device): for a TV or a modest device ---------- */
 html.lite *, html.lite *::before, html.lite *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 html.lite.has-wallpaper body::before { filter: none; inset: 0;
   background: linear-gradient(color-mix(in srgb, var(--bg) 88%, transparent), color-mix(in srgb, var(--bg) 96%, transparent) 70%),
@@ -1691,19 +1691,19 @@ html.lite .topbar.scrolled { background: var(--bg); }
 :root[data-font="mono"] { --sans: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace; --display: var(--sans); }
 :root[data-font="serif"] { --display: Georgia, "Times New Roman", "Liberation Serif", serif; }
 :root[data-font="rounded"] { --display: ui-rounded, "SF Pro Rounded", "Nunito", "Varela Round", var(--sans); --sans: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif; }
-/* néon : lueur sur les titres, le lien actif et les boutons */
+/* neon: glow on the titles, the active link and the buttons */
 :root[data-fx~="neon"] .hero-title, :root[data-fx~="neon"] .detail-title, :root[data-fx~="neon"] .page-head h1, :root[data-fx~="neon"] .logo {
   text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 70%, transparent), 0 0 2px var(--accent); }
 :root[data-fx~="neon"] .nav-link.active { color: var(--accent); text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 80%, transparent); }
 :root[data-fx~="neon"] .row-title { text-shadow: 0 0 12px color-mix(in srgb, var(--accent-2) 55%, transparent); }
 :root[data-fx~="neon"] .btn.primary { box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 2px var(--accent); }
 :root[data-fx~="neon"] .panel { border-color: color-mix(in srgb, var(--accent-2) 30%, transparent); }
-/* lueur des affiches survolées */
+/* glow of hovered posters */
 :root[data-fx~="glow"] .card:hover .card-img, :root[data-fx~="glow"] .card:focus-visible .card-img {
   box-shadow: 0 0 0 2px var(--accent), 0 0 34px color-mix(in srgb, var(--accent-2) 50%, transparent); }
 :root[data-fx~="glow"] .btn.primary { box-shadow: 0 8px 26px color-mix(in srgb, var(--accent) 35%, transparent); }
-/* calques de texture (lignes d'écran, grain, vignettage) : DERRIÈRE l'interface, sur le fond de la page seulement —
-   jamais par-dessus le texte, les affiches ou l'avatar, ni pendant la lecture d'une vidéo */
+/* texture layers (screen lines, grain, vignetting): BEHIND the interface, on the page background only —
+   never over the text, the posters or the avatar, nor during video playback */
 :root[data-fx~="scanlines"] { --fx-scan: repeating-linear-gradient(0deg, rgba(0, 0, 0, .2) 0 1px, transparent 1px 3px); }
 :root[data-fx~="vignette"] { --fx-vig: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, .55) 100%); }
 :root[data-fx~="grain"] { --fx-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.09'/%3E%3C/svg%3E"); }
@@ -1713,7 +1713,7 @@ html.lite .topbar.scrolled { background: var(--bg); }
 html.lite[data-overlay] body::after { display: none; }
 html.lite[data-fx] * { text-shadow: none !important; }
 
-/* ---------- magasin de thèmes ---------- */
+/* ---------- theme store ---------- */
 .store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 .store-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; border: 2px solid var(--line);
   background: var(--surface); min-width: 0; }
@@ -1749,7 +1749,7 @@ html.lite[data-fx] * { text-shadow: none !important; }
 .theme-editor .grad-angle input { flex: 1; }
 .theme-editor .store-preview { height: 90px; }
 
-/* ---------- téléchargements : outils de sélection, espace occupé, téléchargements intelligents ---------- */
+/* ---------- downloads: selection tools, space used, smart downloads ---------- */
 .dl-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 14px; }
 .dl-tools select { width: auto; padding: 6px 10px; font-size: 13px; }
 .dl-sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
@@ -1765,7 +1765,7 @@ html.lite[data-fx] * { text-shadow: none !important; }
 .dl-smart summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .dl-smart p { margin: 8px 0 0; }
 
-/* ---------- sélection multiple (bibliothèques) ---------- */
+/* ---------- multiple selection (libraries) ---------- */
 .selecting a[href^="#/item/"] { cursor: pointer; }
 .selecting .card .card-img::after, .selecting .lib-row::after { content: ''; position: absolute; top: 8px; left: 8px; width: 22px; height: 22px;
   border-radius: 50%; border: 2px solid #fff; background: rgba(0, 0, 0, .45); box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
@@ -1835,21 +1835,21 @@ html.has-audio .bulk-bar { bottom: 108px; }
 .install-choice p { margin: 4px 0 0; }
 .install-tag { margin-left: 8px; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--accent); color: var(--ink-on-accent); }
 @media (max-width: 520px) { .install-choice { flex-wrap: wrap; } .install-choice .btn { width: 100%; justify-content: center; } }
-/* aperçus du magasin : la texture reste sous la barre et le panneau, comme dans l'interface */
+/* store previews: the texture stays under the bar and the panel, as in the interface */
 .store-preview > * { position: relative; z-index: 1; }
 .store-preview::before, .store-preview::after { z-index: 0; }
 
-/* stockage froid : bibliothèques et moyen de suppression */
+/* cold storage: libraries and deletion method */
 .cold-libs { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 14px; }
 .cold-lib { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .cold-lib .check { display: flex; align-items: center; gap: 8px; min-width: 180px; }
 .cold-bar { margin-top: 6px; }
 
-/* paramètres : sous-onglets d'une page qui réunit plusieurs sujets (défilent sur téléphone) */
+/* settings: sub-tabs of a page that gathers several topics (scroll on a phone) */
 .settings-subtabs, .cold-tabs { margin: 2px 0 18px; flex-wrap: wrap; overflow: visible; }
 .settings-subtabs .tab, .cold-tabs .tab { flex: none; white-space: nowrap; text-decoration: none; }
 
-/* menu ⋯ : sur téléphone, en bas de l'écran (jamais coupé) ; ailleurs, recalé pour rester dans la fenêtre */
+/* ⋯ menu: on a phone, at the bottom of the screen (never clipped); elsewhere, moved back to stay in the window */
 .more-list.floating { position: fixed; z-index: 310; overscroll-behavior: contain; }
 .more-list.more-fade { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent); }

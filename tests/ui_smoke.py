@@ -1,9 +1,9 @@
-"""Parcours navigateur (Playwright) sur une vraie médiathèque de test + captures d'écran.
+"""Browser run (Playwright) on a real test media library + screenshots.
 
-python3 tests/ui_smoke.py <dossier_captures> [video_test.webm]
+python3 tests/ui_smoke.py <screenshot_folder> [test_video.webm]
 
-Le Chromium de Playwright ne décode pas le H.264 et hls.js n'est pas embarqué dans le dépôt :
-un faux « Hls » lit une vidéo WebM locale après avoir vérifié que la playlist HLS de Noxa répond.
+Playwright's Chromium does not decode H.264 and hls.js is not bundled in the repository:
+a fake "Hls" plays a local WebM video after checking that Noxa's HLS playlist answers.
 """
 import os
 import shutil
@@ -20,7 +20,7 @@ TMDB = FakeTMDB()
 os.environ["SEANCE_TMDB_API"] = TMDB.url
 os.environ["SEANCE_TMDB_IMG"] = TMDB.url + "/img"
 
-# faux outils SMB + service de montage (voir tests/test_mounts.py)
+# fake SMB tools + mount service (see tests/test_mounts.py)
 from tests.test_mounts import FAKE_MOUNT, FAKE_SMBCLIENT, FAKE_UMOUNT  # noqa: E402
 SMB = tempfile.mkdtemp()
 os.makedirs(os.path.join(SMB, "bin"))
@@ -34,7 +34,7 @@ for _k, _v in (("SEANCE_FSTAB", "fstab"), ("SEANCE_MOUNTINFO", "mountinfo"), ("S
     os.environ[_k] = os.path.join(SMB, _v)
 open(os.environ["SEANCE_FSTAB"], "w").close()
 open(os.environ["SEANCE_MOUNTINFO"], "w").close()
-from seance import mountd  # noqa: E402
+from noxa import mountd  # noqa: E402
 _mounts = mountd.Mounts()
 _mounts.env["unprivileged"] = False
 _msrv = mountd.make_server(_mounts, os.environ["SEANCE_MOUNTD_SOCK"], allowed_uids={os.getuid()})
@@ -42,8 +42,8 @@ threading.Thread(target=_msrv.serve_forever, daemon=True).start()
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
-from seance.api import Ctx, build_app  # noqa: E402
-from seance.web import Server, make_handler  # noqa: E402
+from noxa.api import Ctx, build_app  # noqa: E402
+from noxa.web import Server, make_handler  # noqa: E402
 from tests.test_api import STATIC, Client, media_root, wait_scan  # noqa: E402
 
 out = sys.argv[1] if len(sys.argv) > 1 else "captures"
@@ -80,8 +80,10 @@ def check(cond, msg):
 
 
 with sync_playwright() as pw:
-    browser = pw.chromium.launch()
-    bctx = browser.new_context(viewport={"width": 1440, "height": 900}, bypass_csp=True, reduced_motion="reduce")  # captures stables (sans animations)
+    # PW_CHROMIUM: path of a Chromium already installed (when Playwright's own download is missing)
+    exe = os.environ.get("PW_CHROMIUM")
+    browser = pw.chromium.launch(executable_path=exe, args=["--no-sandbox"]) if exe else pw.chromium.launch()
+    bctx = browser.new_context(viewport={"width": 1440, "height": 900}, bypass_csp=True, reduced_motion="reduce")  # stable screenshots (no animations)
     bctx.route("**/vendor/hls.min.js", lambda r: r.fulfill(status=200, content_type="text/javascript", body=STUB))
     bctx.route("**/__test.webm", serve_webm(webm))
     page = bctx.new_page()
@@ -100,7 +102,7 @@ with sync_playwright() as pw:
     page.click("text=Terminer l’installation")
     page.wait_for_selector("text=Aucune bibliothèque.")
 
-    # --- clé TMDB
+    # --- TMDB key
     page.click(".settings-link:has-text('Métadonnées')")
     page.wait_for_selector("text=Aucune clé TMDB")
     page.fill("input[placeholder^='Clé API']", TMDB.key)
@@ -111,7 +113,7 @@ with sync_playwright() as pw:
     page.wait_for_selector("text=Webhook Radarr / Sonarr")
     check(page.locator("input[value*='/api/hooks/scan?token=']").count() == 1, "adresse du webhook affichée")
 
-    # --- bibliothèque via l'interface, avec le sélecteur de dossier
+    # --- library through the interface, with the folder picker
     page.click(".settings-link:has-text('Bibliothèques')")
     page.click("text=+ Ajouter")
     m = page.locator(".modal")
@@ -177,7 +179,7 @@ with sync_playwright() as pw:
     page.screenshot(path=f"{out}/10-identifier.png")
     page.keyboard.press("Escape")
 
-    # --- collections, bonus, « À regarder » et playlists
+    # --- collections, extras, watchlist and playlists
     page.goto(base + "/#/library/1")
     page.wait_for_selector(".grid .card")
     page.click(".card[title='Le Grand Voyage']")
@@ -214,7 +216,7 @@ with sync_playwright() as pw:
     check(page.locator(".episode").count() == 1, "playlist avec 1 élément")
     page.screenshot(path=f"{out}/18d-playlist.png")
 
-    # --- Découvrir : catalogues des plateformes et demandes via Seerr
+    # --- Discover: platform catalogues and requests through Seerr
     seerr = FakeSeerr()
     page.goto(base + "/#/admin/requests")
     page.wait_for_selector("text=Clé d’API de Seerr")
@@ -252,14 +254,14 @@ with sync_playwright() as pw:
     check(page.locator(".grid .dcard").count() == 2, "catalogue séries Netflix")
     seerr.httpd.shutdown()
 
-    # --- lecteur : MP4 en lecture directe -> refusé par ce Chromium (pas de H.264) -> bascule HLS
+    # --- player: MP4 in direct play -> refused by this Chromium (no H.264) -> switch to HLS
     page.goto(base + "/#/library/1")
     page.wait_for_selector(".grid .card")
     page.click(".card[title='Le Grand Voyage']")
     page.wait_for_selector(".detail-actions .btn.primary")
     page.click(".detail-actions .btn.primary")
     page.wait_for_function("document.querySelector('video') && document.querySelector('video').currentTime > 1.5", timeout=30000)
-    direct_ok = page.evaluate("!window.__hls.length")  # Chromium récent : il décode le H.264, la lecture directe passe
+    direct_ok = page.evaluate("!window.__hls.length")  # recent Chromium: it decodes H.264, direct play works
     check(direct_ok or page.evaluate("window.__hls.every(Boolean)"), "repli HLS après refus de la lecture directe")
     page.mouse.move(700, 400)
     page.click("button[aria-label='Qualité']")
@@ -269,23 +271,23 @@ with sync_playwright() as pw:
     page.screenshot(path=f"{out}/11-lecteur-mode.png")
     page.keyboard.press("Escape")
 
-    # --- anime : sous-titres ASS affichés par le navigateur
+    # --- anime: ASS subtitles shown by the browser
     st, prefs = admin.call("PUT", "/api/me/prefs", {"sub_mode": "always"})
     st, lib = admin.call("GET", "/api/libraries/3/items")
     st, show = admin.call("GET", f"/api/items/{lib['items'][0]['id']}")
     ep1 = show["play_target"]["id"]
-    for _ in range(100):  # vignettes d'aperçu préparées en tâche de fond
+    for _ in range(100):  # preview thumbnails prepared in the background
         if admin.call("GET", f"/api/items/{ep1}/trickplay")[1].get("ready"):
             break
         time.sleep(0.2)
-    # fiche : choix des langues avant la lecture
+    # title page: language choice before playback
     page.goto(base + f"/#/item/{ep1}")
     page.wait_for_selector(".track-chooser")
     page.wait_for_load_state("networkidle")
     href = page.get_attribute(".detail-actions a.btn.primary", "href")
     check("s=" in href and "s=0" not in href, f"sous-titres choisis transmis au lecteur ({href})")
     page.screenshot(path=f"{out}/12a-fiche-episode-pistes.png")
-    # extraction lente simulée : préparation silencieuse (pas de fenêtre), la lecture attend les sous-titres
+    # slow extraction simulated: silent preparation (no dialog), playback waits for the subtitles
     _row = ctx.db.one("SELECT * FROM items WHERE id=?", (int(ep1),))
     shutil.rmtree(ctx.subtitles._dir(_row), ignore_errors=True)
     _orig = ctx.subtitles._ffmpeg
@@ -299,7 +301,7 @@ with sync_playwright() as pw:
     page.wait_for_timeout(1500)
     check(page.evaluate("document.querySelector('video').paused"), "la vidéo attend les sous-titres en silence")
     check(page.locator(".subs-wait").count() == 0, "aucune fenêtre de chargement des sous-titres")
-    # ASS rendu par libass (WebAssembly) : panneau jaune positionné + police jointe au MKV
+    # ASS rendered by libass (WebAssembly): positioned yellow sign + font attached to the MKV
     page.wait_for_selector(".player .JASSUB canvas", state="attached", timeout=30000)
     page.wait_for_function("document.querySelector('video').currentTime > 2", timeout=30000)
     page.wait_for_timeout(800)
@@ -310,7 +312,7 @@ with sync_playwright() as pw:
     yellow = sum(1 for px in shot.getdata() if px[0] > 200 and px[1] > 200 and px[2] < 90)
     check(yellow > 300, f"panneau ASS dessiné par libass ({yellow} pixels jaunes)")
     check(page.locator(".sub-layer .sub-line").count() == 0, "pas de doublon en texte simplifié")
-    # aperçu au survol de la barre, avec le chapitre
+    # preview when hovering the bar, with the chapter
     page.mouse.move(700, 420)
     tl = page.locator(".timeline").bounding_box()
     page.mouse.move(tl["x"] + tl["width"] * (25 / 90), tl["y"] + tl["height"] / 2)
@@ -336,7 +338,7 @@ with sync_playwright() as pw:
     page.goto(base + "/#/")
     page.wait_for_selector(".hero-title")
 
-    # --- profils : « Qui regarde ? » et code PIN
+    # --- profiles: "Who's watching?" and PIN code
     st, kid = admin.call("POST", "/api/admin/users", {"username": "tom", "display_name": "Tom", "managed": True,
                                                       "pin": "1234", "max_age": 10, "avatar_color": "#4c9aff"})
     check(st == 200, f"profil enfant : {kid}")
@@ -361,7 +363,7 @@ with sync_playwright() as pw:
     page.click(".modal button.primary")
     page.wait_for_selector(".hero-title")
 
-    # --- partages réseau
+    # --- network shares
     page.goto(base + "/#/admin/shares")
     page.wait_for_selector("text=Aucun partage réseau")
     page.click("text=+ Ajouter un partage")
@@ -395,7 +397,7 @@ with sync_playwright() as pw:
     mp.fill("input[name=username]", "alex")
     mp.fill("input[name=password]", "motdepasse1")
     mp.click("button[type=submit]")
-    mp.wait_for_selector(".profile-tile")  # plusieurs profils dans le foyer : « Qui regarde ? »
+    mp.wait_for_selector(".profile-tile")  # several profiles in the household: "Who's watching?"
     mp.screenshot(path=f"{out}/17a-mobile-profils.png")
     mp.click(".profile-tile.current")
     mp.wait_for_selector(".hero-title")

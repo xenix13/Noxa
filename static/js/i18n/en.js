@@ -1,5 +1,5 @@
-// Traduction anglaise de l'interface : texte français du code → anglais.
-// Vérifiée par tests/test_i18n.py (toutes les clés utilisées, mêmes variables {…}).
+// English translation of the interface: French text from the code → English.
+// Checked by tests/test_i18n.py (all the keys used, same {…} variables).
 export default {
   "Serveur injoignable": "Server unreachable",
   "Erreur {status}": "Error {status}",
@@ -1382,6 +1382,9 @@ export default {
   "Espace": "Space",
   "Les touches du lecteur se changent dans Paramètres → Cet appareil.": "Player keys can be changed in Settings → This device.",
   "Ma note": "My rating",
+  "Dernier visionnage": "Last watched",
+  "Ordre croissant": "Ascending order",
+  "Ordre décroissant": "Descending order",
   "Masquer pour moi": "Hide for me",
   "Masqué : il n’apparaîtra plus dans vos listes": "Hidden: it won’t show up in your lists anymore",
   "Masqués par vous seul (menu ⋯ d’une fiche → Masquer pour moi) : ils n’apparaissent plus dans vos bibliothèques, l’accueil, la recherche ni les suggestions.": "Hidden for you only (⋯ menu on a title → Hide for me): they no longer appear in your libraries, home, search or suggestions.",
@@ -1718,7 +1721,7 @@ export default {
   "Avec une phrase secrète, les copies envoyées sur S3, Google Drive ou OneDrive sont chiffrées (AES-256) : le service ne peut pas les lire. Notez la phrase ailleurs : sans elle, ces copies ne se restaurent pas. Les copies entre vos serveurs liés et celles du dossier ne sont pas chiffrées.": "With a passphrase, copies sent to S3, Google Drive or OneDrive are encrypted (AES-256): the service cannot read them. Write the passphrase down elsewhere: without it, these copies cannot be restored. Copies between your linked servers and those in the folder are not encrypted.",
   "Cette archive est chiffrée : indiquez la phrase secrète choisie au moment de la sauvegarde (laisser vide pour essayer celle enregistrée ici).": "This archive is encrypted: enter the passphrase chosen at backup time (leave empty to try the one saved here).",
   "Chaque sauvegarde est aussi envoyée sur ces stockages, hors de chez vous : un compartiment S3 (AWS, Backblaze B2, Wasabi, Scaleway, OVH, MinIO…), Google Drive ou OneDrive. Chacun garde le nombre de copies automatiques choisi.": "Each backup is also sent to these storages, outside your home: an S3 bucket (AWS, Backblaze B2, Wasabi, Scaleway, OVH, MinIO…), Google Drive or OneDrive. Each keeps the chosen number of automatic copies.",
-  "Chaque serveur garde aussi les sauvegardes des autres : si l’un tombe en panne, sa dernière sauvegarde est sur un autre. Les noms commencent par le nom du serveur d’origine (nexis-<serveur>_date), et chaque serveur garde celles des autres à part.": "Each server also keeps the others' backups: if one fails, its latest backup is on another. Names start with the origin server's name (nexis-<server>_date), and each server keeps the others' backups separately.",
+  "Chaque serveur garde aussi les sauvegardes des autres : si l’un tombe en panne, sa dernière sauvegarde est sur un autre. Les noms commencent par le nom du serveur d’origine (noxa-<serveur>_date), et chaque serveur garde celles des autres à part.": "Each server also keeps the others' backups: if one fails, its latest backup is on another. Names start with the origin server's name (noxa-<server>_date), and each server keeps the others' backups separately.",
   "Chemin du fichier": "File path",
   "Chiffrement des copies hors du serveur": "Encryption of off-server copies",
   "Chiffrement désactivé": "Encryption turned off",

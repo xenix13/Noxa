@@ -1,4 +1,4 @@
-"""Sous-titres OpenSubtitles : réglages, recherche, téléchargement, tâche automatique (faux serveur d'API).
+"""OpenSubtitles subtitles: settings, search, download, automatic task (fake API server).
 
 python3 -m unittest tests.test_opensubs
 """
@@ -14,15 +14,15 @@ from urllib.parse import parse_qs, urlparse
 
 from tests.test_api import STATIC, Client, media_root, wait_scan
 
-from seance import opensubs, tasks
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import opensubs, tasks
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 SRT = "1\n00:00:01,000 --> 00:00:03,000\nBonjour {n}\n\n".encode()
 
 
 class FakeOS(BaseHTTPRequestHandler):
-    """Faux api.opensubtitles.com : un sous-titre français calé sur le fichier, un autre non, un anglais."""
+    """Fake api.opensubtitles.com: a French subtitle matched to the file, another one not, an English one."""
     calls = []
     remaining = 5
     fail_login = False
@@ -41,7 +41,7 @@ class FakeOS(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         FakeOS.calls.append(("GET", u.path, parse_qs(u.query), dict(self.headers)))
-        if u.path.startswith("/files/"):  # lien de téléchargement : sans clé
+        if u.path.startswith("/files/"):  # download link: without a key
             body = SRT.replace(b"{n}", u.path.rsplit("/", 1)[1].encode())
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
@@ -113,7 +113,7 @@ class OpenSubtitlesTest(unittest.TestCase):
         wait_scan(cls.admin)
         lib = cls.admin.call("GET", "/api/libraries")[1][0]["id"]
         cls.movies = {m["title"]: m for m in cls.admin.call("GET", f"/api/libraries/{lib}/items")[1]["items"]}
-        # identifiants TMDB fixés : le faux serveur répond selon eux
+        # fixed TMDB ids: the fake server answers according to them
         for n, title in enumerate(sorted(cls.movies), 1):
             cls.ctx.db.run("UPDATE items SET tmdb_id=? WHERE id=?", (n, int(cls.movies[title]["id"])))
 
@@ -149,9 +149,9 @@ class OpenSubtitlesTest(unittest.TestCase):
                                                                      "langs": ["fra", "eng"]})
         self.assertEqual(st, 200, r)
         self.assertEqual((r["account"]["remaining"], r["langs"], r["password_set"]), (5, ["fra", "eng"], True))
-        self.assertNotIn("password", json.dumps(r).replace("password_set", ""))  # le mot de passe ne revient jamais
+        self.assertNotIn("password", json.dumps(r).replace("password_set", ""))  # the password never comes back
         self.assertTrue(self.admin.call("GET", "/api/me")[1]["features"]["opensubtitles"])
-        # mot de passe vide : gardé
+        # empty password: kept
         st, r = self.admin.call("PUT", "/api/admin/opensubtitles", {"user": "lea", "password": ""})
         self.assertEqual((st, r["password_set"]), (200, True))
         self.assertEqual(Client(self.base).call("GET", "/api/admin/opensubtitles")[0], 401)
@@ -160,7 +160,7 @@ class OpenSubtitlesTest(unittest.TestCase):
         m = self.movies["Brume"]
         st, r = self.admin.call("GET", f"/api/items/{m['id']}/opensubtitles?langs=fra")
         self.assertEqual(st, 200, r)
-        self.assertEqual([x["release"] for x in r["results"]][:2], ["Exact.Release", "Autre.Version"])  # calé sur le fichier d'abord
+        self.assertEqual([x["release"] for x in r["results"]][:2], ["Exact.Release", "Autre.Version"])  # matched to the file first
         self.assertTrue(r["results"][-1]["machine"])
         q = next(c for c in FakeOS.calls if c[1] == "/api/v1/subtitles")[2]
         self.assertIn("moviehash", q)
@@ -173,7 +173,7 @@ class OpenSubtitlesTest(unittest.TestCase):
         st, cues = self.admin.call("GET", f"/api/items/{m['id']}/subtitles/{sub['id']}")
         self.assertEqual(cues["cues"][0]["t"], f"Bonjour {exact['file_id']}")
         self.assertEqual(self.admin.call("POST", f"/api/items/{m['id']}/opensubtitles", {"file_id": "x", "lang": "fra"})[0], 400)
-        # un nouveau scan garde le sous-titre téléchargé
+        # a new scan keeps the downloaded subtitle
         self.admin.call("POST", "/api/admin/scan", {})
         wait_scan(self.admin)
         st, d = self.admin.call("GET", f"/api/items/{m['id']}")
@@ -188,7 +188,7 @@ class OpenSubtitlesTest(unittest.TestCase):
         self.run_task()
         last = self.ctx.tasks.last("opensubs")
         self.assertEqual(last["status"], "ok", last)
-        # Nuit polaire : français intégré au fichier, anglais à côté -> rien à télécharger
+        # Nuit polaire: French embedded in the file, English next to it -> nothing to download
         polar = next(v for k, v in self.movies.items() if "olaire" in k)
         probe = json.loads(self.ctx.db.one("SELECT probe FROM items WHERE id=?", (int(polar["id"]),))["probe"])
         self.assertFalse([e for e in probe["external"] if e.get("dl")])
@@ -196,8 +196,8 @@ class OpenSubtitlesTest(unittest.TestCase):
         voyage = next(v for k, v in self.movies.items() if "Voyage" in k)
         st, d = self.admin.call("GET", f"/api/items/{voyage['id']}")
         dl = [s for s in d["subtitles"] if s["external"]]
-        self.assertEqual(sorted(s["lang"] for s in dl), ["eng", "fra"])  # SDH accepté faute d'autre anglais
-        # retiré à la main : pas retéléchargé
+        self.assertEqual(sorted(s["lang"] for s in dl), ["eng", "fra"])  # SDH accepted for lack of another English one
+        # removed by hand: not downloaded again
         probe = json.loads(self.ctx.db.one("SELECT probe FROM items WHERE id=?", (int(voyage["id"]),))["probe"])
         fid = next(e["file_id"] for e in probe["external"] if e.get("dl") and e["lang"] == "fra")
         self.assertEqual(self.admin.call("DELETE", f"/api/items/{voyage['id']}/opensubtitles/{fid}")[0], 200)

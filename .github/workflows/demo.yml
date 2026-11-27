@@ -1,0 +1,38 @@
+# Online demo (GitHub Pages, branch gh-pages): each change of the interface on main is copied to the demo,
+# which keeps its recordings (made with tools/demo/build.py on the free film library; to record again,
+# run the tool and push its output to gh-pages).
+name: Demo
+
+on:
+  push:
+    branches: [main]
+    paths: ["static/**", "tools/demo/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: demo
+  cancel-in-progress: false
+
+jobs:
+  interface:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+      - name: Copy the interface into the demo
+        run: python3 tools/demo/build.py --interface-only site
+      - name: Publish
+        run: |
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi
+          git commit -m "Demo: interface from ${GITHUB_SHA::7}"
+          git push

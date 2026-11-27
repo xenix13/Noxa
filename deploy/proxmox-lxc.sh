@@ -2,7 +2,7 @@
 # Creates an Ubuntu 24.04 LXC container ready for Noxa and installs it. Run on the Proxmox VE HOST, as root:
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/main/deploy/proxmox-lxc.sh)"
 # Settings (environment variables): CTID, CT_HOSTNAME, STORAGE, TEMPLATE_STORAGE, BRIDGE,
-# CORES, MEMORY (MB), SWAP (MB), DISK (GB), PRIVILEGED (1 = SMB shares can be mounted from Noxa), SEANCE_BRANCH.
+# CORES, MEMORY (MB), SWAP (MB), DISK (GB), PRIVILEGED (1 = SMB shares can be mounted from Noxa), NOXA_BRANCH.
 set -euo pipefail
 
 command -v pct >/dev/null || { echo "Run this on a Proxmox VE host (pct command not found)." >&2; exit 1; }
@@ -18,7 +18,7 @@ MEMORY="${MEMORY:-4096}"
 SWAP="${SWAP:-2048}"          # a 4K transcode takes 0.5 to 0.7 GB: some margin avoids stutter
 DISK="${DISK:-16}"
 PRIVILEGED="${PRIVILEGED:-1}"
-BRANCH="${SEANCE_BRANCH:-main}"
+BRANCH="${NOXA_BRANCH:-${SEANCE_BRANCH:-main}}"  # SEANCE_BRANCH: name before 4.5
 
 echo "==> Ubuntu 24.04 template"
 pveam update >/dev/null
@@ -46,7 +46,7 @@ done
 
 echo "==> Installing Noxa in the container"
 pct exec "$CTID" -- bash -c "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates >/dev/null \
-  && curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/$BRANCH/deploy/install.sh | SEANCE_BRANCH=$BRANCH bash"
+  && curl -fsSL https://raw.githubusercontent.com/xenix13/Noxa/$BRANCH/deploy/install.sh | NOXA_BRANCH=$BRANCH bash"
 
 echo
 echo "Container $CTID is ready. For a graphics card (hardware transcoding), follow the \"Hardware transcoding\""

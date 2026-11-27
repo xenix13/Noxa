@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from seance.markers import from_chapters
+from noxa.markers import from_chapters
 
 
 def chaps(*spec):
@@ -50,7 +50,7 @@ class MarkersTest(unittest.TestCase):
         self.assertEqual((m["recap"]["start"], m["recap"]["end"], m["intro"]["start"]), (0, 55000, 55000))
         c, d = chaps(("Cold open", 120), ("Récapitulatif", 70), ("Générique", 45), ("Partie 1", 1200))
         self.assertEqual(from_chapters(c, d)["recap"]["start"], 120000)
-        # « Résumé » tardif (bonus de fin) ou trop long : pas un récap
+        # late "Résumé" (end extra) or too long: not a recap
         c, d = chaps(("Partie 1", 1200), ("Résumé", 60))
         self.assertNotIn("recap", from_chapters(c, d))
         c, d = chaps(("Recap", 900), ("Partie 1", 1800))
@@ -62,15 +62,15 @@ if __name__ == "__main__":
 
 
 class ChapterImagesTest(unittest.TestCase):
-    """Chapitres annoncés après la fin réelle de la vidéo : pas d'erreur, et rien à refaire au passage suivant."""
+    """Chapters announced after the real end of the video: no error, and nothing to redo at the next pass."""
 
     def test_chapter_past_end_of_video(self):
         import json
         import subprocess
         import tempfile
         import types
-        from seance.chapters import ChapterImages
-        from seance import media
+        from noxa.chapters import ChapterImages
+        from noxa import media
         d = tempfile.mkdtemp()
         meta = os.path.join(d, "meta.txt")
         with open(meta, "w") as f:
@@ -83,12 +83,12 @@ class ChapterImagesTest(unittest.TestCase):
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", raw, "-i", meta, "-map", "0", "-map_chapters", "1",
                         "-c", "copy", video], check=True)
         probe = media.probe(video)
-        self.assertGreater(probe["chapters"][-1]["start"], probe["duration"])  # chapitre après la fin
+        self.assertGreater(probe["chapters"][-1]["start"], probe["duration"])  # chapter after the end
         item = {"id": 1, "key": video, "probe": json.dumps(probe), "file_size": os.path.getsize(video),
                 "file_mtime": 1, "duration_ms": 5000}
         ci = ChapterImages(types.SimpleNamespace(data_dir=d))
         made = ci.extract_all(item)
         self.assertGreaterEqual(made, 3)
         self.assertTrue(ci.has_all(item))
-        self.assertEqual(ci.extract_all(item), 0)  # tout est fait (ou noté impossible)
+        self.assertEqual(ci.extract_all(item), 0)  # everything is done (or noted impossible)
         self.assertTrue(os.path.isfile(ci.get(item, 0)))

@@ -11,21 +11,21 @@ export class ApiError extends Error {
 let onUnauthorized = () => {};
 export function setUnauthorizedHandler(fn) { onUnauthorized = fn; }
 
-// Serveur administré (Paramètres → sélecteur de serveur) : les requêtes d'administration faites depuis les pages
-// d'administration partent vers ce serveur lié, relayées par celui-ci. Vide : ce serveur.
+// Administered server (Settings → server selector): the administration requests made from the
+// administration pages go to that linked server, relayed by this one. Empty: this server.
 let target = null;
 try { target = JSON.parse(sessionStorage.getItem('admin-server') || 'null'); } catch { target = null; }
 export const adminTarget = () => target;
 export function setAdminTarget(t) {
   target = t && t.id ? { id: String(t.id), name: t.name } : null;
-  try { if (target) sessionStorage.setItem('admin-server', JSON.stringify(target)); else sessionStorage.removeItem('admin-server'); } catch { /* navigation privée */ }
+  try { if (target) sessionStorage.setItem('admin-server', JSON.stringify(target)); else sessionStorage.removeItem('admin-server'); } catch { /* private browsing */ }
 }
 const relayed = (path) => target && path.startsWith('/api/admin/') && path !== '/api/admin/servers' && location.hash.startsWith('#/admin');
-// adresse à utiliser dans un lien (téléchargement) ou un fetch direct
+// address to use in a link (download) or a direct fetch
 export const adminUrl = (path) => (relayed(path) ? `${path}${path.includes('?') ? '&' : '?'}_server=${encodeURIComponent(target.id)}` : path);
 
-// Réponses demandées par la page dès son arrivée (script de démarrage d'index.html), reprises une seule fois et
-// seulement à l'ouverture : toute requête qui modifie quelque chose (connexion, choix du profil…) les oublie.
+// Responses requested by the page as soon as it arrives (start-up script of index.html), used only once and
+// only at opening: any request that changes something (sign-in, profile choice…) forgets them.
 let boot = (window.__nexisBoot && window.__nexisBoot.req) || {};
 const bootAt = (window.__nexisBoot && window.__nexisBoot.at) || 0;
 function fromBoot(method, path) {
@@ -40,9 +40,9 @@ export async function api(method, path, body, { headers = {}, keepalive = false,
   const early = !relayed(path) && fromBoot(method, path);
   const pre = early ? await early : null;
   if (pre) return finish(pre.status, pre.ok, pre.text, quiet401);
-  // X-Lang : messages d'erreur du serveur dans la langue de l'interface
-  const opts = { method, headers: { 'X-Seance': '1', 'X-Lang': lang, ...headers }, credentials: 'same-origin', keepalive };
-  if (relayed(path)) opts.headers['X-Nexis-Server'] = target.id;
+  // X-Lang: server error messages in the interface language
+  const opts = { method, headers: { 'X-Noxa': '1', 'X-Lang': lang, ...headers }, credentials: 'same-origin', keepalive };
+  if (relayed(path)) opts.headers['X-Noxa-Server'] = target.id;
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -50,7 +50,7 @@ export async function api(method, path, body, { headers = {}, keepalive = false,
   let res;
   try {
     res = await fetch(path, opts);
-  } catch (e) {
+  } catch {
     throw new ApiError(0, tr('Serveur injoignable'));
   }
   return finish(res.status, res.ok, await res.text(), quiet401);

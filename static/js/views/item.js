@@ -59,7 +59,7 @@ function fileInfo(d) {
   ), []);
 }
 
-// Sous-titres en ligne (OpenSubtitles) : résultats pour ce fichier, téléchargement en un clic
+// Online subtitles (OpenSubtitles): results for this file, one-click download
 async function subtitleSearch(d, rerender) {
   const list = h('div.os-results', spinner());
   const info = h('p.muted.small');
@@ -202,7 +202,7 @@ function itemMenu(d, rerender) {
     } });
   }
   if (['movie', 'show'].includes(d.type)) {
-    // masqué pour soi : disparaît des listes (bibliothèques, accueil, recherche), la fiche reste accessible
+    // hidden for oneself: disappears from the lists (libraries, home, search), the title page stays reachable
     items.push({ label: d.hidden ? tr('Ne plus masquer') : tr('Masquer pour moi'), onClick: async () => {
       try {
         const r = await put(`/api/items/${d.id}/hidden`, { hidden: !d.hidden });
@@ -213,7 +213,7 @@ function itemMenu(d, rerender) {
     } });
   }
   if (d.type === 'show') {
-    // nouveaux épisodes : prévenu ou non, série par série (Paramètres → Contenu et notifications)
+    // new episodes: notified or not, show by show (Settings → Content and notifications)
     const muted = (state.me.prefs.muted_shows || []).includes(String(d.id));
     items.push({ label: muted ? tr('Être prévenu des nouveaux épisodes') : tr('Ne plus être prévenu des nouveaux épisodes'), onClick: async () => {
       const list = (state.me.prefs.muted_shows || []).filter((x) => x !== String(d.id));
@@ -234,7 +234,7 @@ function itemMenu(d, rerender) {
       } });
     if (d.type === 'movie' || d.type === 'show') items.push({ label: tr('Collections…'), onClick: () => manageCollections(d, rerender) });
     if (d.type === 'movie' || d.type === 'episode') items.push({ label: tr('Informations sur le fichier'), onClick: () => fileInfo(d) });
-    // stockage froid : copie du fichier ailleurs (le titre reste ici, lu depuis la copie si le fichier disparaît)
+    // cold storage: copy of the file elsewhere (the title stays here, played from the copy if the file disappears)
     if (['movie', 'episode', 'show', 'season'].includes(d.type) && !d.server) {
       const label = d.type === 'show' ? tr('Archiver toute la série…') : d.type === 'season' ? tr('Archiver la saison…') : tr('Archiver sur un stockage froid…');
       items.push({ label, onClick: async () => (await import('./admin.js')).archiveDialog([d.id], d.type === 'episode' ? `${d.show} · ${d.title}` : d.title) });
@@ -256,8 +256,8 @@ function itemMenu(d, rerender) {
   return moreMenu(items);
 }
 
-// Avis : j'aime / je n'aime pas (un second clic retire l'avis) ; servent aux suggestions.
-// (fonction gardée à part : l'objet du titre peut être rangé tel quel dans IndexedDB par un téléchargement)
+// Opinions: like / dislike (a second click removes the opinion); used for the suggestions.
+// (function kept apart: the title object can be stored as is in IndexedDB by a download)
 let setOpinion = null;
 function opinionButtons(d) {
   if (!['movie', 'show', 'episode'].includes(d.type)) return null;
@@ -288,7 +288,7 @@ function opinionButtons(d) {
 }
 let syncOpinion = null;
 
-// Note personnelle de 1 à 5 étoiles (un clic sur la note actuelle la retire) ; elle oriente aussi les suggestions
+// Personal rating from 1 to 5 stars (a click on the current rating removes it); it also steers the suggestions
 function starButtons(d) {
   if (!['movie', 'show'].includes(d.type)) return null;
   let value = d.stars || 0;
@@ -346,7 +346,7 @@ function trailerButton(d) {
   } }, icon('film'), tr('Bande-annonce'));
 }
 
-// Choix audio / sous-titres avant la lecture (retenu pour le film ou la série)
+// Audio / subtitle choice before playback (remembered for the movie or the show)
 function trackChooser(d, target, onChange) {
   const audio = d.audio || [];
   const subs = d.subtitles || [];
@@ -361,7 +361,7 @@ function trackChooser(d, target, onChange) {
     a = audio.find((x) => String(x.id) === aSel.value) || null;
     s = sSel.value === '0' ? null : subs.find((x) => String(x.id) === sSel.value) || null;
     s = fixForced(s, a, subs);
-    // la liste dépend de l'audio (pistes forcées visibles seulement si elles servent)
+    // the list depends on the audio (forced tracks visible only when they are used)
     sSel.replaceChildren(...subOptions().map(([v, l]) => h('option', { value: v, selected: String(v) === String(s ? s.id : '0') }, l)));
     put(`/api/items/${d.id}/tracks`, trackPayload(a, s)).catch((e) => toast(e.message, 'bad'));
     onChange(a, s);
@@ -375,8 +375,8 @@ function trackChooser(d, target, onChange) {
     target ? h('span.muted.small', tr('pour {p1}, retenu pour toute la série', { p1: episodeCode(target) })) : null);
 }
 
-// « Regarder ensemble » : lance ce film / cet épisode dans un groupe dont on fait partie (salon créé à
-// l'avance), ou crée un groupe dessus, puis ouvre le lecteur
+// "Watch together": starts this movie / episode in a group one belongs to (room created
+// in advance), or creates a group on it, then opens the player
 async function watchTogether(target) {
   const lobbies = launchableGroups();
   if (lobbies.length) {
@@ -414,9 +414,9 @@ async function watchTogether(target) {
   if (g) location.hash = `#/play/${target.id}?group=${g.id}`;
 }
 
-// ------------------------------------------------------------ téléchargements (regarder hors ligne)
-// « Auto » : le fichier tel quel dès que l'appareil sait le lire (une copie ne coûte presque rien au serveur,
-// une conversion environ 30 s de processeur par minute de vidéo)
+// ------------------------------------------------------------ downloads (watch offline)
+// "Auto": the file as is when the device can play it (a copy costs the server almost nothing,
+// a conversion about 30 s of processor per minute of video)
 const SEASON_QUALITIES = [['auto', tr('Automatique : sans conversion si possible (recommandé)')],
   ['1080p', tr('1080p au plus')], ['720p', tr('720p (converti, fichier plus léger)')],
   ['480p', tr('480p (converti, fichier le plus léger)')]];
@@ -433,7 +433,7 @@ async function qualityChoices(one, tracks) {
   const out = [];
   for (const o of opts) {
     const sig = `${o.convert}:${o.height}`;
-    if (seen.has(sig)) continue; // même résultat qu'une option déjà proposée
+    if (seen.has(sig)) continue; // same result as an option already offered
     seen.add(sig);
     const what = o.quality === 'auto' ? (o.convert ? tr('Auto ({height}p)', { height: o.height }) : tr('Qualité d’origine{p1}', { p1: o.height ? ` (${o.height}p)` : '' })) : o.quality;
     out.push([o.quality, `${what} · ${fmtSize(o.size)} · ${o.convert ? tr('conversion par le serveur') : tr('sans conversion')}`]);
@@ -442,7 +442,7 @@ async function qualityChoices(one, tracks) {
 }
 export const canDownload = () => state.me.features && state.me.features.downloads && offlineSupported();
 
-// choix des pistes comme au lancement de la lecture (langues préférées, sous-titres forcés…)
+// track choice as when starting playback (preferred languages, forced subtitles…)
 function defaultTracks(it) {
   const prefs = withLibLangs(state.me.prefs, it);
   const audio = pickAudio(it.audio || [], prefs, it.track_prefs);
@@ -453,7 +453,7 @@ function defaultTracks(it) {
 async function startDownloads(items, opts) {
   try { localStorage.setItem('nexis.dl.quality', opts.quality); } catch { /* ignore */ }
   for (const it of items) {
-    const full = it.audio ? it : await get(`/api/items/${it.id}`); // les épisodes d'une saison : pistes à connaître
+    const full = it.audio ? it : await get(`/api/items/${it.id}`); // the episodes of a season: tracks to know
     await offlineDownload(state.me.user.id, full, { ...defaultTracks(full), ...opts.tracks, quality: opts.quality });
   }
   toast(items.length > 1 ? tr('{length} épisodes ajoutés aux téléchargements', { length: items.length }) : tr('Téléchargement lancé'), 'ok',
@@ -504,7 +504,7 @@ export async function downloadDialog(items, title) {
   startDownloads(items, { quality: quality.value, tracks });
 }
 
-// Bouton qui suit l'état du téléchargement de ce titre sur l'appareil
+// Button that follows the download state of this title on the device
 function downloadButton(d) {
   if (!canDownload() || !['movie', 'episode'].includes(d.type)) return null;
   const btn = h('button.btn.ghost.icon-only', { title: tr('Télécharger'), 'aria-label': tr('Télécharger pour regarder hors ligne') }, icon('install'));
@@ -578,13 +578,13 @@ function episodeRow(e, refresh) {
 }
 
 export async function renderItem(main, rk, ctx) {
-  // titres proches demandés en même temps que la fiche : un aller-retour de moins quand le serveur est loin
+  // close titles requested together with the title page: one round trip less when the server is far
   const early = /^\d+$/.test(String(rk)) ? get(`/api/items/${rk}/similar`).catch(() => null) : null;
   const d = await get(`/api/items/${rk}`);
   if (!ctx.isCurrent()) return;
   if (d.type === 'season') { location.replace(`#/item/${d.show_id}?season=${d.id}`); return; }
   document.title = `${d.type === 'episode' ? d.show : d.title} · Noxa`;
-  // rafraîchissement sur place (vu / non vu, métadonnées…) : on reste au même endroit de la page
+  // refresh in place (watched / unwatched, metadata…): stay at the same place on the page
   const rerender = async () => {
     const y = window.scrollY;
     main.style.minHeight = `${main.offsetHeight}px`;
@@ -614,7 +614,7 @@ export async function renderItem(main, rk, ctx) {
       actions.append(link);
     }
     if (d.leaves > 1) {
-      // épisodes dans le désordre (sitcoms) : un au hasard, puis un autre à la fin de chacun
+      // episodes in any order (sitcoms): one at random, then another at the end of each
       actions.append(h('button.btn', { type: 'button', title: tr('Lecture aléatoire'), onclick: async () => {
         try {
           const ep = await get(`/api/random?show=${d.id}`);
@@ -677,7 +677,7 @@ export async function renderItem(main, rk, ctx) {
     parts.push(h('section.block', h('div.row-head', h('a.row-title', { href: `#/collection/${c.id}` }, tr('Collection : {title}', { title: c.title }))),
       h('div.grid.small', others.map((x) => posterCard(x)))));
   }
-  // titres proches (genres, réalisateur, acteurs), chargés après la fiche
+  // close titles (genres, director, actors), loaded after the title page
   if (['movie', 'show', 'episode'].includes(d.type)) {
     const similar = h('section.block', { hidden: true });
     parts.push(similar);
@@ -706,8 +706,8 @@ export async function renderItem(main, rk, ctx) {
       || d.seasons.find((s) => d.play_target && s.id === d.play_target.season_id) || d.seasons[0];
     const list = h('div.episodes');
     const tabs = h('div.tabs', { role: 'tablist' });
-    // quiet : mise à jour sur place (épisode marqué vu) — la liste reste affichée, sinon la page se vide un
-    // instant et remonte tout en haut
+    // quiet: update in place (episode marked watched) — the list stays shown, otherwise the page empties for an
+    // instant and jumps back to the top
     const loadSeason = async (s, quiet = false) => {
       current = s;
       tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.id === s.id));

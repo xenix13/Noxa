@@ -1,4 +1,4 @@
-"""Limites par compte (lectures simultanées, débit hors de la maison, temps d'écran) et alertes des administrateurs.
+"""Per-account limits (simultaneous streams, bandwidth away from home, screen time) and administrator alerts.
 
 python3 -m unittest tests.test_limits_alerts
 """
@@ -12,9 +12,9 @@ import unittest
 
 from tests.test_api import STATIC, Client, media_root, wait_scan
 
-from seance import limits
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import limits
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 CAPS = {"video": ["h264", "hevc"], "audio": ["aac", "ac3", "eac3"], "containers": ["mp4", "matroska"]}
 
@@ -26,7 +26,7 @@ class UnitLimitsTest(unittest.TestCase):
         self.assertTrue(limits.in_bedtime("21:00-07:00", at(6, 59)))
         self.assertFalse(limits.in_bedtime("21:00-07:00", at(7, 0)))
         self.assertFalse(limits.in_bedtime("21:00-07:00", at(15, 0)))
-        self.assertTrue(limits.in_bedtime("13:00-15:00", at(14, 0)))  # sieste : plage dans la journée
+        self.assertTrue(limits.in_bedtime("13:00-15:00", at(14, 0)))  # nap: range during the day
         self.assertFalse(limits.in_bedtime(None))
 
     def test_valid_limits(self):
@@ -41,7 +41,7 @@ class UnitLimitsTest(unittest.TestCase):
     def test_cap_quality(self):
         probe = {"video": {"height": 2160}, "bitrate": 40_000_000, "duration": 100}
         self.assertEqual(limits.cap_quality("original", probe, 6000), "720p")
-        self.assertEqual(limits.cap_quality("480p", probe, 20000), "480p")  # déjà en dessous : gardée
+        self.assertEqual(limits.cap_quality("480p", probe, 20000), "480p")  # already below: kept
         self.assertEqual(limits.cap_quality("1080p", probe, 2500), "480p")
 
     def test_remote_cap_only_outside(self):
@@ -112,9 +112,9 @@ class LimitsAlertsTest(unittest.TestCase):
             st, r = self.play()
             self.assertEqual(st, 429)
             self.assertIn("1 vidéo(s) en même temps", r["error"])
-            st, b = self.play(replace=a["stream"])  # changement de qualité ou de piste : remplace le flux
+            st, b = self.play(replace=a["stream"])  # change of quality or track: replaces the stream
             self.assertEqual(st, 200, b)
-            self.assertEqual(self.play(self.admin)[0], 200)  # un autre compte n'est pas concerné
+            self.assertEqual(self.play(self.admin)[0], 200)  # another account is not concerned
         finally:
             self.set_zoe(max_streams=None)
             self.ctx.db.run("DELETE FROM streams")
@@ -130,7 +130,7 @@ class LimitsAlertsTest(unittest.TestCase):
                                                                  "stream": a["stream"], "state": state})
                 self.assertEqual(st, 200, r)
             self.assertEqual((r["screen"]["blocked"], r["screen"]["left"]), (False, 30))
-            # 29 minutes déjà regardées aujourd'hui (sur d'autres appareils)
+            # 29 minutes already watched today (on other devices)
             self.ctx.db.run("INSERT OR REPLACE INTO screen_time(user_id, day, seconds) VALUES(?,?,?)",
                             (self.zoe_id, limits.today(), 29 * 60))
             st, r = self.zoe.call("POST", "/api/progress", {"id": m["id"], "position": 70000, "duration": 600000,
@@ -145,7 +145,7 @@ class LimitsAlertsTest(unittest.TestCase):
             self.assertEqual(st, 403)
             self.assertIn("Temps d'écran du jour écoulé (30 min)", r["error"])
             self.assertEqual(self.play(self.admin)[0], 200)
-            # en anglais
+            # in English
             st, r = self.zoe.call("POST", "/api/play", {"id": m["id"], "caps": CAPS}, headers={"X-Lang": "en"})
             self.assertIn("screen time is up", r["error"])
         finally:
@@ -172,7 +172,7 @@ class LimitsAlertsTest(unittest.TestCase):
         self.assertEqual(h.active(), [])
         moved = self.films + ".off"
         os.rename(self.films, moved)
-        os.makedirs(self.films)  # point de montage vide : partage démonté
+        os.makedirs(self.films)  # empty mount point: share unmounted
         try:
             h.check()
             active = h.active()
@@ -180,7 +180,7 @@ class LimitsAlertsTest(unittest.TestCase):
             self.assertEqual(len(self.sent), 1)
             self.assertEqual(self.sent[0][1], "Dossier de bibliothèque inaccessible")
             h.check()
-            self.assertEqual(len(self.sent), 1)  # pas de nouvel envoi tant que ça dure (rappel au bout d'un jour)
+            self.assertEqual(len(self.sent), 1)  # no new send while it lasts (reminder after a day)
             st, v = self.admin.call("GET", "/api/admin/alerts")
             self.assertEqual(len(v["alerts"]), 1)
             st, v = self.admin.call("GET", "/api/admin/alerts", headers={"X-Lang": "en"})
@@ -191,7 +191,7 @@ class LimitsAlertsTest(unittest.TestCase):
             os.rmdir(self.films)
             os.rename(moved, self.films)
         h.check()
-        self.assertEqual(h.active(), [])  # résolue d'elle-même
+        self.assertEqual(h.active(), [])  # solved by itself
 
     def test_11_task_and_disk_alerts(self):
         h = self.ctx.health
@@ -202,19 +202,19 @@ class LimitsAlertsTest(unittest.TestCase):
         self.assertIn("disque plein", self.sent[-1][2])
         h.task_finished(task, "ok", "")
         self.assertEqual(h.active(), [])
-        # seuil énorme : le disque des données passe pour presque plein
+        # huge threshold: the data disk looks almost full
         st, v = self.admin.call("PUT", "/api/admin/alerts", {"disk_gb": 5000})
         self.assertEqual(st, 200, v)
         st, v = self.admin.call("POST", "/api/admin/alerts/check")
         self.assertEqual([a["kind"] for a in v["alerts"]], ["disk"])
-        st, v = self.admin.call("PUT", "/api/admin/alerts", {"disk": False})  # coupée : l'alerte disparaît
+        st, v = self.admin.call("PUT", "/api/admin/alerts", {"disk": False})  # turned off: the alert disappears
         self.assertEqual(v["alerts"], [])
         self.admin.call("PUT", "/api/admin/alerts", {"disk": True, "disk_gb": 10})
         self.assertEqual(self.admin.call("PUT", "/api/admin/alerts", {"disk_gb": 0})[0], 400)
-        # une tâche qui échoue vraiment
+        # a task that really fails
         self.ctx.db.set_setting("backup_dir", "/proc/nexis-impossible")
         try:
-            from seance import tasks
+            from noxa import tasks
             self.ctx.tasks._execute(tasks.Job(task, "test"))
         finally:
             self.ctx.db.set_setting("backup_dir", None)

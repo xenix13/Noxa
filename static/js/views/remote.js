@@ -3,8 +3,8 @@ import { clear, fmtTime, h, icon, img, select, toast } from '../ui.js';
 import { deviceId } from '../device.js';
 import { tr } from '../i18n.js';
 
-// Télécommande : pilote, depuis cet appareil (typiquement le téléphone), la lecture en cours sur un autre
-// appareil du même compte (ordinateur, TV, tablette). La liste se met à jour en direct.
+// Remote control: drives, from this device (typically the phone), the playback running on another
+// device of the same account (computer, TV, tablet). The list updates live.
 export async function renderRemote(main, ctx) {
   document.title = `${tr('Télécommande')} · Noxa`;
   const list = h('div.remote-list');

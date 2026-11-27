@@ -2,8 +2,8 @@ import { del, get, post, put } from '../api.js';
 import { clear, fmtTime, h, icon, img, modal, select, spinner, toast } from '../ui.js';
 import { locale, plural, tr } from '../i18n.js';
 
-// Photothèque : albums (les sous-dossiers), toutes les photos par mois, favoris, visionneuse plein écran
-// (photos et vidéos du téléphone), et album partagé par lien (#/share/…, consultable sans compte).
+// Photo library: albums (the sub-folders), all the photos by month, favourites, fullscreen viewer
+// (phone photos and videos), and album shared by link (#/share/…, viewable without an account).
 const PAGE = 200;
 
 const monthLabel = (iso) => {
@@ -14,7 +14,7 @@ const dateLabel = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(locale(), { dateStyle: 'long', timeStyle: 'short' });
 };
-// vignette : par /api/img (compte connecté) ou par l'adresse de l'album partagé
+// thumbnail: through /api/img (signed-in account) or through the shared album's address
 const thumbSrc = (c, size) => (c.thumb_url ? `${c.thumb_url}&w=${size}` : img(c.thumb, size, size));
 
 export async function renderPhotos(main, lib, ctx) {
@@ -33,7 +33,7 @@ export async function renderPhotos(main, lib, ctx) {
   });
 }
 
-// Album partagé par lien : sans compte, sans favoris ni partage
+// Album shared by link: no account, no favourites or sharing
 export async function renderShared(main, token, ctx) {
   await browse(main, ctx, {
     view: 'albums', album: ctx.query.get('album') || '', shared: true,
@@ -92,7 +92,7 @@ async function browse(main, ctx, o) {
           heading.textContent = r.title;
           document.title = `${r.title} · Noxa`;
         }
-        // album partagé : on ne remonte pas au-dessus de l'album du lien
+        // shared album: never go above the link's album
         const trail = o.shared ? r.path.slice(1) : r.path;
         clear(crumbs, ...(trail.length ? [h('a', { href: o.rootHref }, o.shared ? r.title : o.title),
           ...trail.flatMap((p, i) => [' › ', i === trail.length - 1 ? h('strong', p.title) : h('a', { href: o.albumHref(p.id) }, p.title)])] : []));
@@ -129,9 +129,9 @@ async function browse(main, ctx, o) {
   await more();
 }
 
-// ------------------------------------------------------------ carte des lieux (GPS des photos)
-// Fond de carte OpenStreetMap (tuiles 256 px, projection de Mercator), sans bibliothèque : on déplace et on
-// zoome à la main ; les photos proches à l'écran sont regroupées en une pastille qui donne leur nombre.
+// ------------------------------------------------------------ map of places (GPS of the photos)
+// OpenStreetMap base map (256 px tiles, Mercator projection), without a library: panning and
+// zooming by hand; photos close on screen are grouped into a badge that gives their count.
 const TILE = 256, MIN_Z = 2, MAX_Z = 18, CLUSTER_PX = 56;
 const TILES = 'https://tile.openstreetmap.org';
 const worldX = (lon, z) => ((lon + 180) / 360) * TILE * 2 ** z;
@@ -166,7 +166,7 @@ async function renderMap(main, lib, tabs, ctx) {
     return;
   }
 
-  // vue de départ : toutes les photos à l'écran
+  // starting view: all the photos on screen
   let z = MAX_Z, cx = 0, cy = 0;
   const fit = (list) => {
     const lats = list.map((p) => p[1]), lons = list.map((p) => p[2]);
@@ -192,7 +192,7 @@ async function renderMap(main, lib, tabs, ctx) {
       }
     }
     tiles.replaceChildren(...imgs);
-    // regroupement : une case de CLUSTER_PX à l'écran = une pastille
+    // grouping: a CLUSTER_PX cell on screen = one badge
     const cells = new Map();
     for (const p of pts) {
       const x = worldX(p[2], z) - left, y = worldY(p[1], z) - top;
@@ -224,7 +224,7 @@ async function renderMap(main, lib, tabs, ctx) {
   }
 
   async function showPlace(list) {
-    if (list.length > 1 && z < 15) {  // plusieurs lieux mêlés : on s'en rapproche d'abord
+    if (list.length > 1 && z < 15) {  // several places mixed: zoom in on them first
       const spread = Math.max(...list.map((p) => p[1])) - Math.min(...list.map((p) => p[1]))
         + Math.max(...list.map((p) => p[2])) - Math.min(...list.map((p) => p[2]));
       if (spread > 0.0005) { fit(list); draw(); }
@@ -243,7 +243,7 @@ async function renderMap(main, lib, tabs, ctx) {
     } catch (e) { placeGrid.replaceChildren(h('div.empty', e.message)); }
   }
 
-  // déplacement à la souris ou au doigt, pincement pour zoomer, molette, double-clic
+  // panning with the mouse or a finger, pinch to zoom, wheel, double-click
   const touches = new Map();
   let drag = null, moved = false, pinch = null;
   map.addEventListener('pointerdown', (e) => {
@@ -276,7 +276,7 @@ async function renderMap(main, lib, tabs, ctx) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (!moved && Math.abs(dx) + Math.abs(dy) > 4) {
       moved = true;
-      map.setPointerCapture(e.pointerId); // seulement une fois le glissement commencé : un simple clic atteint la pastille
+      map.setPointerCapture(e.pointerId); // only once the drag has started: a simple click reaches the badge
     }
     if (!moved) return;
     cx = drag.cx - dx;
@@ -307,7 +307,7 @@ async function renderMap(main, lib, tabs, ctx) {
   draw();
 }
 
-// ------------------------------------------------------------ partage d'un album par lien
+// ------------------------------------------------------------ sharing an album by link
 async function shareDialog(album) {
   const list = h('div.share-list');
   const days = select([['1', tr('1 jour')], ['7', tr('1 semaine')], ['30', tr('1 mois')], ['90', tr('3 mois')]], '7', { 'aria-label': tr('Durée') });
@@ -380,7 +380,7 @@ function openViewer(list, index, loadMore, hasMore, o) {
   function show() {
     const p = list[i];
     if (p.video) {
-      // vidéo du téléphone : lue telle quelle par le navigateur (sinon : à télécharger)
+      // phone video: played as is by the browser (otherwise: to download)
       const v = h('video.viewer-img', { src: p.stream_url, controls: true, autoplay: true, playsinline: true });
       v.addEventListener('error', () => stage.replaceChildren(h('div.viewer-msg', h('p', tr('Ce navigateur ne sait pas lire cette vidéo.')),
         h('a.btn', { href: p.original_url, download: '' }, icon('download'), tr('Télécharger')))));
@@ -402,7 +402,7 @@ function openViewer(list, index, loadMore, hasMore, o) {
     nextBtn.hidden = i === list.length - 1 && !hasMore();
     paintFav();
     const n = list[i + 1];
-    if (n && !n.video) new Image().src = url(n); // la suivante est prête quand on avance
+    if (n && !n.video) new Image().src = url(n); // the next one is ready when moving forward
   }
   async function go(step) {
     if (step > 0 && i === list.length - 1 && hasMore()) await loadMore();
@@ -413,14 +413,14 @@ function openViewer(list, index, loadMore, hasMore, o) {
   }
   function toggleShow() {
     if (timer) { clearInterval(timer); timer = null; }
-    else timer = setInterval(() => { if (!list[i].video) go(1); }, 5000); // une vidéo passe à la suite à sa fin
+    else timer = setInterval(() => { if (!list[i].video) go(1); }, 5000); // a video moves on to the next at its end
     playBtn.replaceChildren(icon(timer ? 'pause' : 'play'));
   }
   const onKey = (e) => {
     const act = { Escape: () => closeViewer(), ArrowLeft: () => go(-1), ArrowRight: () => go(1), ' ': () => toggleShow() }[e.key];
     if (!act || (e.key === ' ' && list[i].video)) return;
     e.preventDefault();
-    e.stopPropagation(); // la visionneuse d'abord (pas de retour en arrière de l'application)
+    e.stopPropagation(); // the viewer first (no going back in the app)
     act();
   };
   root.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, { passive: true });

@@ -1,4 +1,4 @@
-// « Téléchargements » : ce qui est gardé sur cet appareil pour regarder hors ligne.
+// "Downloads": what is kept on this device to watch offline.
 import { state } from '../app.js';
 import { askPersist, list, onDownloads, posterUrl, pump, removeDownload, removeMany, retry, setSmart, smartPrefs, supported, usage } from '../offline.js';
 import { clear, confirmDialog, episodeCode, fmtDuration, h, icon, select, toast, toggle } from '../ui.js';
@@ -18,7 +18,7 @@ function status(d) {
   if (d.state === 'preparing' && d.waiting) return tr('En pause pendant une lecture sur le serveur');
   if (d.state === 'preparing') {
     const p = tr(d.convert ? 'Conversion sur le serveur… {p} %' : 'Préparation sur le serveur… {p} %', { p: Math.round((d.prep || 0) * 100) });
-    return d.got ? `${p} · ${tr('{n} reçus', { n: size(received(d)) })}` : p; // récupéré pendant la préparation
+    return d.got ? `${p} · ${tr('{n} reçus', { n: size(received(d)) })}` : p; // fetched during the preparation
   }
   if (d.state === 'downloading') return tr('Téléchargement… {p1} %', { p1: d.chunks ? Math.round((d.got / d.chunks) * 100) : 0 });
   if (d.state === 'paused') return tr('En attente du réseau : nouvel essai automatique');
@@ -62,7 +62,7 @@ export async function renderDownloads(main, ctx, { offline = false } = {}) {
     await paint();
     toast(tr('{n} téléchargement(s) supprimé(s)', { n: chosen.length }), 'ok');
   };
-  // sélections rapides
+  // quick selections
   const pickWhere = (fn) => { picked.clear(); items.filter(fn).forEach((d) => picked.add(d.key)); paint(); };
 
   const paintTools = () => {
@@ -113,8 +113,8 @@ export async function renderDownloads(main, ctx, { offline = false } = {}) {
     else if (sort === 'date') items.sort((a, b) => (b.doneAt || b.savedAt || 0) - (a.doneAt || a.savedAt || 0));
     const u = await usage();
     const used = items.reduce((n, d) => n + received(d), 0);
-    // Pas de « place restante » : Chrome (depuis la version 144) annonce volontairement « utilisé + 10 Go » pour ne pas
-    // révéler la taille du disque, alors que la vraie limite est ~60 % du stockage. Le chiffre tromperait.
+    // No "space left": Chrome (since version 144) deliberately reports "used + 10 GB" so as not to
+    // reveal the disk size, while the real limit is ~60 % of the storage. The figure would mislead.
     const films = items.filter((d) => d.item.type !== 'episode').reduce((n, d) => n + received(d), 0);
     const watched = items.filter((d) => d.item.watched).reduce((n, d) => n + received(d), 0);
     clear(meter, h('p.muted.small', tr('{length} téléchargement(s) · {p2} sur cet appareil', { length: items.length, p2: size(used) })),
@@ -123,11 +123,11 @@ export async function renderDownloads(main, ctx, { offline = false } = {}) {
       used ? h('p.small.muted.dl-legend', films ? [h('i.films'), tr('Films {n}', { n: size(films) }), ' '] : null,
         used - films ? [h('i.shows'), tr('Séries {n}', { n: size(used - films) })] : null,
         watched ? ` · ${tr('dont {n} déjà vus', { n: size(watched) })}` : '') : null);
-    // La limite vient du navigateur, pas du téléphone : Firefox plafonne un site à 10 Go tant qu'on ne l'autorise pas
-    // à garder ses données (jusqu'à la moitié de l'appareil ensuite) ; Chrome, Edge et Safari vont jusqu'à ~60 %.
-    // Application Noxa (ordinateur, Android) : les téléchargements sont dans les données de l'application, que le
-    // système n'efface pas ; la demande « stockage persistant » n'existe que dans un navigateur (l'application répond
-    // toujours non). Rien à autoriser : la place est celle de l'appareil.
+    // The limit comes from the browser, not the phone: Firefox caps a site at 10 GB until it is allowed
+    // to keep its data (up to half of the device then); Chrome, Edge and Safari go up to ~60 %.
+    // Noxa app (computer, Android): downloads are in the app's data, which the
+    // system does not erase; the "persistent storage" request only exists in a browser (the app always answers
+    // no). Nothing to allow: the space is the device's.
     if (nativeApp()) {
       room.replaceChildren(h('p.small.muted', tr('Application Noxa : les téléchargements sont gardés par l’application, sans limite propre au navigateur. La place disponible est celle de l’appareil.')));
     } else room.replaceChildren(...(u && !u.persisted ? [
@@ -147,7 +147,7 @@ export async function renderDownloads(main, ctx, { offline = false } = {}) {
     }
     const rows = [];
     for (const d of items) {
-      if (!posters.get(d.key)) posters.set(d.key, await posterUrl(d)); // l'affiche arrive au début du téléchargement
+      if (!posters.get(d.key)) posters.set(d.key, await posterUrl(d)); // the poster arrives at the start of the download
       const it = d.item;
       const title = it.type === 'episode' ? it.show : it.title;
       const sub = it.type === 'episode' ? `${episodeCode(it)} · ${it.title}` : String(it.year || '');

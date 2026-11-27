@@ -1,6 +1,6 @@
 import { tr } from './i18n.js';
-// Apparence des sous-titres texte (préférences de chaque utilisateur), appliquée par variables CSS
-// au lecteur et à l'aperçu des Paramètres. Les sous-titres ASS rendus par libass gardent leur propre style.
+// Appearance of text subtitles (each user's preferences), applied through CSS variables
+// to the player and to the Settings preview. ASS subtitles rendered by libass keep their own style.
 export const SUB_FONTS = {
   sans: [tr('Standard'), 'Inter, system-ui, sans-serif'],
   display: [tr('Arrondie'), 'Outfit, Inter, sans-serif'],

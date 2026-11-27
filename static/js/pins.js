@@ -1,4 +1,4 @@
-// Rangées personnelles de l'accueil : collections, playlists ou genres épinglés par chaque utilisateur.
+// Personal rows of the home page: collections, playlists or genres pinned by each user.
 import { get, put } from './api.js';
 import { applyPrefs, state } from './app.js';
 import { h, icon, posterCard, row, toast, wideCard } from './ui.js';
@@ -22,7 +22,7 @@ export async function removePin(id) {
   await savePins(pins().filter((p) => p.id !== id), tr('Rangée retirée de l’accueil'));
 }
 
-// Bouton « Épingler à l'accueil » / « Retirer de l'accueil » ; pin = { type, ref, lib?, title }
+// "Pin to home" / "Remove from home" button; pin = { type, ref, lib?, title }
 export function pinButton(pin) {
   const btn = h('button.btn.ghost.small.pin-btn', { type: 'button' });
   const paint = () => {
@@ -49,7 +49,7 @@ export function pinButton(pin) {
 
 export const PIN_LABELS = { collection: 'collection', playlist: 'playlist', genre: 'genre', filter: 'filtres' };
 
-// Rangée de l'accueil pour une épingle (null si la source n'existe plus ou est vide)
+// Home row for a pin (null when the source no longer exists or is empty)
 export async function pinRow(p) {
   try {
     if (p.type === 'collection') {
@@ -62,7 +62,7 @@ export async function pinRow(p) {
     }
     const lib = (state.me.libraries || []).find((l) => String(l.id) === String(p.lib));
     if (!lib) return null;
-    if (p.type === 'filter') { // combinaison de filtres d'une bibliothèque
+    if (p.type === 'filter') { // combination of filters of a library
       const q = new URLSearchParams(p.ref);
       if (!q.get('sort')) q.set('sort', 'added');
       q.set('start', 0);

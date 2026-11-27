@@ -1,4 +1,4 @@
-"""Langues de l'interface : traductions complètes, langue de chaque compte, langue par défaut du serveur.
+"""Interface languages: complete translations, language of each account, server default language.
 
 python3 -m unittest tests.test_i18n
 """
@@ -14,10 +14,10 @@ import unittest
 
 from tests.test_api import STATIC, Client
 
-from seance import i18n
-from seance.api import Ctx, build_app
-from seance.lang_en import EN
-from seance.web import Server, make_handler
+from noxa import i18n
+from noxa.api import Ctx, build_app
+from noxa.lang_en import EN
+from noxa.web import Server, make_handler
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JS_STRING = re.compile(r"'((?:[^'\\\n]|\\.)*)'")
@@ -34,7 +34,7 @@ def js_unescape(s):
 
 
 def call_args(src, start):
-    """Arguments (texte) de l'appel dont la parenthèse ouvrante est à start, séparés au premier niveau."""
+    """Arguments (text) of the call whose opening parenthesis is at start, split at the top level."""
     depth, quote, args, cur, i = 0, None, [], "", start + 1
     while i < len(src):
         c = src[i]
@@ -67,7 +67,7 @@ def call_args(src, start):
 
 
 def web_keys():
-    """Textes passés à tr() et plural() dans le code de l'interface."""
+    """Texts passed to tr() and plural() in the interface code."""
     keys = {}
     for path in glob.glob(os.path.join(STATIC, "js", "**", "*.js"), recursive=True):
         if "/i18n" in path.replace(os.sep, "/"):
@@ -79,7 +79,7 @@ def web_keys():
             for a in texts:
                 for lit in JS_STRING.finditer(a):
                     if re.search(r"[!=]==?\s*$", a[:lit.start()]):
-                        continue  # valeur comparée dans une condition (tr(x === 'a' ? '…' : '…'))
+                        continue  # value compared in a condition (tr(x === 'a' ? '…' : '…'))
                     keys.setdefault(js_unescape(lit.group(1)), os.path.relpath(path, ROOT))
     return keys
 
@@ -102,7 +102,7 @@ class TranslationsTest(unittest.TestCase):
             self.assertTrue(v.strip(), k)
 
     def test_server_messages_are_translated(self):
-        """Chaque message d'erreur écrit en dur dans le code du serveur a sa traduction anglaise."""
+        """Each error message hard-coded in the server code has its English translation."""
         missing = []
         for path in glob.glob(os.path.join(ROOT, "seance", "**", "*.py"), recursive=True):
             tree = ast.parse(read(path))
@@ -124,7 +124,7 @@ class TranslationsTest(unittest.TestCase):
             self.assertEqual(k.count("{}"), v.count("{}"), k)
 
     def test_scheduled_tasks_are_translated(self):
-        from seance.tasks import TASKS
+        from noxa.tasks import TASKS
         for task in TASKS:
             for text in (task.name, task.description, *[o["label"] for o in task.options],
                          *[o["hint"] for o in task.options if o.get("hint")]):
@@ -133,7 +133,7 @@ class TranslationsTest(unittest.TestCase):
     def test_templates(self):
         self.assertEqual(i18n.tr("Dossier introuvable depuis le serveur : /mnt/x", "en"), "Folder not found from the server: /mnt/x")
         self.assertEqual(i18n.tr("Préparation impossible : ffmpeg s'est arrêté", "en"), "Preparation failed: ffmpeg stopped")
-        self.assertEqual(i18n.tr("Un titre de film", "en"), "Un titre de film")  # texte inconnu : inchangé
+        self.assertEqual(i18n.tr("Un titre de film", "en"), "Un titre de film")  # unknown text: unchanged
         self.assertEqual(i18n.tr("Introuvable", "fr"), "Introuvable")
 
 
@@ -195,7 +195,7 @@ class LanguageApiTest(unittest.TestCase):
     def test_user_language_and_server_default(self):
         st, me = self.admin.call("GET", "/api/me")
         self.assertEqual(me["user"]["language"], "fr")
-        # l'administrateur choisit l'anglais pour les nouveaux comptes
+        # the administrator picks English for new accounts
         st, s = self.admin.call("PUT", "/api/admin/settings", {"default_language": "en"})
         self.assertEqual((st, s["default_language"]), (200, "en"))
         st, status = Client(self.base).call("GET", "/api/status")
@@ -206,7 +206,7 @@ class LanguageApiTest(unittest.TestCase):
         self.assertEqual((st, u["language"]), (200, "en"))
         alice = Client(self.base)
         alice.call("POST", "/api/login", {"username": "alice", "password": "motdepasse1"})
-        # sans en-tête de l'interface : la langue du compte
+        # without the interface header: the account's language
         st, r = alice.call("PUT", "/api/me/password", {"current": "faux", "new": "motdepasse2"})
         self.assertEqual(r["error"], "Incorrect current password")
         # chacun choisit sa langue
@@ -216,9 +216,9 @@ class LanguageApiTest(unittest.TestCase):
         self.assertEqual(me["user"]["language"], "fr")
         st, r = alice.call("PUT", "/api/me/language", {"language": "xx"})
         self.assertEqual(st, 400)
-        # un compte existant garde sa langue quand la langue par défaut change
+        # an existing account keeps its language when the default language changes
         st, me = self.admin.call("GET", "/api/me")
-        self.assertEqual(me["user"]["language"], "en")  # l'administrateur n'a pas choisi : langue par défaut
+        self.assertEqual(me["user"]["language"], "en")  # the administrator has not chosen: default language
         st, r = self.admin.call("PUT", "/api/admin/settings", {"default_language": "zz"})
         self.assertEqual(st, 400)
         self.admin.call("PUT", "/api/admin/settings", {"default_language": "fr"})
@@ -240,7 +240,7 @@ class LanguageApiTest(unittest.TestCase):
         st, tasks = self.admin.call("GET", "/api/admin/tasks", headers={"X-Lang": "en"})
         scan = next(t for t in tasks["tasks"] if t["id"] == "scan")
         self.assertEqual(scan["name"], "Scan libraries")
-        self.assertEqual(scan["category"], "Bibliothèques")  # clé : traduite par l'interface
+        self.assertEqual(scan["category"], "Bibliothèques")  # key: translated by the interface
 
 
 if __name__ == "__main__":

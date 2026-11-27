@@ -1,4 +1,4 @@
-"""Trakt (faux serveur d'API) et Letterboxd (export / import de fichiers).
+"""Trakt (fake API server) and Letterboxd (file export / import).
 
 python3 -m unittest tests.test_tracking
 """
@@ -16,9 +16,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client, media_root, wait_scan
 
-from seance import tasks, tracking
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import tasks, tracking
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 CID, SECRET = "c" * 64, "s" * 64
 
@@ -59,13 +59,13 @@ class FakeTrakt(BaseHTTPRequestHandler):
             if body.get("client_secret") != SECRET:
                 return self.reply(401)
             if FakeTrakt.polls == 1:
-                return self.reply(400)  # l'utilisateur n'a pas encore saisi le code
+                return self.reply(400)  # the user has not typed the code yet
             return self.reply(200, {"access_token": "TOKEN", "refresh_token": "R", "expires_in": 7776000,
                                     "created_at": int(time.time())})
         if self.path == "/oauth/revoke":
             return self.reply(200, {})
         FakeTrakt.posts.append((self.path, body))
-        # comme le vrai Trakt : ce qui est envoyé revient aux lectures suivantes
+        # like the real Trakt: what is sent comes back on the next reads
         if self.path == "/sync/history":
             FakeTrakt.data.setdefault("/sync/watched/movies", []).extend(
                 {"movie": {"ids": m["ids"]}, "last_watched_at": m["watched_at"]} for m in body.get("movies", []))
@@ -119,7 +119,7 @@ class TrackingTest(unittest.TestCase):
     def test_01_trakt(self):
         st, v = self.lea.call("GET", "/api/me/trakt")
         self.assertEqual((v["configured"], v["linked"]), (False, False))
-        self.assertNotIn("client_id", v)  # réglage du serveur : administrateurs seulement
+        self.assertNotIn("client_id", v)  # server setting: administrators only
         self.assertEqual(self.lea.call("PUT", "/api/admin/trakt", {"client_id": CID})[0], 403)
         self.assertEqual(self.admin.call("PUT", "/api/admin/trakt", {"client_id": "court"})[0], 400)
         st, v = self.admin.call("PUT", "/api/admin/trakt", {"client_id": CID, "client_secret": SECRET})
@@ -132,7 +132,7 @@ class TrackingTest(unittest.TestCase):
             "/sync/ratings/movies": [{"movie": {"ids": {"tmdb": voyage["tmdb"]}}, "rating": 8}],
             "/sync/watchlist/movies": [{"movie": {"ids": {"tmdb": polaire["tmdb"]}}}],
         }
-        # vu sur Noxa avant de relier : doit partir vers Trakt
+        # watched on Noxa before linking: must go to Trakt
         self.lea.call("POST", f"/api/items/{voyage['id']}/watched", {"watched": True})
         st, c = self.lea.call("POST", "/api/me/trakt/link")
         self.assertEqual((st, c["user_code"]), (200, "AB12CD34"))
@@ -146,15 +146,15 @@ class TrackingTest(unittest.TestCase):
         self.assertTrue(self.watched(self.lea, "Brume"))
         hist = self.ctx.db.one("SELECT watched_at FROM history h JOIN users u ON u.id=h.user_id WHERE u.username='lea' "
                                "AND rating_key=?", (brume["id"],))
-        self.assertEqual(time.strftime("%Y-%m-%d", time.gmtime(hist["watched_at"])), "2024-03-01")  # date de Trakt
+        self.assertEqual(time.strftime("%Y-%m-%d", time.gmtime(hist["watched_at"])), "2024-03-01")  # date from Trakt
         st, d = self.lea.call("GET", f"/api/items/{voyage['id']}")
-        self.assertEqual(d["stars"], 4)  # 8/10 -> 4 étoiles
+        self.assertEqual(d["stars"], 4)  # 8/10 -> 4 stars
         st, wl = self.lea.call("GET", "/api/watchlist")
         self.assertIn(polaire["id"], json.dumps(wl))
         sent = dict(FakeTrakt.posts)
         self.assertEqual([m["ids"]["tmdb"] for m in sent["/sync/history"]["movies"]], [voyage["tmdb"]])
-        self.assertNotIn("/sync/ratings", sent)  # Noxa n'avait aucune note à envoyer
-        # une note donnée sur Noxa part au passage suivant (tâche planifiée)
+        self.assertNotIn("/sync/ratings", sent)  # Noxa had no rating to send
+        # a rating given on Noxa goes out at the next pass (scheduled task)
         self.lea.call("PUT", f"/api/items/{polaire['id']}/stars", {"stars": 5})
         FakeTrakt.posts.clear()
         tm = self.ctx.tasks
@@ -162,8 +162,8 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual(tm.last("trakt")["status"], "ok", tm.last("trakt"))
         sent = dict(FakeTrakt.posts)
         self.assertEqual(sent["/sync/ratings"]["movies"], [{"ids": {"tmdb": polaire["tmdb"]}, "rating": 10}])
-        self.assertNotIn("/sync/history", sent)  # rien de nouveau
-        # délier
+        self.assertNotIn("/sync/history", sent)  # nothing new
+        # unlink
         st, v = self.lea.call("DELETE", "/api/me/trakt")
         self.assertFalse(v["linked"])
 
@@ -178,7 +178,7 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual(st, 200)
         rows = list(csv.DictReader(io.StringIO(data.decode())))
         self.assertEqual([(r["tmdbID"], r["Title"], r["Rating"]) for r in rows], [(str(brume["tmdb"]), brume["title"], "3")])
-        # export de Letterboxd : un film vu (titre et année), une note, la liste « À regarder », un film absent
+        # Letterboxd export: a watched movie (title and year), a rating, the watchlist, a missing movie
         z = io.BytesIO()
         with zipfile.ZipFile(z, "w") as f:
             f.writestr("watched.csv", "Date,Name,Year,Letterboxd URI\n2023-05-02,%s,%d,https://boxd.it/a\n"
@@ -186,7 +186,7 @@ class TrackingTest(unittest.TestCase):
             f.writestr("ratings.csv", "Date,Name,Year,Letterboxd URI,Rating\n2023-05-02,%s,%d,https://boxd.it/a,4.5\n"
                        % (voyage["title"], voyage["year"]))
             f.writestr("watchlist.csv", "Date,Name,Year,Letterboxd URI\n2023-01-01,%s,%d,https://boxd.it/c\n"
-                       % (polaire["title"].upper(), polaire["year"] + 1))  # casse et année à un an près
+                       % (polaire["title"].upper(), polaire["year"] + 1))  # case and year within one year
         st, r = u.call("POST", "/api/me/letterboxd", raw_body=z.getvalue(), headers={"Content-Type": "application/zip"})
         self.assertEqual(st, 200, r)
         self.assertEqual((r["watched"], r["rated"], r["watchlist"], r["unmatched"]), (1, 1, 1, ["Film Introuvable (1999)"]))

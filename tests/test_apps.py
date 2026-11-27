@@ -1,5 +1,5 @@
-"""Applications natives distribuées par le serveur : liste, fichiers (copie locale ou GitHub en attendant),
-mises à jour de l'application de bureau.
+"""Native apps distributed by the server: list, files (local copy or GitHub meanwhile),
+desktop app updates.
 
 python3 -m unittest tests.test_apps
 """
@@ -14,9 +14,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tests.test_api import STATIC, Client
 
-from seance import __version__, apps
-from seance.api import Ctx, build_app
-from seance.web import Server, make_handler
+from noxa import __version__, apps
+from noxa.api import Ctx, build_app
+from noxa.web import Server, make_handler
 
 FILES = {"noxa-android.apk": b"PK" + b"a" * 5000, "Noxa-Setup.exe": b"MZ" + b"w" * 7000, "latest.yml": b"version: 1.0.0\npath: Noxa-Setup.exe\n",
          "noxa-apps.json": json.dumps({"desktop": "1.0.0", "android": {"version": "1.0.0", "code": 1}}).encode()}
@@ -24,8 +24,8 @@ FILES = {"noxa-android.apk": b"PK" + b"a" * 5000, "Noxa-Setup.exe": b"MZ" + b"w"
 
 class FakeGitHub(BaseHTTPRequestHandler):
     hits = []
-    complete = True  # False : publication de cette version sans les applications (jointes plus tard par la CI)
-    missing = False  # True : cette version pas encore publiée du tout
+    complete = True  # False: release of this version without the apps (attached later by CI)
+    missing = False  # True: this version not published at all yet
 
     def log_message(self, *a):
         pass
@@ -66,7 +66,7 @@ class AppsTest(unittest.TestCase):
         cls.srv = Server(("127.0.0.1", 0), make_handler(build_app(cls.ctx)))
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.srv.server_address[1]}"
-        cls.anon = Client(cls.base)  # sans compte : la page Applications est publique
+        cls.anon = Client(cls.base)  # no account: the Apps page is public
 
     @classmethod
     def tearDownClass(cls):
@@ -81,15 +81,15 @@ class AppsTest(unittest.TestCase):
         by = {a["id"]: a for a in r["apps"]}
         self.assertTrue(by["android"]["available"])
         self.assertTrue(by["windows"]["available"])
-        self.assertFalse(by["macos"]["available"])  # pas dans cette publication
+        self.assertFalse(by["macos"]["available"])  # not in this release
         self.assertEqual(r["versions"]["android"]["code"], 1)
         self.assertEqual(r["release"], f"v{__version__}")
 
     def test_02_files(self):
         self.anon.call("GET", "/api/apps")
-        # premier téléchargement : GitHub le temps que le serveur fasse sa copie
+        # first download: GitHub while the server makes its copy
         st, body, h = self.anon.call("GET", "/apps/android", raw=True)
-        self.assertIn(st, (200,), h)  # urllib suit la redirection
+        self.assertIn(st, (200,), h)  # urllib follows the redirect
         self.assertEqual(body, FILES["noxa-android.apk"])
         for _ in range(50):
             if apps.os.path.isfile(os.path.join(self.ctx.data_dir, "apps", f"v{__version__}", "noxa-android.apk")):
@@ -98,10 +98,10 @@ class AppsTest(unittest.TestCase):
         hits = len(FakeGitHub.hits)
         st, body, h = self.anon.call("GET", "/apps/android", raw=True)
         self.assertEqual((st, body), (200, FILES["noxa-android.apk"]))
-        self.assertEqual(len(FakeGitHub.hits), hits)  # servi par le serveur lui-même
+        self.assertEqual(len(FakeGitHub.hits), hits)  # served by the server itself
         self.assertEqual(h["Content-Type"], "application/vnd.android.package-archive")
         self.assertIn("attachment", h.get("Content-Disposition", ""))
-        self.assertEqual(self.anon.call("GET", "/apps/macos")[0], 404)  # pas encore publiée
+        self.assertEqual(self.anon.call("GET", "/apps/macos")[0], 404)  # not published yet
         self.assertEqual(self.anon.call("GET", "/apps/inconnue")[0], 404)
 
     def test_03_desktop_updates(self):
@@ -113,23 +113,23 @@ class AppsTest(unittest.TestCase):
 
 
     def test_04_release_without_apps_yet(self):
-        """Serveur mis à jour avant que la CI ait joint les applications à la publication : il propose celles de
-        la version précédente, et regarde de nouveau dans 10 minutes (pas 6 heures)."""
+        """Server updated before CI attached the apps to the release: it offers those of
+        the previous version, and looks again in 10 minutes (not 6 hours)."""
         for missing in (False, True):
             FakeGitHub.complete, FakeGitHub.missing = False, missing
             try:
                 a = apps.Apps(self.ctx)
                 a.refresh()
-                self.assertEqual(a.release["tag"], "v3.99.0", missing)  # ni la pré-version de test, ni l'ancien nom
+                self.assertEqual(a.release["tag"], "v3.99.0", missing)  # neither the test pre-release nor the old name
                 self.assertEqual(a.manifest["android"]["code"], 1)
                 self.assertLessEqual(time.time() - a.checked, apps.REFRESH - apps.RETRY + 5)
-                a.refresh()  # avant les 10 minutes : rien de nouveau demandé
+                a.refresh()  # before the 10 minutes: nothing new requested
                 self.assertEqual(a.release["tag"], "v3.99.0")
                 FakeGitHub.complete, FakeGitHub.missing = True, False
                 a.checked -= apps.RETRY + 1
                 a.refresh()
                 self.assertEqual(a.release["tag"], f"v{__version__}")
-                self.assertGreater(a.checked, time.time() - 5)  # complète : prochain passage dans 6 h
+                self.assertGreater(a.checked, time.time() - 5)  # complete: next pass in 6 h
             finally:
                 FakeGitHub.complete, FakeGitHub.missing = True, False
 
