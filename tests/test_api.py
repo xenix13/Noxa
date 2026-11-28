@@ -874,6 +874,35 @@ class SeanceTest(unittest.TestCase):
         finally:
             subcache.SOON_READRATE, sc._streaming, api_mod.PREPARE_WINDOW_MS = old
 
+    def test_replaced_external_subtitle_is_served_again(self):
+        """An external .srt replaced under the same name (a better synced version) is read again, and the
+        browser checks it again at each playback instead of keeping the old one (issue #24)."""
+        m = self.movie("Nuit polaire")
+        row = self.ctx.db.one("SELECT probe FROM items WHERE id=?", (int(m["id"]),))
+        path = json.loads(row["probe"])["external"][0]["path"]
+        url = f"/api/items/{m['id']}/subtitles/1000"
+        st, body, hdrs = self.admin.call("GET", url, raw=True)
+        self.assertEqual(st, 200)
+        etag = hdrs.get("ETag")
+        self.assertTrue(etag)
+        self.assertIn("no-cache", hdrs.get("Cache-Control", ""))
+        st, _, _ = self.admin.call("GET", url, raw=True, headers={"If-None-Match": etag})
+        self.assertEqual(st, 304)  # unchanged: nothing to download again
+        with open(path, encoding="utf-8") as f:
+            original = f.read()
+        st0 = os.stat(path)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("1\n00:00:02,500 --> 00:00:04,000\nShifted line\n")
+            os.utime(path, ns=(st0.st_atime_ns, st0.st_mtime_ns + 5_000_000_000))
+            st, d = self.admin.call("GET", url, headers={"If-None-Match": etag})
+            self.assertEqual(st, 200)
+            self.assertEqual([(c["s"], c["t"]) for c in d["cues"]], [(2500, "Shifted line")])
+        finally:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(original)
+            os.utime(path, ns=(st0.st_atime_ns, st0.st_mtime_ns))
+
     def test_renamed_file_keeps_exported_subtitles(self):
         """A renamed or re-indexed file finds its already exported subtitles: nothing is read again."""
         m = self.movie("Nuit polaire")
