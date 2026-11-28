@@ -49,6 +49,14 @@ def register(app, ctx, x):
             return {"ready": True, "partial": True, "until": job.until_ms, "progress": round(job.progress, 3)}
         return {"ready": False, "progress": round(job.progress, 3), "until": job.until_ms}
 
+    def fresh(req, data, ctype, etag):
+        """Subtitles the browser checks again at each playback (ETag): the same address can hold another track
+        after a subtitle is added to the folder, or a new version of the same .srt."""
+        headers = {"Cache-Control": "private, no-cache", "ETag": etag}
+        if req.headers.get("If-None-Match") == etag:
+            return Response(b"", 304, ctype, headers)
+        return Response(data, 200, ctype, headers)
+
     @app.route("GET", f"/api/items/{RK}/subtitles/(?P<sub>\\d{{1,6}})")
     def item_subtitles(req):
         r = require_item(req.user, req.params["rk"])
@@ -78,20 +86,27 @@ def register(app, ctx, x):
                         raise HTTPError(502, f"Lecture des sous-titres impossible : {job.error}")
                     return Response(json.dumps({"pending": True, "progress": st.get("progress", 0)}), 202,
                                     json_type, {"Cache-Control": "no-store"})
-            return Response(data, 200, json_type, {"Cache-Control": "private, max-age=3600"})
+            return fresh(req, data, json_type, f'"{r["id"]}-{r["file_mtime"]}-{r["file_size"]}-{sub}"')
         ext = probe.get("external", [])
         if sub - EXTERNAL_BASE >= len(ext):
             raise HTTPError(404, "Sous-titres introuvables")
-        # key: the file itself (a subtitle added to the folder shifts the numbers of the next ones)
-        tag = hashlib.sha1(f"{ext[sub - EXTERNAL_BASE]['path']}|{r['file_mtime']}".encode()).hexdigest()[:16]
+        # key: the subtitle file itself, as it is now (a subtitle added to the folder shifts the numbers of the
+        # next ones, and a .srt replaced by a better synced one keeps its name)
+        path = ext[sub - EXTERNAL_BASE]["path"]
+        try:
+            st = os.stat(path)
+            stamp = f"{st.st_mtime_ns}|{st.st_size}"
+        except OSError:
+            stamp = ""
+        tag = hashlib.sha1(f"{path}|{stamp}|{r['file_mtime']}".encode()).hexdigest()[:16]
         cache = os.path.join(ctx.data_dir, "cache", "subs", f"ext_{r['id']}_{tag}.json")
         if os.path.isfile(cache):
             with open(cache, "rb") as f:
-                return Response(f.read(), 200, json_type, {"Cache-Control": "private, max-age=3600"})
+                return fresh(req, f.read(), json_type, f'"{tag}"')
         with sub_lock(cache):
             if os.path.isfile(cache):
                 with open(cache, "rb") as f:
-                    return Response(f.read(), 200, json_type)
+                    return fresh(req, f.read(), json_type, f'"{tag}"')
             e = ext[sub - EXTERNAL_BASE]
             try:
                 if e["codec"] in ("subrip", "webvtt"):
@@ -105,7 +120,7 @@ def register(app, ctx, x):
             with open(cache + ".tmp", "wb") as f:
                 f.write(data)
             os.replace(cache + ".tmp", cache)
-        return Response(data, 200, json_type)
+        return fresh(req, data, json_type, f'"{tag}"')
 
     @app.route("GET", f"/api/items/{RK}/subtitles/(?P<sub>\\d{{1,6}})\\.vtt")
     def item_subtitles_vtt(req):
@@ -128,7 +143,7 @@ def register(app, ctx, x):
             text = str(c.get("t") or "").replace("-->", "→").strip()
             if text:
                 out += [f"{ts(c.get('s', 0))} --> {ts(c.get('e', 0))}" + (" line:10%" if c.get("top") else ""), text, ""]
-        return Response("\n".join(out).encode(), 200, "text/vtt; charset=utf-8", {"Cache-Control": "private, max-age=600"})
+        return Response("\n".join(out).encode(), 200, "text/vtt; charset=utf-8", {"Cache-Control": "private, no-cache"})
 
     # -- original ASS (faithful rendering by libass in the browser) and fonts attached to the MKV
     ASS_FN = re.compile(rb"\\fn([^\\}]{1,100})")
